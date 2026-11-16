@@ -31,8 +31,21 @@ assert.equal(storage.get('codicamp_stars_v2'), '{"1":3}');
 assert.deepEqual(migrateLocalGames(result), result);
 // An intentional admin removal after migration must not be undone.
 assert.deepEqual(migrateLocalGames([customized]), [customized]);
-// A fresh browser also gets exactly the two playable games.
+// A browser already migrated for RoboLab/CodiCamp must receive Radar too.
+storage.delete(`${CONFIG.STORAGE_PREFIX}games_radar_20261116`);
+const pending = { id:'game-sensor-ultrasonico', title:'Mi radar', url:'', preview:'',
+ description:'Calibra un sensor HC-SR04 y programa la reacción del robot según la distancia medida. Próximamente.' };
+const upgraded = migrateLocalGames([customized, pending]);
+assert.equal(upgraded.length, 2);
+assert.equal(upgraded[1].title, 'Mi radar');
+assert.equal(upgraded[1].url, 'games/radar-ultrasonico/index.html');
+assert.match(upgraded[1].description, /5 retos/);
+assert.deepEqual(upgraded[0], customized);
+storage.delete(`${CONFIG.STORAGE_PREFIX}games_radar_20261116`);
+const external = { ...pending, url:'https://example.invalid/mi-radar' };
+assert.deepEqual(migrateLocalGames([external]), [external]);
+// A fresh browser also gets exactly the three playable games.
 storage.clear();
 const fresh = migrateLocalGames(SEED.games);
-assert.equal(fresh.filter(x => x.url).length, 2);
+assert.equal(fresh.filter(x => x.url).length, 3);
 '''], cwd=ROOT, check=True)

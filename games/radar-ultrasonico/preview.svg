@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img" aria-label="Radar Ultrasónico · HC-SR04 34.2 cm">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="100%" r="90%">
+      <stop offset="0" stop-color="#12233f"/><stop offset="1" stop-color="#0b1120"/>
+    </radialGradient>
+    <linearGradient id="sweep" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#22c55e" stop-opacity=".45"/><stop offset="1" stop-color="#22c55e" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#16213a"/></pattern>
+  </defs>
+  <rect width="640" height="400" fill="url(#bg)"/>
+  <rect width="640" height="400" fill="url(#grid)"/>
+  <!-- sonar semicircular -->
+  <g fill="none" stroke="#22c55e" stroke-opacity=".35">
+    <path d="M30 360a290 290 0 0 1 580 0"/><path d="M102.5 360a217.5 217.5 0 0 1 435 0"/>
+    <path d="M175 360a145 145 0 0 1 290 0"/><path d="M247.5 360a72.5 72.5 0 0 1 145 0"/>
+    <path d="M320 360V70M320 360L71 215M320 360L569 215M320 360L175 109M320 360L465 109"/>
+    <path d="M30 360H610"/>
+  </g>
+  <path d="M320 360L465 109A290 290 0 0 1 569 215Z" fill="url(#sweep)"/>
+  <path d="M320 360L540 171" stroke="#22c55e" stroke-width="3" filter="url(#glow)"/>
+  <!-- ondas ultrasónicas -->
+  <g fill="none" stroke-width="4" stroke-linecap="round" filter="url(#glow)">
+    <path d="M360 300a60 60 0 0 1 0-80" stroke="#38bdf8" transform="rotate(180 360 260)"/>
+    <path d="M380 318a90 90 0 0 1 0-116" stroke="#38bdf8" stroke-opacity=".7" transform="rotate(180 380 260)"/>
+    <path d="M500 300a60 60 0 0 0 0-80" stroke="#f97316" transform="rotate(180 500 260)"/>
+  </g>
+  <!-- blips -->
+  <g fill="#22c55e" filter="url(#glow)">
+    <circle cx="452" cy="232" r="7"/><circle cx="214" cy="196" r="6" opacity=".7"/><circle cx="364" cy="150" r="5" opacity=".5"/>
+  </g>
+  <!-- HC-SR04 -->
+  <g transform="translate(256 336)">
+    <rect width="128" height="44" rx="5" fill="#1e40af" stroke="#38bdf8" stroke-width="2"/>
+    <circle cx="34" cy="22" r="17" fill="#94a3b8"/><circle cx="34" cy="22" r="10" fill="#334155"/>
+    <circle cx="94" cy="22" r="17" fill="#94a3b8"/><circle cx="94" cy="22" r="10" fill="#334155"/>
+  </g>
+  <!-- rótulos -->
+  <text x="28" y="54" fill="#e2e8f0" font-family="system-ui,Segoe UI,sans-serif" font-size="30" font-weight="800">Radar Ultrasónico</text>
+  <text x="28" y="80" fill="#94a3b8" font-family="system-ui,Segoe UI,sans-serif" font-size="14">Arduino Nano · SG90 · Sensores</text>
+  <g transform="translate(424 28)">
+    <rect width="190" height="40" rx="10" fill="#020617" stroke="#f97316" stroke-opacity=".7"/>
+    <text x="95" y="26" fill="#f97316" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="16" font-weight="700">HC-SR04 · 34.2 cm</text>
+  </g>
+</svg>

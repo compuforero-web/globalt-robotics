@@ -23,8 +23,9 @@ const games = [
   {
     id: 'game-sensor-ultrasonico', sort_order: 3, featured: false,
     title: 'Radar Ultrasónico',
-    description: 'Calibra un sensor HC-SR04 y programa la reacción del robot según la distancia medida. Próximamente.',
-    category: 'Sensores', level: 'Intermedio', url: '', preview: '',
+    description: 'Domina el HC-SR04 en 5 retos: física del eco, calibración, reversa con alertas, radar con microservo SG90 y robot evasor. Incluye código Arduino en vivo y progreso local.',
+    category: 'Sensores', level: 'Intermedio',
+    url: 'games/radar-ultrasonico/index.html', preview: 'games/radar-ultrasonico/preview.svg',
   },
   {
     id: 'game-sumo-bot', sort_order: 4, featured: false,

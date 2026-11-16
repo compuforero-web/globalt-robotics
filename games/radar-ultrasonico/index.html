@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Simulador interactivo de sensor ultrasónico HC-SR04 con Arduino Nano, microservo SG90 y buzzer.">
+  <title>Radar Ultrasónico · Simulador HC-SR04</title>
+  <link rel="icon" href="preview.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="dot" aria-hidden="true"></span>
+      <div><h1>Radar Ultrasónico</h1><small>Nivel Intermedio · Sensores</small></div>
+    </div>
+    <nav id="levels" class="levels" aria-label="Seleccionar nivel"></nav>
+    <div class="prog" title="Progreso guardado en este navegador">
+      <div class="track"><div id="bar"></div></div><span id="prog">0/5</span>
+      <button id="resetProg" class="btn icon" title="Borrar progreso" aria-label="Borrar progreso">↺</button>
+    </div>
+    <button id="snd" class="btn icon" aria-pressed="true" aria-label="Sonido on/off">🔊</button>
+  </header>
+
+  <main class="layout">
+    <section class="stage">
+      <div class="cvwrap">
+        <canvas id="cv" width="640" height="400" aria-label="Simulación interactiva del sensor ultrasónico"></canvas>
+      </div>
+      <div id="msg" class="msg" role="status" aria-live="polite" hidden></div>
+    </section>
+
+    <aside class="panel">
+      <h2 id="ltitle"></h2>
+      <p id="goal" class="goal"></p>
+      <p class="hw"><span>Arduino Nano</span><span>HC-SR04</span><span>SG90</span><span>Buzzer · LEDs</span></p>
+      <div id="controls" class="controls"></div>
+      <div class="actions">
+        <button id="act" class="btn primary"></button>
+        <button id="reset" class="btn ghost">Reiniciar</button>
+        <button id="next" class="btn ok" hidden>Siguiente nivel →</button>
+      </div>
+      <div class="code">
+        <div class="codehead"><span>C++ · Arduino Nano <em>en vivo</em></span><button id="copy" class="btn mini">Copiar</button></div>
+        <pre><code id="code"></code></pre>
+      </div>
+    </aside>
+  </main>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
