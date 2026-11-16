@@ -12,6 +12,10 @@ npm start
 
 Abrir `http://localhost:8080` y `http://localhost:8080/admin`.
 
+## Aula (cuentas e inscripción, en desarrollo)
+
+`aula/` (frontend) y `services/aula-api/` (FastAPI + PostgreSQL): registro de estudiantes, sesión de servidor e inscripción al curso de Arduino. No publicado; ver [services/aula-api/README.md](services/aula-api/README.md) y [docs/AULA_CUENTAS_AUDITORIA.md](docs/AULA_CUENTAS_AUDITORIA.md).
+
 ## GitHub y Linux
 
 El código oficial vive en https://github.com/compuforero-web/globalt-robotics, rama `main`.

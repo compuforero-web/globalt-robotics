@@ -1,0 +1,39 @@
+/* Aula GLOBALT — usa los tokens de styles/base.css */
+.aula-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg-2); }
+.aula-top__home { display: inline-flex; align-items: center; gap: 8px; font: 700 .95rem var(--font-display); color: var(--text-strong); }
+.aula-top__title { color: var(--cyan); font-weight: 600; flex: 1; }
+.aula-top__user { font-size: .9rem; color: var(--muted); }
+
+.aula { width: min(100% - 32px, 760px); margin: 24px auto 48px; display: grid; gap: 16px; }
+.aviso { margin: 0; padding: 10px 14px; border: 1px solid rgba(249, 115, 22, .45); border-radius: var(--radius-sm); background: rgba(249, 115, 22, .08); font-size: .9rem; }
+.estado { margin: 0; min-height: 1.4em; font-size: .95rem; }
+.estado[data-tipo="error"] { color: #fda4af; }
+.estado[data-tipo="ok"] { color: #86efac; }
+.estado[data-tipo="aviso"] { color: #fdba74; }
+
+.tarjeta { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; }
+.tarjeta h1, #vista-cursos h1 { font-size: 1.6rem; }
+.pestanas { display: flex; gap: 6px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.pestanas button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 12px; color: var(--muted); font-weight: 600; cursor: pointer; min-height: 44px; }
+.pestanas button[aria-selected="true"] { color: var(--text-strong); border-color: var(--cyan); }
+.formulario { display: grid; gap: 14px; }
+.formulario label { display: grid; gap: 6px; font-weight: 600; font-size: .92rem; }
+.formulario small { font-weight: 400; color: var(--muted); }
+.formulario input { width: 100%; min-height: 46px; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: #050912; color: var(--text); font-size: 16px; }
+.formulario input:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(56, 189, 248, .2); }
+.error { color: #fda4af; margin: 12px 0 0; min-height: 1.2em; }
+
+.cabecera { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+#vista-cursos h2 { font-size: 1.15rem; margin-top: 24px; }
+.lista { display: grid; gap: 12px; }
+.curso { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: grid; gap: 8px; justify-items: start; }
+.curso h3 { margin: 0; }
+.curso p { margin: 0; }
+.pendiente { font-size: .88rem; color: #fdba74; border: 1px dashed rgba(249, 115, 22, .5); border-radius: 999px; padding: 4px 12px; }
+.nota { font-size: .85rem; color: var(--muted); margin-top: 20px; }
+
+@media (max-width: 520px) {
+  .aula { width: calc(100% - 24px); margin-top: 16px; }
+  .tarjeta { padding: 16px; }
+  .curso .btn { width: 100%; }
+}

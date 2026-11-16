@@ -1,0 +1,247 @@
+"""API del aula: registro, sesión de servidor y cursos del estudiante. Prefijo: /api/aula."""
+from contextlib import asynccontextmanager
+from datetime import timedelta
+import re
+import unicodedata
+from urllib.parse import urlsplit
+
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from psycopg.errors import UniqueViolation
+from psycopg_pool import ConnectionPool
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from . import seguridad
+from .config import cargar
+
+COOKIE = 'aula_sesion'
+RUTA_COOKIE = '/api/aula'
+MAX_CUERPO = 16 * 1024
+METODOS_SEGUROS = {'GET', 'HEAD', 'OPTIONS'}
+
+
+def crear_app(config=None):
+    config = config or cargar()
+    pool = ConnectionPool(config.database_url, min_size=1, max_size=10, open=False,
+                          kwargs={'autocommit': True})
+
+    @asynccontextmanager
+    async def ciclo(_app):
+        pool.open(wait=True, timeout=30)
+        yield
+        pool.close()
+
+    app = FastAPI(title='Aula GLOBALT', lifespan=ciclo, docs_url=None, redoc_url=None, openapi_url=None)
+    app.state.pool = pool
+    app.state.config = config
+
+    # ---------- Protección general: tamaño, tipo de contenido y origen ----------
+    @app.middleware('http')
+    async def proteger(request: Request, siguiente):
+        if request.method not in METODOS_SEGUROS:
+            origen = request.headers.get('origin')
+            if not origen and request.headers.get('referer'):
+                partes = urlsplit(request.headers['referer'])
+                origen = f'{partes.scheme}://{partes.netloc}'
+            if not origen or origen.rstrip('/') not in config.origenes:
+                return error(403, 'Origen no permitido.')
+            try:
+                largo = int(request.headers.get('content-length', '0'))
+            except ValueError:
+                largo = MAX_CUERPO + 1
+            if largo > MAX_CUERPO:
+                return error(413, 'Solicitud demasiado grande.')
+            if largo and not request.headers.get('content-type', '').startswith('application/json'):
+                return error(415, 'Se espera JSON.')
+        respuesta = await siguiente(request)
+        respuesta.headers['Cache-Control'] = 'no-store'
+        respuesta.headers['X-Content-Type-Options'] = 'nosniff'
+        respuesta.headers['Referrer-Policy'] = 'same-origin'
+        return respuesta
+
+    @app.exception_handler(RequestValidationError)
+    async def validacion(_request, exc):
+        # No se devuelven los valores recibidos (podrían incluir la contraseña).
+        campos = sorted({str(e['loc'][-1]) for e in exc.errors() if e.get('loc')})
+        return error(422, 'Datos no válidos: ' + ', '.join(campos) if campos else 'Datos no válidos.')
+
+    # ---------- Utilidades de base de datos ----------
+    def bd():
+        with pool.connection() as conexion:
+            yield conexion
+
+    def ip(request: Request) -> str:
+        return request.client.host if request.client else 'desconocida'
+
+    def contar(conexion, tipo, clave):
+        fila = conexion.execute(
+            'SELECT count(*) FROM intentos WHERE tipo = %s AND clave = %s AND creado_en > now() - %s',
+            (tipo, seguridad.huella(clave), timedelta(minutes=config.ventana_min))).fetchone()
+        return fila[0]
+
+    def anotar(conexion, tipo, clave):
+        conexion.execute('INSERT INTO intentos (tipo, clave) VALUES (%s, %s)', (tipo, seguridad.huella(clave)))
+        conexion.execute("DELETE FROM intentos WHERE creado_en < now() - interval '1 day'")
+
+    def abrir_sesion(conexion, respuesta: Response, usuario_id: int):
+        sesion, csrf = seguridad.token(), seguridad.token()
+        conexion.execute("DELETE FROM sesiones WHERE expira_en < now() - interval '30 days' "
+                         "OR revocada_en < now() - interval '30 days'")
+        conexion.execute(
+            'INSERT INTO sesiones (id_hash, usuario_id, csrf, expira_en) VALUES (%s, %s, %s, now() + %s)',
+            (seguridad.huella(sesion), usuario_id, csrf, timedelta(hours=config.duracion_max_horas)))
+        respuesta.set_cookie(COOKIE, sesion, max_age=config.duracion_max_horas * 3600, path=RUTA_COOKIE,
+                             httponly=True, secure=config.cookie_segura, samesite='strict')
+        return csrf
+
+    def sesion_actual(request: Request, conexion=Depends(bd)):
+        """Devuelve la sesión válida o responde 401. Renueva la marca de inactividad."""
+        valor = request.cookies.get(COOKIE)
+        if not valor or len(valor) > 100:
+            raise HTTPException(401, 'Sesión no iniciada.')
+        fila = conexion.execute(
+            'UPDATE sesiones s SET ultimo_uso = now() FROM usuarios u '
+            'WHERE s.id_hash = %s AND u.id = s.usuario_id AND s.revocada_en IS NULL '
+            'AND s.expira_en > now() AND s.ultimo_uso > now() - %s '
+            'RETURNING s.id_hash, s.csrf, u.id, u.nombre, u.correo, u.rol',
+            (seguridad.huella(valor), timedelta(minutes=config.inactividad_min))).fetchone()
+        if not fila:
+            raise HTTPException(401, 'La sesión no existe, se cerró o caducó.')
+        claves = ('id_hash', 'csrf', 'usuario_id', 'nombre', 'correo', 'rol')
+        return dict(zip(claves, fila))
+
+    def con_csrf(request: Request, sesion=Depends(sesion_actual)):
+        recibido = request.headers.get('x-csrf-token', '')
+        if not recibido or not seguridad.iguales(recibido, sesion['csrf']):
+            raise HTTPException(403, 'Falta o no coincide el token CSRF.')
+        return sesion
+
+    def publico(sesion):
+        return {'nombre': sesion['nombre'], 'correo': sesion['correo'], 'rol': sesion['rol']}
+
+    # ---------- Rutas ----------
+    @app.get('/api/aula/salud')
+    def salud(conexion=Depends(bd)):
+        conexion.execute('SELECT 1')
+        return {'ok': True}
+
+    @app.post('/api/aula/registro', status_code=201)
+    def registro(datos: Registro, request: Request, respuesta: Response, conexion=Depends(bd)):
+        if contar(conexion, 'registro_ip', ip(request)) >= config.max_registros_ip:
+            raise HTTPException(429, 'Demasiados registros desde esta conexión. Intenta más tarde.')
+        anotar(conexion, 'registro_ip', ip(request))
+        if datos.clave.lower() == datos.correo.lower():
+            raise HTTPException(422, 'La contraseña no puede ser igual al correo.')
+        try:
+            with conexion.transaction():
+                # El rol nunca procede del cliente: el registro público solo crea estudiantes.
+                fila = conexion.execute(
+                    "INSERT INTO usuarios (correo, nombre, hash_clave, rol) VALUES (%s, %s, %s, 'estudiante') RETURNING id",
+                    (datos.correo, datos.nombre, seguridad.hash_clave(datos.clave))).fetchone()
+                csrf = abrir_sesion(conexion, respuesta, fila[0])
+        except UniqueViolation:
+            raise HTTPException(409, 'Ya existe una cuenta con ese correo.')
+        return {'usuario': {'nombre': datos.nombre, 'correo': datos.correo, 'rol': 'estudiante'}, 'csrf': csrf}
+
+    @app.post('/api/aula/sesion')
+    def iniciar(datos: Acceso, request: Request, respuesta: Response, conexion=Depends(bd)):
+        if (contar(conexion, 'acceso_correo', datos.correo) >= config.max_fallos_correo
+                or contar(conexion, 'acceso_ip', ip(request)) >= config.max_fallos_ip):
+            raise HTTPException(429, 'Demasiados intentos fallidos. Espera unos minutos.',
+                                headers={'Retry-After': str(config.ventana_min * 60)})
+        fila = conexion.execute('SELECT id, hash_clave, nombre, rol FROM usuarios WHERE correo = %s',
+                                (datos.correo,)).fetchone()
+        if not seguridad.verificar_clave(fila[1] if fila else None, datos.clave):
+            anotar(conexion, 'acceso_correo', datos.correo)
+            anotar(conexion, 'acceso_ip', ip(request))
+            raise HTTPException(401, 'Correo o contraseña incorrectos.')
+        if seguridad.necesita_rehash(fila[1]):
+            conexion.execute('UPDATE usuarios SET hash_clave = %s WHERE id = %s', (seguridad.hash_clave(datos.clave), fila[0]))
+        conexion.execute('DELETE FROM intentos WHERE tipo = %s AND clave = %s',
+                         ('acceso_correo', seguridad.huella(datos.correo)))
+        anterior = request.cookies.get(COOKIE)
+        if anterior:
+            conexion.execute('UPDATE sesiones SET revocada_en = now() WHERE id_hash = %s', (seguridad.huella(anterior),))
+        csrf = abrir_sesion(conexion, respuesta, fila[0])
+        return {'usuario': {'nombre': fila[2], 'correo': datos.correo, 'rol': fila[3]}, 'csrf': csrf}
+
+    @app.get('/api/aula/sesion')
+    def consultar(sesion=Depends(sesion_actual)):
+        return {'usuario': publico(sesion), 'csrf': sesion['csrf']}
+
+    @app.delete('/api/aula/sesion', status_code=204)
+    def cerrar(respuesta: Response, sesion=Depends(con_csrf), conexion=Depends(bd)):
+        conexion.execute('UPDATE sesiones SET revocada_en = now() WHERE id_hash = %s', (sesion['id_hash'],))
+        respuesta.delete_cookie(COOKIE, path=RUTA_COOKIE, httponly=True, secure=config.cookie_segura, samesite='strict')
+        respuesta.status_code = 204
+        return respuesta
+
+    @app.get('/api/aula/cursos')
+    def cursos(conexion=Depends(bd)):
+        filas = conexion.execute('SELECT id, titulo, ruta_laboratorio FROM cursos WHERE activo ORDER BY id').fetchall()
+        return {'cursos': [{'id': f[0], 'titulo': f[1], 'laboratorio': f[2]} for f in filas]}
+
+    @app.get('/api/aula/mis-cursos')
+    def mis_cursos(sesion=Depends(sesion_actual), conexion=Depends(bd)):
+        filas = conexion.execute(
+            'SELECT c.id, c.titulo, c.ruta_laboratorio, i.creada_en FROM inscripciones i '
+            'JOIN cursos c ON c.id = i.curso_id WHERE i.usuario_id = %s ORDER BY i.creada_en',
+            (sesion['usuario_id'],)).fetchall()
+        return {'cursos': [{'id': f[0], 'titulo': f[1], 'laboratorio': f[2], 'inscrito_en': f[3].isoformat()} for f in filas]}
+
+    @app.post('/api/aula/inscripciones')
+    def inscribir(datos: Inscripcion, respuesta: Response, sesion=Depends(con_csrf), conexion=Depends(bd)):
+        if not conexion.execute('SELECT 1 FROM cursos WHERE id = %s AND activo', (datos.curso_id,)).fetchone():
+            raise HTTPException(404, 'Curso no disponible.')
+        nueva = conexion.execute(
+            'INSERT INTO inscripciones (usuario_id, curso_id) VALUES (%s, %s) ON CONFLICT DO NOTHING RETURNING curso_id',
+            (sesion['usuario_id'], datos.curso_id)).fetchone()
+        respuesta.status_code = 201 if nueva else 200
+        return {'curso_id': datos.curso_id, 'nueva': bool(nueva)}
+
+    return app
+
+
+def error(estado, mensaje):
+    return JSONResponse({'detail': mensaje}, status_code=estado,
+                        headers={'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'})
+
+
+CONTROL = re.compile(r'[\x00-\x1f\x7f-\x9f​-‏ -‮⁦-⁩]')
+
+
+class Registro(BaseModel):
+    model_config = ConfigDict(extra='forbid')   # campos como «rol» se rechazan
+    nombre: str = Field(min_length=2, max_length=60)
+    correo: EmailStr = Field(max_length=254)
+    clave: str = Field(min_length=10, max_length=128)
+
+    @field_validator('nombre')
+    @classmethod
+    def nombre_limpio(cls, valor):
+        valor = ' '.join(unicodedata.normalize('NFC', valor).split())
+        if CONTROL.search(valor) or len(valor) < 2:
+            raise ValueError('nombre no válido')
+        return valor
+
+    @field_validator('correo')
+    @classmethod
+    def correo_minusculas(cls, valor):
+        return str(valor).lower()
+
+
+class Acceso(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    correo: EmailStr = Field(max_length=254)
+    clave: str = Field(min_length=1, max_length=128)
+
+    @field_validator('correo')
+    @classmethod
+    def correo_minusculas(cls, valor):
+        return str(valor).lower()
+
+
+class Inscripcion(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    curso_id: str = Field(pattern=r'^[a-z0-9-]{3,60}$')
