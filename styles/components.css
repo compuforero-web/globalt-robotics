@@ -96,3 +96,18 @@
   .modal { width: 100vw; height: 100dvh; border-radius: 0; border: 0; }
   .modal__tools [data-fullscreen] { display: none; }
 }
+
+/* Búsqueda: acciones compactas, accesibles y sin alterar las tarjetas. */
+.search-status { overflow-wrap: anywhere; }
+.search-status__reset {
+  display: inline-block; margin: 0 0 0 12px; padding: 4px 8px;
+  border: 1px solid var(--border-strong); border-radius: 6px;
+  background: var(--surface); color: var(--text); font: inherit;
+  cursor: pointer; white-space: normal;
+}
+.search-status__reset:hover { border-color: var(--cyan); color: var(--cyan); }
+.search-status__reset:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+.empty--filter p { margin: 0 0 12px; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .search-status__reset { display: block; margin: 6px auto 0; }
+}
