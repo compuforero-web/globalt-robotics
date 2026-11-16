@@ -170,6 +170,106 @@ if (process.env.LAB_PENDIENTE_URL) {
   log('sin servicio: aviso «Compilación próximamente», acciones de compilación desactivadas y sin aprobar');
 }
 
+// 15. Lección guiada: pasos, ejemplos sin sobrescribir, pistas contextuales y errores sin causa inventada.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const g = await ctx.newPage();
+  g.on('pageerror', (e) => errors.push(e.message));
+  await g.goto(URL_LAB);
+  await g.waitForFunction(() => document.querySelector('#service').dataset.kind === 'ok');
+  const visibleSteps = () => g.locator('.step:not([hidden])').count();
+  assert.equal(await g.locator('.step').count(), 6);
+  assert.equal(await visibleSteps(), 1);
+  assert.match(await g.textContent('.step:not([hidden]) .step__title'), /circuito/i);
+
+  // Pista contextual del paso actual, progresiva y repetible.
+  const hint = async () => { await g.click('[data-act="hint"]'); return g.textContent('.guide__text'); };
+  assert.match(await hint(), /Pista 1 de 2 sobre el circuito/);
+  assert.match(await hint(), /Pista 2 de 2 sobre el circuito/);
+  assert.match(await hint(), /Pista 1 de 2 sobre el circuito/);
+
+  // Recorrer todos los pasos con «Siguiente» y el teclado no aprueba el reto.
+  for (let i = 0; i < 5; i++) await g.click('[data-nav="next"]');
+  assert.match(await g.textContent('.step:not([hidden]) .step__title'), /reto/i);
+  assert.equal(await g.evaluate(() => document.activeElement.classList.contains('step__title')), true);
+  assert.match(await g.textContent('.step:not([hidden])'), /Reto/);
+  assert.doesNotMatch(await g.textContent('.step:not([hidden])'), /delay\(200\)|delay\(800\)/);
+  assert.match(await g.textContent('#progress-state'), /Reto pendiente/);
+  assert.equal(await g.evaluate(() => JSON.parse(localStorage.getItem('globalt.laboratorio.arduino.v1')).lessons['arduino-led-serie'].completedAt), undefined);
+  assert.equal(await g.locator('.steps__seen:not([hidden])').count(), 5);
+  await g.click('[data-nav="next"]');   // en el último paso: repasar desde el paso 1
+  assert.match(await g.textContent('.step:not([hidden]) .step__title'), /circuito/i);
+  await g.focus('.steps__btn[data-step="0"]');
+  await g.keyboard.press('ArrowRight');
+  await g.keyboard.press('Enter');
+  assert.match(await g.textContent('.step:not([hidden]) .step__title'), /setup/i);
+  await g.reload();
+  assert.match(await g.textContent('.step:not([hidden]) .step__title'), /setup/i);
+  log('lección por pasos: navegación, teclado, repaso y recuerdo del paso sin aprobar el reto');
+
+  // Ejemplo: cancelar no cambia nada; reemplazar no guarda y se puede recuperar el trabajo (incluso sin guardar).
+  const mine = '// mi trabajo guardado\nvoid setup(){}\nvoid loop(){}\n';
+  await g.locator('.code-editor__input').fill(mine);
+  await g.click('#btn-save');
+  await g.locator('.code-editor__input').fill(mine + '// cambio sin guardar\n');
+  await g.click('.step:not([hidden]) [data-act="try"]');
+  assert.ok(await g.isVisible('#example-dialog'));
+  await g.keyboard.press('Escape');
+  await g.waitForFunction(() => /No se cambió nada/.test(document.querySelector('#status').textContent));
+  assert.equal(await g.inputValue('.code-editor__input'), mine + '// cambio sin guardar\n');
+  await g.click('.step:not([hidden]) [data-act="try"]');
+  await g.click('#example-dialog button[value="replace"]');
+  await g.waitForFunction(() => /una sola vez/.test(document.querySelector('.code-editor__input').value));
+  assert.equal(await g.textContent('#save-state'), 'Cambios sin guardar');
+  assert.equal(await g.evaluate(() => JSON.parse(localStorage.getItem('globalt.laboratorio.arduino.v1')).lessons['arduino-led-serie'].code), mine);
+  await g.click('#btn-run');
+  await g.waitForFunction(() => document.querySelector('#monitor').textContent.includes('Esto se repite'), null, { timeout: 15000 });
+  await g.click('#btn-stop');
+  assert.equal((await g.textContent('#monitor')).match(/una sola vez/g).length, 1);
+  await g.click('#btn-recover');
+  assert.equal(await g.inputValue('.code-editor__input'), mine + '// cambio sin guardar\n');
+  log('ejemplo: pide elección, no guarda solo, se ejecuta y el código anterior se recupera');
+
+  // Pistas según el código: ritmo correcto pero sin mensaje → pista sobre el mensaje; contador dentro de loop().
+  await g.locator('.code-editor__input').fill('void setup(){ pinMode(13, OUTPUT); Serial.begin(9600); }\nvoid loop(){ digitalWrite(13, HIGH); delay(200); digitalWrite(13, LOW); delay(800); }\n');
+  assert.match(await hint(), /sobre el mensaje/);
+  await g.locator('.code-editor__input').fill('void setup(){ pinMode(13, OUTPUT); Serial.begin(9600); }\nvoid loop(){ int n = 0; n++; digitalWrite(13, HIGH); Serial.print("Latido "); Serial.println(n); delay(200); digitalWrite(13, LOW); delay(800); }\n');
+  assert.match(await hint(), /dónde vive el contador/);
+  const fail = await (async () => { await g.click('#btn-check'); await g.waitForFunction(() => !/evaluando/i.test(document.querySelector('#eval-result').textContent), null, { timeout: 30000 }); return g.textContent('#eval-result'); })();
+  assert.match(fail, /Todavía no/);
+  log('pistas contextuales según el código, sin aprobar');
+
+  // Error del compilador: pista sobre la línea; mensaje desconocido → no se inventa causa y se conserva el original.
+  await g.locator('.code-editor__input').fill('void setup() {\n  Serial.begin(9600)\n}\nvoid loop() {}\n');
+  await g.click('#btn-compile');
+  await g.waitForSelector('.diag', { timeout: 15000 });
+  assert.match(await hint(), /error del compilador.*línea 3/);
+  await g.locator('.code-editor__input').fill('void setup() {\n  int a[2] = {1, 2, 3};\n}\nvoid loop() {}\n');
+  await g.click('#btn-compile');
+  await g.waitForFunction(() => /initializers/.test(document.querySelector('#diagnostics').textContent), null, { timeout: 15000 });
+  const diag = await g.textContent('.diag--error');
+  assert.match(diag, /too many initializers/);
+  assert.match(diag, /No tengo una explicación preparada/);
+  assert.match(await g.textContent('.guide__text'), /No tengo una explicación preparada/);
+  log('errores: explicación reconocida o aviso honesto, con el diagnóstico original');
+  if (SHOTS) await g.screenshot({ path: SHOTS + '/leccion-escritorio.png', fullPage: true });
+  await ctx.close();
+
+  // Móvil: pasos y diálogo sin desbordamiento horizontal.
+  const phone2 = await browser.newContext({ ...devices['Pixel 7'] });
+  const m = await phone2.newPage();
+  await m.goto(URL_LAB);
+  await m.click('[data-step="1"]');
+  await m.click('.step:not([hidden]) [data-act="try"]');
+  const box = await m.locator('#example-dialog').boundingBox();
+  assert.ok(box.x >= 0 && box.x + box.width <= 412, JSON.stringify(box));
+  await m.click('#example-dialog button[value="cancel"]');
+  assert.ok(await m.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
+  if (SHOTS) await m.screenshot({ path: SHOTS + '/leccion-movil.png', fullPage: true });
+  await phone2.close();
+  log('móvil: pasos y diálogo dentro de la pantalla');
+}
+
 assert.deepEqual(errors, []);
 await browser.close();
 console.log('Todas las comprobaciones del laboratorio pasaron.');

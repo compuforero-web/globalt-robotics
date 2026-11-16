@@ -118,9 +118,31 @@ store.set('globalt.laboratorio.arduino.v1', '{roto');
 assert.deepEqual(p.getLesson('l'), {});
 
 const { preparedHelp } = await import('./games/laboratorio-arduino/src/guide.js');
-const hint = preparedHelp.respond('hint', { level: 0 }).text;
-assert.match(hint, /Pista 1 de 5/);
-assert.doesNotMatch(preparedHelp.respond('hint', { level: 4 }).text, /delay\\(200\\)/);   // no entrega la solución
+const { analyzeCode, chooseTopic, hintText } = await import('./games/laboratorio-arduino/src/guide.js');
+const { EXAMPLE_CODE, EXAMPLES, STEPS } = await import('./games/laboratorio-arduino/src/lesson.js');
+const fs = await import('node:fs');
+const fx = (n) => fs.readFileSync(`tests/fixtures/laboratorio/${n}.ino`, 'utf8');
+assert.match(preparedHelp.respond('hint', { topic: 'paso-0', level: 0 }).text, /Pista 1 de 2 sobre el circuito/);
+assert.equal(chooseTopic({ code: EXAMPLE_CODE, untouched: true, step: 2 }).topic, 'paso-2');
+assert.equal(analyzeCode(EXAMPLE_CODE).topic, 'ritmo');
+assert.equal(analyzeCode(fx('solucion')).topic, 'comprobar');
+assert.equal(analyzeCode(fx('mensajes-al-inicio')).topic, 'momento');
+assert.equal(analyzeCode(fx('sin-serial')).topic, 'baud');
+assert.equal(analyzeCode('void setup(){pinMode(13,OUTPUT);Serial.begin(9600);}\\nvoid loop(){int n=0;n++;Serial.print("Latido ");delay(200);delay(800);}').topic, 'alcance');
+assert.equal(chooseTopic({ code: fx('latido-desfasado'), lastChecks: [{ id: 'serial', ok: false }] }).topic, 'momento');
+assert.equal(chooseTopic({ code: 'x', compileError: { errorLine: 3, errorHelp: 'Falta ;' } }).topic, 'compilar');
+assert.equal(chooseTopic({ code: fx('solucion'), completed: true }).topic, 'superado');
+assert.ok(hintText('compilar', 0, { errorLine: 3, errorHelp: 'Falta ;' }).text.includes('línea 3'));
+// Ninguna pista ni ejemplo entrega la solución (200 ms y 800 ms juntos en delay()).
+for (const t of ['paso-0','paso-1','paso-2','paso-3','paso-4','compilar','pinmode','baud','ritmo','texto','contador','alcance','momento','comprobar','superado'])
+  for (let i = 0; i < 4; i++) assert.doesNotMatch(hintText(t, i, { delays: [], errorHelp: '' }).text, /delay\\(200\\)[\\s\\S]*delay\\(800\\)/);
+for (const ex of Object.values(EXAMPLES)) assert.ok(!(ex.code.includes('delay(200)') && ex.code.includes('delay(800)')));
+assert.equal(STEPS.length, 6);
+assert.equal(explainDiagnostic("too many initializers for 'int [2]'"), null);
+assert.match(explainDiagnostic("'class HardwareSerial' has no member named 'printl'"), /printl.*Serial/);
+p.saveSteps('l', 3, [0, 1, 3, 3]);
+assert.deepEqual(p.getLesson('l').seen, [0, 1, 3]);
+assert.equal(p.getLesson('l').completedAt, undefined);   // recorrer pasos nunca aprueba
 const fail = preparedHelp.respond('eval-fail', { checks: [{ id: 'on', ok: false }, { id: 'baud', ok: true }] });
 assert.doesNotMatch(fail.text, /superado/);
 assert.match(preparedHelp.respond('compile-error', { diagnostics: [{ tipo: 'error', linea: 3, mensaje: "expected ‘;’ before ‘}’ token" }] }).text, /línea 3/);

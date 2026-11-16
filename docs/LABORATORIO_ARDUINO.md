@@ -22,9 +22,15 @@ Funciones soportadas en la emulación: GPIO digital, temporizadores 0–2 (`dela
 - `src/main.js` orquesta; `lesson.js` contenido; `editor.js` + `cpp-highlight.js` editor; `compiler.js` cliente HTTP; `compiler-help.js` explicaciones de errores; `nano-runner.js` emulación; `sim-worker.js` + `simulation.js` Workers (tiempo real y evaluación); `challenge.js` evaluación; `circuit.js` ilustración; `guide.js` guía «Chispa»; `progress.js` almacenamiento local.
 - `vendor/avr8js-0.21.1.js`: paquete npm `avr8js@0.21.1` (MIT, © Uri Shaked) empaquetado en un único ES Module con esbuild 0.24.2 (`--bundle --format=esm --minify`); licencia en `vendor/LICENSE-avr8js.txt`. Es una biblioteca; no usa el servicio ni cuentas de Wokwi.
 
+## Lección guiada
+
+`lesson.js` define seis pasos (`STEPS`): circuito, `setup()`/`loop()`, modificar, compilar, simulación y reto. Cada paso tiene explicación breve, preguntas «Piensa» (respuesta desplegable) y, en algunos, un **Ejemplo** (`EXAMPLES`) que nunca es la solución; el reto aparece aparte con la etiqueta **Reto** y sin código. Se navega con la barra de pasos (flechas ←/→ entre botones), «Anterior»/«Siguiente» y «Repasar desde el paso 1»; el paso actual y los vistos se guardan en `step`/`seen` del progreso local. Recorrer los pasos **no aprueba**: solo «Comprobar reto».
+
+«Probar en el editor…» abre un diálogo (Cancelar por defecto). Si se elige reemplazar, el código actual (guardado o no) queda en `backupCode`, el cambio se puede deshacer con Ctrl+Z o «Recuperar mi código» (intercambia editor y respaldo) y no se guarda nada hasta pulsar Guardar.
+
 ## Guía «Chispa»
 
-Mensajes preparados y deterministas, identificados como «Ayuda preparada». Pistas progresivas (5 niveles, sin entregar el código completo), explicación del primer error del compilador, celebración solo tras compilación correcta o reto comprobado. Se puede minimizar y silenciar (preferencia local), está en el flujo de la página (no flota sobre editor, controles ni circuito) y respeta `prefers-reduced-motion`.
+Mensajes preparados y deterministas, identificados como «Ayuda preparada». «Pedir pista» elige un tema con reglas locales (`chooseTopic`/`analyzeCode` en `guide.js`): error de compilación del código actual, paso de la lección si el ejemplo no se ha tocado, último fallo de la evaluación y análisis del código (pin, `Serial.begin`, tiempos, texto «Latido», contador y su alcance, momento del mensaje). Cada tema avanza en 2–3 pistas y vuelve a empezar para repasarlas; ninguna entrega el código del reto y el análisis nunca aprueba. Los errores del compilador conservan el mensaje original; si no hay regla para un mensaje, se dice expresamente en vez de inventar una causa. Celebra solo tras compilación correcta o reto comprobado. Se puede minimizar y silenciar (preferencia local), está en el flujo de la página y respeta `prefers-reduced-motion`.
 
 Para añadir IA más adelante: crear un proveedor `{ id, label, respond(event, context) }` (puede ser asíncrono) y pasarlo a `createGuide(root, { providers: [proveedorIA, preparedHelp] })`. Los eventos son `welcome`, `hint`, `service-pending`, `compile-error`, `compile-ok`, `run-started`, `eval-fail`, `eval-pass`.
 
