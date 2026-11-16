@@ -7,6 +7,7 @@ export const waLink = (message) =>
   `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
 
 export const waMsg = {
+  access: 'Hola, quiero solicitar una cuenta para acceder al curso de Arduino en GLOBALT ROBOTICS.',
   general: 'Hola, me interesa información sobre GLOBALT ROBOTICS',
   workshops: 'Hola, me interesa información sobre los talleres de GLOBALT ROBOTICS',
   workshop: (t) => `Hola, me interesa información sobre el taller "${t}" de GLOBALT ROBOTICS. ¿Me pueden enviar fechas y precios?`,
