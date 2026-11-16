@@ -22,7 +22,7 @@
       "category": "Arduino",
       "level": "Básico",
       "url": "games/robolab-arduino/index.html",
-      "preview": "assets/img/robolab-preview.svg"
+      "preview": "assets/img/games/robolab-photo-v1.webp"
     },
     {
       "id": "game-codicamp-agrotech",
@@ -33,7 +33,7 @@
       "category": "Programación por bloques",
       "level": "Básico",
       "url": "games/codicamp-agrotech/index.html",
-      "preview": "assets/img/codicamp-preview.svg"
+      "preview": "assets/img/games/codicamp-photo-v1.webp"
     },
     {
       "id": "game-sensor-ultrasonico",
@@ -44,7 +44,7 @@
       "category": "Sensores",
       "level": "Intermedio",
       "url": "games/radar-ultrasonico/index.html",
-      "preview": "games/radar-ultrasonico/preview.svg"
+      "preview": "assets/img/games/radar-photo-v1.webp"
     },
     {
       "id": "game-sumo-bot",
@@ -55,7 +55,7 @@
       "category": "Proyecto",
       "level": "Proyecto Final",
       "url": "games/sumo-bot-challenge/index.html",
-      "preview": "games/sumo-bot-challenge/preview.svg"
+      "preview": "assets/img/games/sumo-photo-v1.webp"
     },
     {
       "id": "game-solarlab",
@@ -66,7 +66,7 @@
       "category": "Energías limpias",
       "level": "Intermedio",
       "url": "games/solar-lab/index.html",
-      "preview": "games/solar-lab/preview.svg"
+      "preview": "assets/img/games/solar-photo-v1.webp"
     }
   ],
   "courses": [

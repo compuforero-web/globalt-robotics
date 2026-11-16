@@ -7,7 +7,7 @@ const games = [
     description: 'Explora Arduino Nano, conecta un LED, controla un microservo, mide distancias con el HC-SR04 y construye un robot evasor con puente H L298N. 5 niveles interactivos.',
     category: 'Arduino', level: 'Básico',
     url: 'games/robolab-arduino/index.html',
-    preview: 'assets/img/robolab-preview.svg',
+    preview: 'assets/img/games/robolab-photo-v1.webp',
   },
   {
       "id": "game-codicamp-agrotech",
@@ -18,21 +18,21 @@ const games = [
       "category": "Programación por bloques",
       "level": "Básico",
       "url": "games/codicamp-agrotech/index.html",
-      "preview": "assets/img/codicamp-preview.svg"
+      "preview": "assets/img/games/codicamp-photo-v1.webp"
   },
   {
     id: 'game-sensor-ultrasonico', sort_order: 3, featured: false,
     title: 'Radar Ultrasónico',
     description: 'Domina el HC-SR04 en 5 retos: física del eco, calibración, reversa con alertas, radar con microservo SG90 y robot evasor. Incluye código Arduino en vivo y progreso local.',
     category: 'Sensores', level: 'Intermedio',
-    url: 'games/radar-ultrasonico/index.html', preview: 'games/radar-ultrasonico/preview.svg',
+    url: 'games/radar-ultrasonico/index.html', preview: 'assets/img/games/radar-photo-v1.webp',
   },
   {
     id: 'game-sumo-bot', sort_order: 4, featured: false,
     title: 'Sumo Bot Challenge',
     description: 'Diseña la estrategia de un robot de sumo en 5 retos: borde con TCRT5000, detección con HC-SR04, velocidad PWM y duelos. Ajusta parámetros y observa el código Arduino Nano con L298N en vivo.',
     category: 'Proyecto', level: 'Proyecto Final',
-    url: 'games/sumo-bot-challenge/index.html', preview: 'games/sumo-bot-challenge/preview.svg',
+    url: 'games/sumo-bot-challenge/index.html', preview: 'assets/img/games/sumo-photo-v1.webp',
   },
   {
       "id": "game-solarlab",
@@ -43,7 +43,7 @@ const games = [
       "category": "Energías limpias",
       "level": "Intermedio",
       "url": "games/solar-lab/index.html",
-      "preview": "games/solar-lab/preview.svg"
+      "preview": "assets/img/games/solar-photo-v1.webp"
   },
 ];
 
