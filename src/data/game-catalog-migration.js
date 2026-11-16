@@ -82,7 +82,7 @@ function migrateSumoGames(items) {
 
 
 // SolarLab se agrega una sola vez, manteniendo los juegos y preferencias existentes.
-export function migrateLocalGames(items) {
+function migrateSolarGames(items) {
   const initial = migrateSumoGames(items);
   const marker = `${CONFIG.STORAGE_PREFIX}games_solar_20261116`;
   const result = initial.map((item) => ({ ...item }));
@@ -95,4 +95,30 @@ export function migrateLocalGames(items) {
     localStorage.setItem(marker, '1');
   } catch { /* La incorporación también funciona en memoria si no se permite guardar. */ }
   return result;
+}
+
+// Actualiza solo las portadas predeterminadas; conserva imágenes y datos personalizados.
+const LEGACY_COVERS = {
+  "game-robolab-arduino": "assets/img/robolab-preview.svg",
+  "game-codicamp-agrotech": "assets/img/codicamp-preview.svg",
+  "game-sensor-ultrasonico": "games/radar-ultrasonico/preview.svg",
+  "game-sumo-bot": "games/sumo-bot-challenge/preview.svg",
+  "game-solarlab": "games/solar-lab/preview.svg"
+};
+
+export function migrateLocalGames(items) {
+  const initial = migrateSolarGames(items);
+  let changed = false;
+  const result = initial.map((game) => {
+    if (!Object.hasOwn(LEGACY_COVERS, game.id) || game.preview !== LEGACY_COVERS[game.id]) return game;
+    const builtin = SEED.games.find((item) => item.id === game.id);
+    if (!builtin) return game;
+    changed = true;
+    return { ...game, preview: builtin.preview };
+  });
+  if (changed) {
+    try { localStorage.setItem(`${CONFIG.STORAGE_PREFIX}games`, JSON.stringify(result)); }
+    catch { /* Las portadas se actualizan en memoria si el almacenamiento está bloqueado. */ }
+  }
+  return changed ? result : initial;
 }
