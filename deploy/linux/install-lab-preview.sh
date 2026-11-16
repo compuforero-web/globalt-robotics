@@ -93,15 +93,25 @@ install -d -o 10001 -g "$NGINX_GID" -m 770 "$SOCKET_DIR"
 install -m 644 nginx-lab-preview.conf /etc/globalt-robotics-lab/nginx.conf
 WEB_OPTIONS=(--read-only --tmpfs /var/cache/nginx --tmpfs /var/run --tmpfs /tmp
   --mount type=bind,src="$WEBROOT",dst=/srv/lab,readonly
-  --mount type=bind,src="$SOCKET_DIR",dst=/run/compilador,readonly
+  --mount type=bind,src="$SOCKET_DIR",dst=/compiler-socket,readonly
   --mount type=bind,src=/etc/globalt-robotics-lab/nginx.conf,dst=/etc/nginx/conf.d/default.conf,readonly)
 docker run --rm --network none "${WEB_OPTIONS[@]}" "$NGINX_IMAGE" nginx -t
 compiler_created=false
 preview_created=false
 cleanup() {
+  status=$?
+  trap - ERR
+  set +e
+  echo "Diagnóstico de la prueba (salida $status):"
+  if [[ "$preview_created" == true ]]; then
+    docker logs --tail 25 globalt-arduino-preview 2>&1
+    docker exec globalt-arduino-preview sh -c 'id nginx; ls -ld /compiler-socket; ls -l /compiler-socket/compilador.sock' 2>&1
+  fi
+  if [[ "$compiler_created" == true ]]; then docker logs --tail 15 globalt-arduino-compiler 2>&1; fi
   if [[ "$preview_created" == true ]]; then docker rm -f globalt-arduino-preview >/dev/null 2>&1 || true; fi
   if [[ "$compiler_created" == true ]]; then docker rm -f globalt-arduino-compiler >/dev/null 2>&1 || true; fi
   echo 'Prueba interrumpida; la plataforma pública y sus contenedores no se cambiaron.'
+  exit "$status"
 }
 trap cleanup ERR
 docker run -d --name globalt-arduino-compiler --restart unless-stopped \
@@ -118,10 +128,14 @@ docker run -d --name globalt-arduino-preview --restart unless-stopped \
   --publish 127.0.0.1:8097:80 --publish 100.117.79.42:8097:80 \
   "${WEB_OPTIONS[@]}" "$NGINX_IMAGE"
 preview_created=true
+# El socket se monta fuera de /run: /var/run puede ser un enlace a /run en la imagen.
+docker exec globalt-arduino-preview test -S /compiler-socket/compilador.sock
+healthy=false
 for attempt in {1..15}; do
-  if curl -fsS http://127.0.0.1:8097/api/arduino/salud; then break; fi
+  if curl -fsS --max-time 3 http://127.0.0.1:8097/api/arduino/salud; then healthy=true; break; fi
   sleep 1
 done
+if [[ "$healthy" != true ]]; then echo 'El proxy no alcanzó al compilador. Se detiene la prueba.'; false; fi
 curl -fsS http://127.0.0.1:8097/games/laboratorio-arduino/index.html >/dev/null
 # Comprueba compilación y diagnósticos por el proxy real, sin evaluar C++ en el host.
 python3 - "$SOURCE" <<'PY'
