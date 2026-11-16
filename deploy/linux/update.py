@@ -13,10 +13,10 @@ import tempfile
 import time
 import urllib.request
 
-PUBLIC_DIRS = {'assets', 'styles', 'src', 'games', 'data'}
+PUBLIC_DIRS = {'assets', 'styles', 'src', 'games', 'data', 'aula'}
 PUBLIC_FILES = {'index.html', 'admin.html', 'robots.txt', 'favicon.ico'}
 REQUIRED = ('index.html', 'admin.html', 'src/config.js', 'src/public/main.js',
-            'games/robolab-arduino/index.html')
+            'games/robolab-arduino/index.html', 'aula/index.html')
 
 
 def run(*args):
@@ -106,12 +106,17 @@ def update(args):
             run(*git, 'fetch', 'origin', '+refs/heads/main:refs/heads/main')
             sha = run(*git, 'rev-parse', 'refs/heads/main').decode().strip()
             target = 'releases/' + sha
-            if old == target:
+            if old == target and not getattr(args, 'force', False):
                 print('Sin cambios: ' + sha)
                 return
             releases = root / 'releases'
             releases.mkdir(exist_ok=True)
             destination = root / target
+            # --force publica de nuevo la misma versión en otra carpeta (p. ej., tras ampliar la lista de
+            # carpetas publicadas). La activa no se toca hasta pasar la comprobación HTTP.
+            if getattr(args, 'force', False) and destination.exists():
+                target = 'releases/' + sha + '-' + str(int(time.time()))
+                destination = root / target
             if not destination.exists():
                 stage = Path(tempfile.mkdtemp(prefix='.staging-', dir=releases))
                 try:
@@ -145,6 +150,7 @@ def update(args):
 
 
 if __name__ == '__main__':
+    os.umask(0o022)   # archivos publicados legibles por nginx, se ejecute como se ejecute
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--state', default='/var/lib/globalt-robotics')
     parser.add_argument('--webroot', default='/srv/globalt-robotics')
@@ -152,4 +158,5 @@ if __name__ == '__main__':
     parser.add_argument('--health-url', default='http://127.0.0.1:8094')
     parser.add_argument('--prepare-only', action='store_true')
     parser.add_argument('--rollback', action='store_true')
+    parser.add_argument('--force', action='store_true', help='regenerar la versión aunque ya esté activa')
     update(parser.parse_args())

@@ -30,6 +30,11 @@ export function saveCode(id, code) {
   return update(id, { code: String(code).slice(0, 32 * 1024), savedAt: new Date().toISOString() });
 }
 
+/** Copia de respaldo del código de este navegador antes de sustituirlo por la versión de la cuenta. */
+export function saveBackup(id, code) {
+  return update(id, { backupCode: String(code).slice(0, 32 * 1024), backupAt: new Date().toISOString() });
+}
+
 /** Registra un reto superado (solo tras una evaluación correcta). */
 export function markCompleted(id, code) {
   const now = new Date().toISOString();

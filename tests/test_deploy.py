@@ -1,4 +1,5 @@
 import argparse
+import os
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import importlib.util
@@ -75,6 +76,28 @@ class DeploymentTests(unittest.TestCase):
         self.args.rollback = True
         deploy.update(self.args)
         self.assertEqual(self.active(), self.first)
+    def test_force_regenerates_active_release(self):
+        deploy.update(self.args)
+        release = self.web / 'current'
+        (release / 'aula/index.html').unlink()          # p. ej., versión publicada antes de permitir aula/
+        deploy.update(self.args)                          # sin --force: «Sin cambios»
+        self.assertFalse((release / 'aula/index.html').exists())
+        self.args.force = True
+        deploy.update(self.args)
+        self.assertEqual((release / 'aula/index.html').read_text(), 'original')
+        self.assertEqual(self.active(), self.first)
+        self.assertTrue((self.web / 'previous').is_symlink())          # la versión anterior queda para volver
+
+    def test_force_health_failure_keeps_active_release(self):
+        deploy.update(self.args)
+        antes = os.readlink(self.web / 'current')
+        (self.web / 'current/aula/index.html').unlink()
+        self.args.force = True
+        self.args.health_url = 'http://127.0.0.1:9'                      # comprobación HTTP fallida
+        with self.assertRaises(RuntimeError):
+            deploy.update(self.args)
+        self.assertEqual(os.readlink(self.web / 'current'), antes)       # sigue la misma carpeta activa
+
     def test_invalid_json_preserves_active_release(self):
         (self.repo / 'data').mkdir()
         (self.repo / 'data/catalog.json').write_text('{broken')

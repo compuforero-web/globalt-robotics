@@ -1,13 +1,14 @@
 // Laboratorio de programación Arduino de GLOBALT: lección, editor, compilación, simulación, reto y guía.
 import { LESSON, EXAMPLE_CODE, lessonHtml } from './lesson.js';
 import { createEditor } from './editor.js';
-import { checkCompiler, compileSketch, CompilerUnavailable } from './compiler.js';
+import { checkCompiler, compileSketch, CompilerUnavailable, usarAula, enAula } from './compiler.js';
 import { explainDiagnostic, GENERIC_HELP } from './compiler-help.js';
 import { Simulation, recordTrace } from './simulation.js';
 import { evaluateChallenge, EVAL_DURATION_MS } from './challenge.js';
 import { createCircuit } from './circuit.js';
 import { createGuide } from './guide.js';
 import * as progress from './progress.js';
+import * as cuenta from './cuenta.js';
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -33,23 +34,131 @@ function updateDirty() {
   $('#save-state').classList.toggle('is-dirty', dirty);
 }
 function save() {
-  if (!progress.saveCode(LESSON.id, editor.value)) { setStatus('Este navegador no permite guardar (modo privado o almacenamiento bloqueado).', 'warn'); return false; }
+  if (!progress.saveCode(LESSON.id, editor.value)) {
+    setStatus('Este navegador no permite guardar (modo privado o almacenamiento bloqueado).', 'warn');
+    syncAccount(editor.value);
+    return false;
+  }
   savedCode = editor.value;
   updateDirty();
+  syncAccount();
   return true;
 }
 function restoreExample() {
+  const where = account.active ? 'en este navegador y en tu cuenta' : 'en este navegador';
   const message = isDirty()
-    ? 'Tienes cambios sin guardar. ¿Descartarlos y restaurar el ejemplo original? Tu código guardado también se reemplazará.'
-    : '¿Restaurar el ejemplo original? Se reemplazará el código guardado en este navegador.';
+    ? `Tienes cambios sin guardar. ¿Descartarlos y restaurar el ejemplo original? Tu código guardado ${where} también se reemplazará.`
+    : `¿Restaurar el ejemplo original? Se reemplazará el código guardado ${where}.`;
   if (!confirm(message)) return;
   progress.clearCode(LESSON.id);
   savedCode = EXAMPLE_CODE;
   editor.setValue(EXAMPLE_CODE);
   updateDirty();
   showDiagnostics(null);
+  syncAccount();
 }
 window.addEventListener('beforeunload', (e) => { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+
+// ---------- Copia en la cuenta del aula (opcional; el guardado local sigue siendo el respaldo) ----------
+const account = { active: false, version: null, choosing: null, failed: false, pendingCode: null, queue: Promise.resolve() };
+function accountState(text, kind = '', { retry = false, html = false } = {}) {
+  $('#cuenta').hidden = false;
+  const el = $('#cuenta-estado');
+  if (html) el.innerHTML = text; else el.textContent = text;
+  el.dataset.kind = kind;
+  $('#btn-cuenta-reintentar').hidden = !retry;
+}
+const AULA_LINK = '<a href="../../aula/index.html">aula</a>';
+
+function useAccountVersion(remote) {
+  const local = progress.getLesson(LESSON.id).code;
+  if (typeof local === 'string' && local !== remote.codigo) progress.saveBackup(LESSON.id, local);
+  editor.setValue(remote.codigo);
+  progress.saveCode(LESSON.id, remote.codigo);
+  savedCode = remote.codigo;
+  account.version = remote.version;
+  updateDirty();
+  showDiagnostics(null);
+}
+
+function offerChoice(remote) {
+  account.choosing = remote;
+  const date = new Date(remote.actualizado_en).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' });
+  $('#cuenta-eleccion-detalle').textContent = `La de tu cuenta es del ${date}. Elige cuál quieres seguir usando; la otra queda como copia de respaldo en este navegador.`;
+  $('#cuenta-eleccion').hidden = false;
+  accountState('Elige una versión para seguir guardando en tu cuenta.', 'warn');
+}
+function closeChoice() { account.choosing = null; $('#cuenta-eleccion').hidden = true; }
+
+$('#btn-usar-cuenta').addEventListener('click', () => {
+  const remote = account.choosing;
+  if (!remote) return;
+  if (isDirty() && !confirm('Tus cambios sin guardar se reemplazarán por la versión de tu cuenta. ¿Continuar?')) return;
+  closeChoice();
+  useAccountVersion(remote);
+  accountState('Usando la versión de tu cuenta.', 'ok');
+});
+$('#btn-usar-local').addEventListener('click', () => {
+  const remote = account.choosing;
+  if (!remote) return;
+  account.version = remote.version;   // se guardará encima, a sabiendas
+  progress.saveBackup(LESSON.id, remote.codigo);
+  closeChoice();
+  save();                              // guarda aquí y sube a la cuenta
+});
+
+/** Sube el código guardado localmente. Encola las llamadas para no cruzar versiones. */
+function syncAccount(code = savedCode) {
+  if (!account.active) return;
+  if (account.choosing) { accountState('Guardado en este navegador. Elige primero qué versión usar en tu cuenta.', 'warn'); return; }
+  account.queue = account.queue.then(async () => {
+    accountState('Guardando en tu cuenta…', 'busy');
+    try {
+      const saved = await cuenta.guardar(LESSON.id, code, account.version);
+      account.version = saved.version;
+      account.failed = false;
+      account.pendingCode = null;
+      accountState(saved.codigo === editor.value ? 'Guardado en tu cuenta.' : 'Guardado en tu cuenta (hay cambios más nuevos sin guardar).', 'ok');
+    } catch (error) {
+      if (error.status === 409 && error.borrador) offerChoice(error.borrador);
+      else if (error.status === 401) {
+        account.active = false;
+        accountState(`Tu sesión terminó: el código quedó solo en este navegador. Entra de nuevo en el ${AULA_LINK} y recarga esta página.`, 'warn', { html: true });
+      } else if (error.status === 413 || error.status === 422) accountState(error.message, 'warn');
+      else if (error.status === 403) {   // la sesión cambió (p. ej., se entró de nuevo en otra pestaña): reconectar
+        account.active = false;
+        account.failed = true;
+        accountState('No se pudo guardar en tu cuenta. Tu código sigue guardado en este navegador.', 'error', { retry: true });
+      } else {
+        account.pendingCode = code;
+        account.failed = true;
+        accountState('No se pudo guardar en tu cuenta. Tu código sigue guardado en este navegador.', 'error', { retry: true });
+      }
+    }
+  });
+}
+
+async function connectAccount() {
+  accountState('Conectando con tu cuenta…', 'busy');
+  const result = await cuenta.conectar(LESSON.id);
+  account.site = result.estado;
+  if (result.estado === 'sin-aula') { $('#cuenta').hidden = true; return; }
+  if (result.estado === 'sin-sesion') { accountState(`Entra en el ${AULA_LINK} para guardar tu código también en tu cuenta.`, '', { html: true }); return; }
+  if (result.estado === 'sin-inscripcion') { accountState(`${esc(result.mensaje)} Ir al ${AULA_LINK}.`, '', { html: true }); return; }
+  if (result.estado === 'error') { account.failed = true; accountState('No se pudo conectar con tu cuenta. Tu código sigue guardado en este navegador.', 'error', { retry: true }); return; }
+  account.active = true;
+  account.failed = false;
+  const remote = result.borrador;
+  const hasLocal = typeof progress.getLesson(LESSON.id).code === 'string' || isDirty();
+  if (!remote) { accountState('Tu cuenta aún no tiene copia de este código: pulsa Guardar para crearla.'); return; }
+  account.version = remote.version;
+  if (remote.codigo === editor.value) accountState('Sincronizado con tu cuenta.', 'ok');
+  else if (!hasLocal) { useAccountVersion(remote); accountState('Código recuperado de tu cuenta.', 'ok'); }
+  else { account.version = null; offerChoice(remote); }
+}
+const retryAccount = () => (account.active ? syncAccount(account.pendingCode ?? savedCode) : connectAccount());
+$('#btn-cuenta-reintentar').addEventListener('click', retryAccount);
+addEventListener('online', () => { if (account.failed) retryAccount(); });
 
 function renderProgress() {
   const lesson = progress.getLesson(LESSON.id);
@@ -77,7 +186,8 @@ function updateButtons() {
 }
 function setService(ready, info = '', pending = false) {
   const el = $('#service');
-  el.textContent = ready ? `Compilador listo · ${info}` : (pending ? 'Compilación próximamente' : 'Compilador sin respuesta');
+  el.textContent = ready ? `Compilador listo · ${info}`
+    : (pending ? 'Compilación próximamente' : (enAula() ? 'Compilador no disponible' : 'Compilador sin respuesta'));
   el.dataset.kind = ready ? 'ok' : 'warn';
   servicePending = !ready && pending;
   updateButtons();
@@ -85,7 +195,7 @@ function setService(ready, info = '', pending = false) {
 function serviceUnavailable(error) {
   setService(false, '', Boolean(error?.pending));
   setStatus(error?.message || 'No se pudo contactar con el compilador.', 'warn');
-  guide.notify('service-pending');
+  if (error?.pending) guide.notify('service-pending');   // si el servidor da un motivo, ya se muestra arriba
 }
 
 // ---------- Compilación ----------
@@ -235,13 +345,20 @@ $('#btn-check').addEventListener('click', () => withBusy(async () => {
 }));
 
 // ---------- Inicio ----------
+// En el aula privada se compila a través de su API (sesión + inscripción); en el resto, como siempre.
+const accountReady = connectAccount().catch(() => {}).then(() => {
+  if (account.site && account.site !== 'sin-aula') usarAula(cuenta.tokenCsrf);
+});
 updateDirty();
 renderProgress();
 updateButtons();
 guide.notify('welcome', { completed: Boolean(stored.completedAt) });
-checkCompiler()
+accountReady.then(checkCompiler)
   .then((info) => setService(Boolean(info.ok), info.version?.compilador || 'avr-gcc'))
   .catch((error) => {
     if (error instanceof CompilerUnavailable && error.pending) serviceUnavailable(error);
-    else setService(false);
+    else {
+      setService(false);
+      if (enAula()) setStatus(error.message, 'warn');   // sin sesión, sin inscripción o compilador detenido
+    }
   });

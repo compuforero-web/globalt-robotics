@@ -45,6 +45,16 @@ async function init() {
   $('#stat-courses').textContent = courses.length;
   $('#footer-location').textContent = settings.location;
   $('#year').textContent = new Date().getFullYear();
+  mostrarAulaSiDisponible();
+}
+
+// El acceso al aula solo aparece cuando su servicio responde en este sitio (evita enlaces rotos).
+async function mostrarAulaSiDisponible() {
+  try {
+    const r = await fetch('api/aula/salud', { cache: 'no-store', headers: { Accept: 'application/json' } });
+    const ok = r.ok && (r.headers.get('content-type') || '').includes('application/json') && (await r.json()).ok === true;
+    $$('[data-aula-link]').forEach((el) => { el.hidden = !ok; });
+  } catch { /* sin aula: el enlace sigue oculto */ }
 }
 
 init().catch((err) => console.error('[GLOBALT] Error iniciando la web:', err));

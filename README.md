@@ -16,6 +16,10 @@ Abrir `http://localhost:8080` y `http://localhost:8080/admin`.
 
 Lección piloto con editor, compilación real (avr-gcc), emulación ATmega328P en el navegador y reto evaluado: `games/laboratorio-arduino/`. Ver [docs/LABORATORIO_ARDUINO.md](docs/LABORATORIO_ARDUINO.md). La compilación necesita el servicio aislado de [services/compilador-arduino](services/compilador-arduino/README.md), disponible en los laboratorios privados y bloqueado en el dominio público. Si `/api/arduino/` no responde (404, HTML o error de red), la página muestra a los estudiantes «Compilación próximamente» y desactiva solo Compilar, Ejecutar y Comprobar reto; editar, guardar y restaurar siguen activos. Los errores reales de compilación del estudiante se muestran siempre.
 
+## Aula (cuentas e inscripción, en desarrollo)
+
+`aula/` (frontend) y `services/aula-api/` (FastAPI + PostgreSQL): cuentas de estudiante, sesión de servidor, inscripción al curso de Arduino, borradores y compilación autenticada. Ver [services/aula-api/README.md](services/aula-api/README.md). Despliegue en el dominio por etapas (preparar, activar, revertir, respaldos): [docs/AULA_PRODUCCION.md](docs/AULA_PRODUCCION.md). El registro público está cerrado por defecto.
+
 ## GitHub y Linux
 
 El código oficial vive en https://github.com/compuforero-web/globalt-robotics, rama `main`.
