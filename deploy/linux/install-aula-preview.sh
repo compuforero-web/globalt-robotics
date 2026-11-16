@@ -9,7 +9,7 @@ PORT=8100
 for tool in docker git python3 curl ss; do command -v "$tool" >/dev/null || { echo "Falta $tool"; exit 1; }; done
 docker info >/dev/null
 docker compose version >/dev/null
-REV=$(git -C "$REPO" rev-parse HEAD)
+REV=$(git -c safe.directory="$REPO" -C "$REPO" rev-parse HEAD)
 if [[ -d "$STATE" ]]; then
   echo "Ya existe $STATE. Se conserva para revisar; no se reemplazan cuentas ni contenedores."
   exit 1
@@ -23,7 +23,7 @@ WEB_IMAGE=$(docker inspect globalt-robotics-web --format '{{.Image}}')
 umask 077
 install -d -m 700 "$STATE" "$STATE/source" "$STATE/site"
 trap 'echo "Instalación interrumpida. Se conservaron los recursos del piloto en $STATE para diagnóstico; los servicios existentes no se modificaron."' ERR
-git -C "$REPO" archive "$REV" | tar -x -C "$STATE/source"
+git -c safe.directory="$REPO" -C "$REPO" archive "$REV" | tar -x -C "$STATE/source"
 printf '%s\n' "$REV" > "$STATE/revision.txt"
 python3 - "$STATE" "$WEB_IMAGE" "$PORT" <<'PY'
 import json,pathlib,secrets,shutil,sys
