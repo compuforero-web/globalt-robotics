@@ -114,14 +114,36 @@ cleanup() {
   exit "$status"
 }
 trap cleanup ERR
+# Un intento anterior puede dejar un socket sin proceso escuchando.
+# Ya comprobamos al inicio que no existe ningún contenedor de este piloto.
+if [[ -S "$SOCKET_DIR/compilador.sock" ]]; then
+  rm -- "$SOCKET_DIR/compilador.sock"
+elif [[ -e "$SOCKET_DIR/compilador.sock" || -L "$SOCKET_DIR/compilador.sock" ]]; then
+  echo 'La ruta esperada del socket contiene otro tipo de archivo; se conserva para revisar.'
+  false
+fi
 docker run -d --name globalt-arduino-compiler --restart unless-stopped \
   "${LIMITS[@]}" --user "10001:$NGINX_GID" --log-opt max-size=5m --log-opt max-file=2 \
   --env COMPILADOR_SOCKET=/run/compilador/compilador.sock \
   --env COMPILADOR_SIMULTANEOS=1 --env COMPILADOR_ESPERA=5 \
   --mount type=bind,src="$SOCKET_DIR",dst=/run/compilador "$IMAGE"
 compiler_created=true
-for attempt in {1..20}; do [[ -S "$SOCKET_DIR/compilador.sock" ]] && break; sleep 1; done
-curl -fsS --max-time 10 --unix-socket "$SOCKET_DIR/compilador.sock" http://localhost/api/arduino/salud
+# El archivo por sí solo no acredita disponibilidad; esperar HTTP 200 por el socket.
+wait_for_compiler() {
+  local attempt
+  for attempt in {1..30}; do
+    if curl -fsS --max-time 2 --unix-socket "$SOCKET_DIR/compilador.sock" \
+      http://localhost/api/arduino/salud > "$STATE/last-compiler-health.json" 2> "$STATE/last-compiler-health.err"; then
+      cat "$STATE/last-compiler-health.json"
+      return 0
+    fi
+    sleep 1
+  done
+  echo 'El compilador no respondió correctamente durante el arranque.'
+  cat "$STATE/last-compiler-health.err" >&2
+  return 1
+}
+wait_for_compiler
 printf '\n'
 docker run -d --name globalt-arduino-preview --restart unless-stopped \
   --memory 64m --cpus .25 --pids-limit 64 --log-opt max-size=5m --log-opt max-file=2 \
