@@ -21,16 +21,18 @@ export function createCircuit(root) {
       <rect x="12" y="0" width="4" height="16" class="c-band1"/><rect x="21" y="0" width="4" height="16" class="c-band1"/>
       <rect x="30" y="0" width="4" height="16" class="c-band2"/><rect x="44" y="0" width="3" height="16" class="c-band3"/></g>
     <text x="148" y="14" class="c-small" text-anchor="middle">220 Ω</text>
-    <path d="M176 30 H286 V84" class="c-wire c-wire--sig"/>
+    <path d="M176 30 H252 V170 H281 V144" class="c-wire c-wire--sig"/>
     <g class="c-led" transform="translate(286 104)">
       <circle r="30" class="c-glow"/>
       <path d="M-13 6 V-10 a13 13 0 0 1 26 0 V6 z" class="c-led-body"/>
       <rect x="-16" y="6" width="32" height="5" rx="2" class="c-led-rim"/>
       <line x1="-5" y1="11" x2="-5" y2="40" class="c-leg"/><line x1="5" y1="11" x2="5" y2="32" class="c-leg"/>
     </g>
-    <text x="300" y="80" class="c-tiny">ánodo +</text>
+    <circle cx="281" cy="144" r="2.2" fill="#f97316"/>
+    <text x="245" y="161" class="c-tiny">ánodo +</text>
     <text x="300" y="148" class="c-tiny">cátodo −</text>
     <path d="M291 136 V196 H40 V144" class="c-wire c-wire--gnd"/>
+    <circle cx="291" cy="136" r="2.2" fill="#7c8da2"/>
   </svg>
   <div class="pin-strip" aria-label="Estado de los pines digitales">
     ${[...Array(14).keys()].map((p) => `<span class="pin-dot" data-pin="${p}" title="D${p}">D${p}</span>`).join('')}
