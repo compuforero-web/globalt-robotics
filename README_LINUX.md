@@ -20,9 +20,13 @@ cd ~/globalt-robotics
 sudo bash deploy/linux/install.sh
 ```
 
-Si `~/globalt-robotics` ya existe, no lo borres: comprueba primero qué contiene. El instalador se detiene si el puerto 8093 o el contenedor están ocupados, o si no encuentra la IP NetBird documentada. Requiere Git, Python 3, Docker activo, curl y systemd. No instala paquetes del sistema ni cambia reglas de red. Descarga la imagen oficial Nginx y fija su digest para esta instalación.
+Si `~/globalt-robotics` ya existe, no lo borres: comprueba primero qué contiene. El instalador se detiene si el puerto 8094 o el contenedor están ocupados, o si no encuentra la IP NetBird documentada. Requiere Git, Python 3, Docker activo, curl y systemd. No instala paquetes del sistema ni cambia reglas de red. Descarga la imagen oficial Nginx y fija su digest para esta instalación.
 
-Abrir desde un equipo con NetBird: **http://100.117.79.42:8093**. En el propio servidor: `http://127.0.0.1:8093`. No se expone en todas las interfaces ni se crea un acceso público. El dominio y HTTPS público se configuran después de conectar y verificar el almacenamiento compartido. NetBird debe conservar la IP indicada para la publicación privada.
+Abrir desde un equipo con NetBird: **http://100.117.79.42:8094**. En el propio servidor: `http://127.0.0.1:8094`. No se expone en todas las interfaces ni se crea un acceso público. El dominio y HTTPS público se configuran después de conectar y verificar el almacenamiento compartido. NetBird debe conservar la IP indicada para la publicación privada.
+
+## Puerto reservado para esta plataforma
+
+Se usa **8094** porque el puerto **8093 pertenece a Origen Inmobiliaria** en este servidor. La detección de puerto ocupado se mantiene: no se detiene ni reemplaza ningún servicio existente.
 
 ## Funcionamiento
 
@@ -31,7 +35,7 @@ Abrir desde un equipo con NetBird: **http://100.117.79.42:8093**. En el propio s
 - Sitio activo: `/srv/globalt-robotics/current` apunta a una carpeta de `releases/` identificada por commit.
 - Se conservan cinco versiones recientes, además de la activa y la anterior cuando corresponda; Git conserva el historial descargado.
 - Comprobación de cambios: temporizador `globalt-robotics-sync.timer`, aproximadamente cada 60–65 segundos después de la consulta anterior. Una descarga o fallo de red puede aumentar el tiempo; al volver Internet se reintenta.
-- Nginx: contenedor independiente `globalt-robotics-web`, puerto 8093, reinicio automático con Docker.
+- Nginx: contenedor independiente `globalt-robotics-web`, puerto 8094, reinicio automático con Docker.
 - Sincronización: usuario `globalt-robotics`, sin sudo ni acceso al socket Docker. No ejecuta archivos del repositorio.
 - Las herramientas de despliegue quedan instaladas fuera de la web. Cambiarlas en GitHub **no** las ejecuta ni sustituye automáticamente: requieren revisión e instalación manual.
 - La publicación copia solo `index.html`, `admin.html`, `robots.txt`, `favicon.ico` y las carpetas `assets`, `styles`, `src`, `games`, `data`. El repositorio, SQL, guías, scripts y pruebas no se sirven por HTTP. No colocar secretos en las carpetas públicas.
@@ -45,7 +49,7 @@ sudo docker ps --filter name=globalt-robotics-web
 systemctl status globalt-robotics-sync.timer --no-pager
 sudo systemctl start globalt-robotics-sync.service
 sudo journalctl -u globalt-robotics-sync.service -n 30 --no-pager
-curl -fsS http://127.0.0.1:8093/revision.txt
+curl -fsS http://127.0.0.1:8094/revision.txt
 ```
 
 Para verificar sincronización real, hacer un cambio pequeño visible en GitHub sobre `main`, esperar el temporizador y comparar `revision.txt` con el SHA del commit; recargar y comprobar el cambio. Esto queda pendiente hasta tener acceso al servidor.

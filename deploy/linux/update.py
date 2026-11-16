@@ -149,7 +149,7 @@ if __name__ == '__main__':
     parser.add_argument('--state', default='/var/lib/globalt-robotics')
     parser.add_argument('--webroot', default='/srv/globalt-robotics')
     parser.add_argument('--repo-url', default='https://github.com/compuforero-web/globalt-robotics.git')
-    parser.add_argument('--health-url', default='http://127.0.0.1:8093')
+    parser.add_argument('--health-url', default='http://127.0.0.1:8094')
     parser.add_argument('--prepare-only', action='store_true')
     parser.add_argument('--rollback', action='store_true')
     update(parser.parse_args())
