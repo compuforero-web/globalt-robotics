@@ -1,7 +1,7 @@
 // Laboratorio de programación Arduino de GLOBALT: lección, editor, compilación, simulación, reto y guía.
 import { LESSON, EXAMPLE_CODE, lessonHtml } from './lesson.js';
 import { createEditor } from './editor.js';
-import { checkCompiler, compileSketch, CompilerUnavailable } from './compiler.js';
+import { checkCompiler, compileSketch, CompilerUnavailable, usarAula, enAula } from './compiler.js';
 import { explainDiagnostic, GENERIC_HELP } from './compiler-help.js';
 import { Simulation, recordTrace } from './simulation.js';
 import { evaluateChallenge, EVAL_DURATION_MS } from './challenge.js';
@@ -140,6 +140,7 @@ function syncAccount(code = savedCode) {
 async function connectAccount() {
   accountState('Conectando con tu cuenta…', 'busy');
   const result = await cuenta.conectar(LESSON.id);
+  account.site = result.estado;
   if (result.estado === 'sin-aula') { $('#cuenta').hidden = true; return; }
   if (result.estado === 'sin-sesion') { accountState(`Entra en el ${AULA_LINK} para guardar tu código también en tu cuenta.`, '', { html: true }); return; }
   if (result.estado === 'sin-inscripcion') { accountState(`${esc(result.mensaje)} Ir al ${AULA_LINK}.`, '', { html: true }); return; }
@@ -184,7 +185,7 @@ function updateButtons() {
 }
 function setService(ready, info = '') {
   const el = $('#service');
-  el.textContent = ready ? `Compilador listo · ${info}` : 'Servicio de compilación pendiente';
+  el.textContent = ready ? `Compilador listo · ${info}` : (enAula() ? 'Compilador no disponible' : 'Servicio de compilación pendiente');
   el.dataset.kind = ready ? 'ok' : 'warn';
 }
 
@@ -235,7 +236,7 @@ async function ensureCompiled() {
     if (error instanceof CompilerUnavailable) {
       setService(false);
       setStatus(error.message, 'warn');
-      guide.notify('service-pending');
+      if (!enAula()) guide.notify('service-pending');   // en el aula el mensaje del servidor ya lo explica
     } else setStatus(error.message, 'error');
     return null;
   }
@@ -338,11 +339,17 @@ $('#btn-check').addEventListener('click', () => withBusy(async () => {
 }));
 
 // ---------- Inicio ----------
-connectAccount();
+// En el aula privada se compila a través de su API (sesión + inscripción); en el resto, como siempre.
+const accountReady = connectAccount().catch(() => {}).then(() => {
+  if (account.site && account.site !== 'sin-aula') usarAula(cuenta.tokenCsrf);
+});
 updateDirty();
 renderProgress();
 updateButtons();
 guide.notify('welcome', { completed: Boolean(stored.completedAt) });
-checkCompiler()
+accountReady.then(checkCompiler)
   .then((info) => setService(Boolean(info.ok), info.version?.compilador || 'avr-gcc'))
-  .catch(() => setService(false));
+  .catch((error) => {
+    setService(false);
+    if (enAula()) setStatus(error.message, 'warn');
+  });

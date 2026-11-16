@@ -2,7 +2,9 @@
 from contextlib import asynccontextmanager
 from datetime import timedelta
 import re
+import threading
 import unicodedata
+from typing import Literal
 from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
@@ -12,7 +14,7 @@ from psycopg.errors import UniqueViolation
 from psycopg_pool import ConnectionPool
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from . import seguridad
+from . import compilador, seguridad
 from .config import cargar
 
 COOKIE = 'aula_sesion'
@@ -246,6 +248,89 @@ def crear_app(config=None):
                                 status_code=409)
         return {'borrador': borrador_publico(fila)}
 
+    # ---------- Compilación con el servicio existente (sesión, CSRF, inscripción y límites) ----------
+    CURSO_ARDUINO = 'course-arduino'
+    NO_DISPONIBLE = 'El compilador no está disponible en este momento. Tu código sigue guardado; inténtalo más tarde.'
+    OCUPADO = 'El compilador está ocupado. Espera unos segundos e inténtalo de nuevo.'
+    turnos = threading.BoundedSemaphore(max(1, config.compilar_simultaneos))
+    cerrojo = threading.Lock()
+    estado_cola = {'esperando': 0, 'en_curso': set()}   # usuarios con una compilación en marcha
+
+    def exigir_inscripcion(conexion, usuario_id):
+        if not conexion.execute('SELECT 1 FROM inscripciones WHERE usuario_id = %s AND curso_id = %s',
+                                (usuario_id, CURSO_ARDUINO)).fetchone():
+            raise HTTPException(403, 'Inscríbete en el curso de Arduino desde el aula para compilar.')
+
+    @app.get('/api/aula/compilador/salud')
+    def salud_compilador(sesion=Depends(sesion_actual), conexion=Depends(bd)):
+        exigir_inscripcion(conexion, sesion['usuario_id'])
+        try:
+            estado, datos = compilador.pedir(config.compilador_socket, 'GET', '/salud', tiempo=5)
+        except compilador.NoDisponible:
+            raise HTTPException(503, NO_DISPONIBLE)
+        if estado != 200 or not datos.get('ok'):
+            raise HTTPException(503, NO_DISPONIBLE)
+        return {'ok': True, 'version': datos.get('version') or {}}
+
+    @app.post('/api/aula/compilar')
+    def compilar(datos: Compilacion, request: Request):
+        # Conexiones a la base cortas: no se retiene ninguna mientras se espera al compilador.
+        with pool.connection() as conexion:
+            sesion = con_csrf(request, sesion_actual(request, conexion))
+            usuario = sesion['usuario_id']
+            exigir_inscripcion(conexion, usuario)
+            minuto, hora = conexion.execute(
+                "SELECT count(*) FILTER (WHERE creado_en > now() - interval '1 minute'), count(*) "
+                "FROM compilaciones WHERE usuario_id = %s AND creado_en > now() - interval '1 hour'",
+                (usuario,)).fetchone()
+        if minuto >= config.compilar_por_minuto:
+            raise HTTPException(429, 'Has compilado muchas veces seguidas. Espera un minuto y vuelve a intentarlo.',
+                                headers={'Retry-After': '60'})
+        if hora >= config.compilar_por_hora:
+            raise HTTPException(429, 'Alcanzaste el límite de compilaciones de esta hora. Tu código sigue guardado.',
+                                headers={'Retry-After': '600'})
+        with cerrojo:   # una compilación por estudiante, aunque use varias sesiones o pestañas
+            if usuario in estado_cola['en_curso']:
+                raise HTTPException(429, 'Ya tienes una compilación en curso. Espera a que termine.',
+                                    headers={'Retry-After': '5'})
+            if estado_cola['esperando'] >= config.compilar_max_espera:
+                raise HTTPException(503, OCUPADO, headers={'Retry-After': '10'})
+            estado_cola['en_curso'].add(usuario)
+            estado_cola['esperando'] += 1
+        try:
+            try:
+                turno = turnos.acquire(timeout=config.compilar_espera_s)
+            finally:
+                with cerrojo:
+                    estado_cola['esperando'] -= 1
+            if not turno:
+                raise HTTPException(503, OCUPADO, headers={'Retry-After': '10'})
+            try:
+                with pool.connection() as conexion:
+                    conexion.execute('INSERT INTO compilaciones (usuario_id) VALUES (%s)', (usuario,))
+                    conexion.execute("DELETE FROM compilaciones WHERE usuario_id = %s AND creado_en < now() - interval '1 day'",
+                                     (usuario,))
+                estado, respuesta = compilador.pedir(config.compilador_socket, 'POST', '/compilar',
+                                                     {'placa': 'nano', 'codigo': datos.codigo},
+                                                     tiempo=config.compilar_tiempo_s)
+            except compilador.NoDisponible as fallo:
+                if str(fallo) in ('TimeoutError', 'timeout'):
+                    raise HTTPException(504, 'El compilador tardó demasiado en responder. Inténtalo de nuevo.')
+                raise HTTPException(503, NO_DISPONIBLE)
+            finally:
+                turnos.release()
+        finally:
+            with cerrojo:
+                estado_cola['en_curso'].discard(usuario)
+        if estado == 200:
+            # Resultado del compilador tal cual (incluidos errores del código). No se registra ninguna aprobación.
+            return JSONResponse(respuesta)
+        if estado in (429, 503):
+            raise HTTPException(503, OCUPADO, headers={'Retry-After': '10'})
+        if estado in (400, 413):
+            raise HTTPException(estado, str(respuesta.get('error') or 'El código no se puede compilar.')[:300])
+        raise HTTPException(502, 'Respuesta inesperada del compilador.')
+
     return app
 
 
@@ -292,6 +377,19 @@ class Borrador(BaseModel):
     model_config = ConfigDict(extra='forbid')   # sin usuario_id: la identidad sale de la sesión
     codigo: str = Field(max_length=MAX_CODIGO)
     version_base: int | None = Field(default=None, ge=1, le=2_000_000_000)
+
+    @field_validator('codigo')
+    @classmethod
+    def sin_nulos(cls, valor):
+        if '\x00' in valor:
+            raise ValueError('carácter nulo')
+        return valor
+
+
+class Compilacion(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    placa: Literal['nano'] = 'nano'
+    codigo: str = Field(min_length=1, max_length=MAX_CODIGO)
 
     @field_validator('codigo')
     @classmethod

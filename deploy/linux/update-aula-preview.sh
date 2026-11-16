@@ -9,7 +9,10 @@
 # Pasos: 1) verifica la instalación y se detiene ante diferencias; 2) respaldo comprobado de PostgreSQL
 # y de la configuración; 3) exporta el commit, construye la imagen de la API y sincroniza la web;
 # 4) la API aplica las migraciones pendientes al arrancar (mecanismo existente, con suma de control);
-# 5) comprueba página, salud y guardado de borradores con una cuenta ficticia propia que luego elimina.
+# 5) comprueba página, salud, borradores y una compilación real con una cuenta ficticia propia que luego elimina.
+# Compilación: la API del aula usa el compilador EXISTENTE (contenedor globalt-arduino-compiler, sin red) por su
+# socket Unix. Se monta solo la carpeta del socket, en solo lectura, y la API recibe el grupo que ya tiene el
+# socket. No se cambian el compilador, sus permisos ni los laboratorios 8094/8097; no se monta el socket de Docker.
 # Si algo falla tras el cambio, vuelve automáticamente a la API y web anteriores. La base de datos
 # NUNCA se restaura automáticamente. Recuperación: RECUPERACION.txt dentro de cada respaldo.
 # Se puede repetir: no duplica migraciones ni pierde datos.
@@ -23,6 +26,9 @@ PORT=8100
 NETBIRD=100.117.79.42
 BASE="http://127.0.0.1:$PORT"
 DB_C="$NAME-db"; API_C="$NAME-api"; WEB_C="$NAME-web"
+COMP_C=globalt-arduino-compiler
+SOCKET_DIR=/var/lib/globalt-robotics-lab/run
+SOCKET_API=/compilador            # destino del montaje dentro de la API
 
 falla() { echo "ERROR: $*" >&2; exit 1; }
 paso() { printf '\n== %s\n' "$*"; }
@@ -58,7 +64,8 @@ trap 'echo "Detenido durante la verificación: no se modificó nada. Revisa $LOG
 "${GIT[@]}" show "$REV:deploy/linux/update-aula-preview.sh" | cmp -s - "$SELF" \
   || falla 'Este script no coincide con el del commit indicado. Ejecuta la copia de ese mismo commit.'
 for f in services/aula-api/Dockerfile services/aula-api/app/main.py services/aula-api/app/migraciones.py \
-         aula/index.html games/laboratorio-arduino/index.html games/laboratorio-arduino/src/cuenta.js; do
+         services/aula-api/app/compilador.py aula/index.html games/laboratorio-arduino/index.html \
+         games/laboratorio-arduino/src/cuenta.js; do
   "${GIT[@]}" cat-file -e "$REV:$f" 2>/dev/null || falla "El commit no contiene $f."
 done
 for f in compose.json api.env db.env nginx.conf revision.txt; do [[ -f $f ]] || falla "Falta $STATE/$f."; done
@@ -72,9 +79,31 @@ for dir in "$STATE" "$(docker info -f '{{.DockerRootDir}}')"; do
   (( libre > 2 * 1024 * 1024 )) || falla "Menos de 2 GB libres en $dir."
 done
 
-python3 - "$STATE" "$OLD" "$NAME" "$PORT" "$NETBIRD" <<'PY' || falla 'compose.json no coincide con la instalación esperada; no se modificó nada.'
+# Compilador existente: solo se comprueba; no se modifica.
+[[ -d $SOCKET_DIR && ! -L $SOCKET_DIR ]] || falla "No existe la carpeta del socket $SOCKET_DIR."
+[[ -S $SOCKET_DIR/compilador.sock && ! -L $SOCKET_DIR/compilador.sock ]] || falla 'No existe el socket del compilador.'
+read -r SOCK_UID SOCK_GID SOCK_MODO < <(stat -c '%u %g %a' "$SOCKET_DIR/compilador.sock")
+read -r DIR_UID DIR_GID DIR_MODO < <(stat -c '%u %g %a' "$SOCKET_DIR")
+[[ $SOCK_UID == 10001 && $SOCK_MODO == 660 && $DIR_UID == 10001 && $DIR_GID == "$SOCK_GID" && $DIR_MODO == 770 ]] \
+  || falla "Permisos del socket inesperados ($SOCK_UID:$SOCK_GID $SOCK_MODO, carpeta $DIR_UID:$DIR_GID $DIR_MODO)."
+[[ $SOCK_GID =~ ^[0-9]+$ && $SOCK_GID != 0 ]] || falla 'El grupo del socket no es válido.'
+python3 - "$COMP_C" "$SOCKET_DIR" <<'PY' || falla 'El contenedor del compilador no coincide con lo esperado; no se modificó nada.'
+import json, subprocess, sys
+nombre, carpeta = sys.argv[1:]
+c = json.loads(subprocess.run(['docker', 'inspect', nombre], capture_output=True, check=True).stdout)[0]
+assert c['State']['Running'], 'el compilador no está en ejecución'
+assert c['HostConfig']['NetworkMode'] == 'none', 'el compilador debe seguir sin red'
+assert c['HostConfig']['ReadonlyRootfs'] and 'ALL' in (c['HostConfig']['CapDrop'] or []), 'aislamiento del compilador'
+assert not any(m['Source'] == '/var/run/docker.sock' or m['Source'] == '/run/docker.sock' for m in c['Mounts'])
+assert any(m['Source'] == carpeta for m in c['Mounts']), 'el compilador no usa la carpeta del socket'
+print('Compilador existente (sin red, solo lectura, socket propio): OK')
+PY
+salud_comp=$(curl -fsS --max-time 5 --unix-socket "$SOCKET_DIR/compilador.sock" http://localhost/api/arduino/salud || true)
+[[ $salud_comp == *'"ok": true'* || $salud_comp == *'"ok":true'* ]] || falla 'El compilador existente no responde sano; no se modificó nada.'
+
+python3 - "$STATE" "$OLD" "$NAME" "$PORT" "$NETBIRD" "$SOCKET_DIR" "$SOCKET_API" "$SOCK_GID" <<'PY' || falla 'compose.json no coincide con la instalación esperada; no se modificó nada.'
 import json, pathlib, sys
-state, old, name, port, netbird = sys.argv[1:]
+state, old, name, port, netbird, sdir, sapi, sgid = sys.argv[1:]
 c = json.loads(pathlib.Path(state, 'compose.json').read_text())
 s = c['services']
 assert c['name'] == name and set(s) == {'db', 'api', 'web'}, 'proyecto o servicios'
@@ -89,7 +118,15 @@ assert s['db']['volumes'] == ['datos:/var/lib/postgresql/data'], 'volumen db'
 assert s['api']['build'] == {'context': 'source/services/aula-api'}, 'build api'
 assert s['api']['image'] == f'globalt-aula-api:{old}', 'imagen api distinta de revision.txt'
 assert s['api']['env_file'] == ['api.env'] and s['db']['env_file'] == ['db.env'], 'env_file'
-print('compose.json: OK')
+# Antes de integrar el compilador la API no tiene montajes; después, solo la carpeta del socket.
+conocidas = {'read_only', 'tmpfs', 'cap_drop', 'security_opt', 'init', 'restart', 'logging', 'networks', 'build',
+             'image', 'container_name', 'env_file', 'mem_limit', 'cpus', 'pids_limit', 'depends_on'}
+compilador = {'volumes': [f'{sdir}:{sapi}:ro'], 'group_add': [sgid],
+              'environment': {'AULA_COMPILADOR_SOCKET': f'{sapi}/compilador.sock'}}
+extra = {k: v for k, v in s['api'].items() if k not in conocidas}
+assert extra in ({}, compilador), f'opciones inesperadas en la API: {sorted(extra)}'
+assert s['api']['read_only'] is True and s['api']['cap_drop'] == ['ALL'], 'aislamiento de la API'
+print('compose.json: OK' + (' (compilador ya integrado)' if extra else ''))
 PY
 "${DC[@]}" config --quiet || falla 'docker compose no acepta compose.json.'
 
@@ -115,6 +152,8 @@ for rol, redes_rol in esperado.items():
     assert set(c['NetworkSettings']['Networks']) == redes_rol, f'{rol}: redes {sorted(c["NetworkSettings"]["Networks"])}'
     if rol != 'web':
         assert not any(c['HostConfig'].get('PortBindings') or {}), f'{rol} publica puertos'
+api_montajes = [(m['Type'], m['Source'], m['Destination'], m['RW']) for m in ins[f'{name}-api']['Mounts']]
+assert api_montajes in ([], [('bind', '/var/lib/globalt-robotics-lab/run', '/compilador', False)]), f'montajes API {api_montajes}'
 web = ins[f'{name}-web']
 pub = {(b['HostIp'], b['HostPort']) for b in web['HostConfig']['PortBindings']['80/tcp']}
 assert pub == {('127.0.0.1', port), (netbird, port)}, f'puertos web {pub}'
@@ -301,10 +340,16 @@ else
   echo 'Misma versión ya instalada: se conservan source/ y la imagen; se repiten las comprobaciones.'
 fi
 sincronizar_sitio "$STAGE/site"
-python3 - "$STATE/compose.json" "$REV" <<'PY'
+python3 - "$STATE/compose.json" "$REV" "$SOCKET_DIR" "$SOCKET_API" "$SOCK_GID" <<'PY'
 import json, pathlib, sys
 p = pathlib.Path(sys.argv[1]); c = json.loads(p.read_text())
-c['services']['api']['image'] = 'globalt-aula-api:' + sys.argv[2]   # único cambio en compose.json
+rev, sdir, sapi, sgid = sys.argv[2:]
+api = c['services']['api']
+api['image'] = 'globalt-aula-api:' + rev
+# Compilador existente: solo la carpeta del socket, en solo lectura, con el grupo que ya tiene el socket.
+api['volumes'] = [f'{sdir}:{sapi}:ro']
+api['group_add'] = [sgid]
+api['environment'] = {'AULA_COMPILADOR_SOCKET': f'{sapi}/compilador.sock'}
 tmp = p.with_name('.compose.json.nuevo'); tmp.write_text(json.dumps(c, indent=2)); tmp.chmod(0o600); tmp.replace(p)
 PY
 "${DC[@]}" config --quiet
@@ -320,6 +365,9 @@ for _ in $(seq 1 60); do
 done
 if [[ $sano != true ]]; then docker logs --tail 30 "$API_C" >&2 || true; false; fi
 comprobar_contenedores despues
+salud_comp=$(curl -fsS --max-time 5 --unix-socket "$SOCKET_DIR/compilador.sock" http://localhost/api/arduino/salud || true)
+[[ $salud_comp == *'"ok"'* ]] || { echo 'El compilador existente dejó de responder.' >&2; false; }
+[[ $(stat -c '%u %g %a' "$SOCKET_DIR/compilador.sock") == "10001 $SOCK_GID 660" ]] || { echo 'Cambiaron los permisos del socket.' >&2; false; }
 echo 'SELECT version, suma FROM esquema_migraciones ORDER BY version' | sql | tr '|' ' ' > "$STATE/.migraciones-aplicadas"
 diff <(sort "$STATE/.migraciones-destino.sumas") <(sort "$STATE/.migraciones-aplicadas") \
   || { echo 'Las migraciones aplicadas no coinciden con las del commit.' >&2; false; }
@@ -365,8 +413,23 @@ assert pedir('PUT', B, {'codigo': 'otro'}, csrf)[0] == 409, 'no debe sobrescribi
 assert pedir('DELETE', '/api/aula/sesion', None, csrf)[0] == 204, 'cerrar sesión'
 assert pedir('GET', B)[0] == 401, 'sin sesión debe rechazarse'
 r = pedir('POST', '/api/aula/sesion', {'correo': correo, 'clave': clave}); assert r[0] == 200, 'volver a entrar'
-assert j(pedir('GET', B))['borrador']['codigo'] == codigo, 'recuperar borrador'
-print('Página, salud, registro, inscripción y borrador (guardar, conflicto, cerrar sesión, recuperar): OK')
+r = pedir('GET', B); assert j(r)['borrador']['codigo'] == codigo, 'recuperar borrador'
+csrf = j(pedir('GET', '/api/aula/sesion'))['csrf']
+assert pedir('GET', '/api/aula/compilador/salud')[0] == 200, 'salud del compilador vía aula'
+blink = 'void setup() { pinMode(13, OUTPUT); }\nvoid loop() { digitalWrite(13, HIGH); delay(200); digitalWrite(13, LOW); delay(800); }\n'
+assert pedir('POST', '/api/aula/compilar', {'codigo': blink}, None)[0] == 403, 'compilar sin CSRF debe rechazarse'
+r = pedir('POST', '/api/aula/compilar', {'codigo': blink}, csrf)
+assert r[0] == 200 and j(r)['ok'] is True and j(r)['hex'].startswith(':'), f'compilación real: {r[0]} {r[2][:200]!r}'
+r = pedir('POST', '/api/aula/compilar', {'codigo': 'void setup() { x }\nvoid loop() {}\n'}, csrf)
+assert r[0] == 200 and j(r)['ok'] is False and j(r)['diagnosticos'], 'errores del código'
+anon = urllib.request.build_opener()
+try:
+    anon.open(urllib.request.Request(base + '/api/aula/compilar', data=b'{"codigo":"x"}', method='POST',
+              headers={'Origin': base, 'Content-Type': 'application/json'}), timeout=10)
+    raise AssertionError('compilar sin sesión debe rechazarse')
+except urllib.error.HTTPError as e:
+    assert e.code in (401, 403), e.code
+print('Página, salud, registro, inscripción, borrador y compilación real (con y sin errores, sin sesión, sin CSRF): OK')
 PY
 borrar_ficticia || { echo "No se pudo eliminar la cuenta ficticia $CORREO; eliminarla a mano." >&2; prueba_ok=false; }
 [[ $prueba_ok == true ]]

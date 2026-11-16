@@ -18,6 +18,14 @@ class Config:
     max_fallos_ip: int
     max_registros_ip: int
     ventana_min: int
+    # Compilación a través del servicio existente (socket Unix montado en solo lectura).
+    compilador_socket: str = ''
+    compilar_simultaneos: int = 1      # compilaciones del aula a la vez (deja hueco a los laboratorios)
+    compilar_max_espera: int = 4       # peticiones esperando turno; el resto recibe «ocupado»
+    compilar_espera_s: float = 8.0     # espera máxima por un turno
+    compilar_tiempo_s: float = 45.0    # tiempo máximo de respuesta del compilador
+    compilar_por_minuto: int = 6       # por estudiante (no por sesión)
+    compilar_por_hora: int = 60
 
 
 def cargar():
@@ -34,4 +42,11 @@ def cargar():
         max_fallos_ip=int(os.environ.get('AULA_MAX_FALLOS_IP', '30')),
         max_registros_ip=int(os.environ.get('AULA_MAX_REGISTROS_IP', '10')),
         ventana_min=int(os.environ.get('AULA_VENTANA_INTENTOS_MIN', '15')),
+        compilador_socket=os.environ.get('AULA_COMPILADOR_SOCKET', ''),
+        compilar_simultaneos=int(os.environ.get('AULA_COMPILAR_SIMULTANEOS', '1')),
+        compilar_max_espera=int(os.environ.get('AULA_COMPILAR_MAX_ESPERA', '4')),
+        compilar_espera_s=float(os.environ.get('AULA_COMPILAR_ESPERA_S', '8')),
+        compilar_tiempo_s=float(os.environ.get('AULA_COMPILAR_TIEMPO_S', '45')),
+        compilar_por_minuto=int(os.environ.get('AULA_COMPILAR_POR_MINUTO', '6')),
+        compilar_por_hora=int(os.environ.get('AULA_COMPILAR_POR_HORA', '60')),
     )

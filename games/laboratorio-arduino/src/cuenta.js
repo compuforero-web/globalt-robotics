@@ -36,6 +36,9 @@ async function llamar(ruta, { metodo = 'GET', datos } = {}) {
   return json;
 }
 
+/** Token CSRF de la sesión actual (solo en memoria), para compilar a través del aula. */
+export const tokenCsrf = () => csrf;
+
 const ruta = (leccionId) => `/borradores/${encodeURIComponent(leccionId)}`;
 
 /**

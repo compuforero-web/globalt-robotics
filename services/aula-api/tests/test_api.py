@@ -31,7 +31,7 @@ def config(**cambios):
 def base_limpia():
     with psycopg.connect(URL, autocommit=True) as c:
         c.execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
-    assert migraciones.aplicar(URL) == ['0001_inicial.sql', '0002_borradores.sql']
+    assert migraciones.aplicar(URL) == ['0001_inicial.sql', '0002_borradores.sql', '0003_compilaciones.sql']
     assert migraciones.aplicar(URL) == []          # reproducible e idempotente
 
 
@@ -305,3 +305,144 @@ def test_borrador_no_sobrescribe_version_mas_reciente():
         r = uno.put(RUTA_B, json={'codigo': 'v1-bis', 'version_base': 1}, headers=h1)
         assert r.status_code == 409 and r.json()['borrador'] == {**r.json()['borrador'], 'codigo': 'v2', 'version': 2}
         assert uno.get(RUTA_B).json()['borrador']['codigo'] == 'v2'
+
+
+# ---------- Compilación a través del servicio existente (compilador falso por socket Unix) ----------
+import json as _json
+import socketserver
+import tempfile
+import threading
+import time
+from http.server import BaseHTTPRequestHandler
+
+FALSO = {'estado': 200, 'retraso': 0.0, 'peticiones': []}
+
+
+class _Falso(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def address_string(self): return 'unix'
+
+    def responder(self, estado, datos):
+        cuerpo = _json.dumps(datos).encode()
+        self.send_response(estado); self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(cuerpo))); self.end_headers(); self.wfile.write(cuerpo)
+
+    def do_GET(self):
+        self.responder(200, {'ok': True, 'version': {'compilador': 'avr-gcc falso'}})
+
+    def do_POST(self):
+        datos = _json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+        FALSO['peticiones'].append((self.path, datos))
+        time.sleep(FALSO['retraso'])
+        if FALSO['estado'] == 200:
+            self.responder(200, {'ok': True, 'hex': ':00000001FF', 'diagnosticos': [], 'salida': '',
+                                 'memoria': {'flash': 1, 'flashMax': 2, 'ram': 1, 'ramMax': 2}})
+        else:
+            self.responder(FALSO['estado'], {'error': 'Directiva no permitida.'})
+
+
+class _ServidorUnix(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+    daemon_threads = True
+
+
+@pytest.fixture()
+def socket_falso():
+    carpeta = tempfile.mkdtemp()
+    ruta = os.path.join(carpeta, 'compilador.sock')
+    servidor = _ServidorUnix(ruta, _Falso)
+    threading.Thread(target=servidor.serve_forever, daemon=True).start()
+    FALSO.update(estado=200, retraso=0.0, peticiones=[])
+    yield ruta
+    servidor.shutdown(); servidor.server_close()
+
+
+RUTA_C = '/api/aula/compilar'
+PROG = {'codigo': 'void setup() {}\nvoid loop() {}\n'}
+
+
+def test_compilar_exige_sesion_inscripcion_csrf_y_origen(socket_falso):
+    with cliente(compilador_socket=socket_falso) as c:
+        assert c.post(RUTA_C, json=PROG).status_code == 401
+        assert c.get('/api/aula/compilador/salud').status_code == 401
+        h = {'X-CSRF-Token': registrar(c, 'comp.sin@example.com').json()['csrf']}
+        r = c.post(RUTA_C, json=PROG, headers=h)
+        assert r.status_code == 403 and 'Inscríbete' in r.json()['detail']
+        assert c.get('/api/aula/compilador/salud').status_code == 403
+        c.post('/api/aula/inscripciones', json={'curso_id': 'course-arduino'}, headers=h)
+        assert c.post(RUTA_C, json=PROG).status_code == 403                                  # sin CSRF
+        assert c.post(RUTA_C, json=PROG, headers={'X-CSRF-Token': 'x' * 43}).status_code == 403  # CSRF falso
+        assert c.post(RUTA_C, json=PROG, headers={**h, 'Origin': 'https://atacante.example'}).status_code == 403
+        assert c.post(RUTA_C, json={**PROG, 'usuario_id': 1}, headers=h).status_code == 422
+        assert c.post(RUTA_C, json={**PROG, 'placa': 'uno'}, headers=h).status_code == 422
+        assert c.post(RUTA_C, json={'codigo': 'a' * 12001}, headers=h).status_code == 422
+        assert FALSO['peticiones'] == []                                   # nada llegó al compilador
+        assert c.get('/api/aula/compilador/salud').json()['ok'] is True
+        r = c.post(RUTA_C, json=PROG, headers=h)
+        assert r.status_code == 200 and r.json()['ok'] is True and r.json()['hex']
+        assert FALSO['peticiones'] == [('/api/arduino/compilar', {'placa': 'nano', 'codigo': PROG['codigo']})]
+    # Compilar no registra aprobaciones ni guarda el código.
+    assert sql("SELECT count(*) FROM compilaciones c JOIN usuarios u ON u.id = c.usuario_id "
+               "WHERE u.correo = 'comp.sin@example.com'")[0][0] == 1
+
+
+def test_compilar_limite_por_estudiante_aunque_cambie_de_sesion(socket_falso):
+    with cliente(compilador_socket=socket_falso, compilar_por_minuto=3) as c:
+        h = inscrito(c, 'comp.limite@example.com')
+        for _ in range(3):
+            assert c.post(RUTA_C, json=PROG, headers=h).status_code == 200
+        r = c.post(RUTA_C, json=PROG, headers=h)
+        assert r.status_code == 429 and r.headers['retry-after'] == '60'
+    with cliente(compilador_socket=socket_falso, compilar_por_minuto=3) as otra:   # nueva sesión, mismo estudiante
+        h2 = entrar(otra, 'comp.limite@example.com')
+        assert otra.post(RUTA_C, json=PROG, headers=h2).status_code == 429
+    with cliente(compilador_socket=socket_falso, compilar_por_minuto=100, compilar_por_hora=3) as c3:
+        h3 = entrar(c3, 'comp.limite@example.com')
+        r = c3.post(RUTA_C, json=PROG, headers=h3)
+        assert r.status_code == 429 and 'hora' in r.json()['detail']
+    assert len(FALSO['peticiones']) == 3
+
+
+def test_compilar_una_a_la_vez_por_estudiante_y_cola_global(socket_falso):
+    app_cfg = dict(compilador_socket=socket_falso, compilar_simultaneos=1, compilar_max_espera=1, compilar_espera_s=0.3)
+    with cliente(**app_cfg) as a:
+        ha = inscrito(a, 'comp.cola.a@example.com')
+        FALSO['retraso'] = 1.0
+        resultados = []
+        hilos = [threading.Thread(target=lambda: resultados.append(a.post(RUTA_C, json=PROG, headers=ha))) for _ in range(2)]
+        for t in hilos: t.start(); time.sleep(0.1)
+        for t in hilos: t.join()
+        estados = sorted(r.status_code for r in resultados)
+        assert estados == [200, 429], estados   # misma cuenta: la segunda no espera ni satura
+        # Otro estudiante (misma API) mientras el turno está ocupado: espera 0,3 s y recibe «ocupado».
+        b = TestClient(a.app, base_url='http://aula.test')
+        b.headers.update({'Origin': ORIGEN})
+        hb = inscrito(b, 'comp.cola.b@example.com')
+        hilo = threading.Thread(target=lambda: resultados.append(a.post(RUTA_C, json=PROG, headers=ha)))
+        hilo.start(); time.sleep(0.1)
+        r = b.post(RUTA_C, json=PROG, headers=hb)
+        hilo.join()
+        assert r.status_code == 503 and 'ocupado' in r.json()['detail'] and r.headers['retry-after'] == '10'
+        FALSO['retraso'] = 0.0
+        assert b.post(RUTA_C, json=PROG, headers=hb).status_code == 200   # se recupera al quedar libre
+
+
+def test_compilador_detenido_errores_y_recuperacion(socket_falso):
+    with cliente(compilador_socket=socket_falso + '.no-existe', compilar_tiempo_s=0.5) as c:
+        h = inscrito(c, 'comp.caido@example.com')
+        r = c.post(RUTA_C, json=PROG, headers=h)
+        assert r.status_code == 503 and 'no está disponible' in r.json()['detail']
+        assert c.get('/api/aula/compilador/salud').status_code == 503
+    with cliente(compilador_socket=socket_falso, compilar_tiempo_s=0.5) as c:
+        h = entrar(c, 'comp.caido@example.com')
+        FALSO['estado'] = 503
+        assert c.post(RUTA_C, json=PROG, headers=h).status_code == 503
+        FALSO['estado'] = 400
+        r = c.post(RUTA_C, json=PROG, headers=h)
+        assert r.status_code == 400 and r.json()['detail'] == 'Directiva no permitida.'
+        FALSO.update(estado=200, retraso=1.5)
+        r = c.post(RUTA_C, json=PROG, headers=h)
+        assert r.status_code == 504 and 'tardó' in r.json()['detail']
+        FALSO['retraso'] = 0.0
+        time.sleep(1.2)
+        assert c.post(RUTA_C, json=PROG, headers=h).status_code == 200      # recuperación
+        assert c.get('/api/aula/compilador/salud').status_code == 200
