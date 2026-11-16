@@ -29,7 +29,7 @@ function showInPlayer(player, video, autoplay) {
   const id = idOf(video);
   if (!id) {
     player.innerHTML = `<div class="player__empty">${icon('play', 'icon icon--xl')}
-      <p><strong>Galería lista para tus videos</strong><br>Pega enlaces de YouTube en <code>/admin → Videotutoriales</code> y aparecerán aquí con su miniatura.</p></div>`;
+      <p><strong>Video próximamente</strong></p></div>`;
     return;
   }
   player.innerHTML = autoplay
@@ -40,7 +40,13 @@ function showInPlayer(player, video, autoplay) {
   if (!autoplay) $('.player__facade', player).addEventListener('click', () => showInPlayer(player, video, true));
 }
 
+/** Pinta la galería. Devuelve false, sin pintar nada, si aún no hay ningún video publicado. */
 export function renderVideos(grid, player, videos) {
+  if (!videos.some((v) => idOf(v))) {
+    grid.innerHTML = '';
+    player.innerHTML = '';
+    return false;
+  }
   grid.innerHTML = videos.map(videoCard).join('') || '<p class="empty">Aún no hay videos publicados.</p>';
   const first = videos.find((v) => idOf(v)) ?? videos[0];
   showInPlayer(player, first ?? {}, false);
@@ -52,4 +58,5 @@ export function renderVideos(grid, player, videos) {
     showInPlayer(player, video, true);
     player.scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
+  return true;
 }

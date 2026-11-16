@@ -2,7 +2,12 @@
 const BASE = '/api/arduino';
 
 export class CompilerUnavailable extends Error {
-  constructor(message = 'Servicio de compilación pendiente') { super(message); this.name = 'CompilerUnavailable'; }
+  // pending = no hay servicio de compilación en este sitio (sin detalle del servicio).
+  constructor(message) {
+    super(message || 'La compilación estará disponible próximamente.');
+    this.name = 'CompilerUnavailable';
+    this.pending = !message;
+  }
 }
 
 async function request(path, options = {}, timeoutMs = 30000) {

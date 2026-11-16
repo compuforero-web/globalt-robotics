@@ -1,6 +1,6 @@
 // Prueba manual de extremo a extremo del laboratorio (no la ejecuta CI: necesita Chromium y el compilador).
 // Uso: LAB_URL=http://localhost:8080/games/laboratorio-arduino/index.html node tests/e2e/laboratorio.e2e.mjs
-//      LAB_PENDIENTE_URL=…  (opcional) servidor sin compilador para comprobar «Servicio de compilación pendiente»
+//      LAB_PENDIENTE_URL=…  (opcional) servidor sin compilador para comprobar «Compilación próximamente»
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
@@ -156,18 +156,18 @@ await rp.goto(URL_LAB);
 assert.equal(await rp.evaluate(() => getComputedStyle(document.querySelector('.g-eye')).animationName), 'none');
 log('movimiento reducido respetado');
 
-// 14. Sin servicio: «Servicio de compilación pendiente», nunca un éxito ficticio.
+// 14. Sin servicio: aviso para estudiantes, solo se desactivan compilar/ejecutar/comprobar y nunca hay éxito ficticio.
 if (process.env.LAB_PENDIENTE_URL) {
   const p2 = await browser.newPage();
   await p2.goto(process.env.LAB_PENDIENTE_URL);
   await p2.waitForFunction(() => document.querySelector('#service').dataset.kind !== '');
-  assert.equal(await p2.textContent('#service'), 'Servicio de compilación pendiente');
-  await p2.click('#btn-run');
-  await p2.waitForFunction(() => !/Compilando/.test(document.querySelector('#status').textContent) && document.querySelector('#status').textContent);
-  assert.equal(await p2.textContent('#status'), 'Servicio de compilación pendiente');
+  assert.equal(await p2.textContent('#service'), 'Compilación próximamente');
+  assert.equal(await p2.textContent('#status'), 'La compilación estará disponible próximamente.');
+  for (const id of ['#btn-compile', '#btn-run', '#btn-check']) assert.equal(await p2.isDisabled(id), true, id);
+  for (const id of ['#btn-save', '#btn-restore']) assert.equal(await p2.isDisabled(id), false, id);
   assert.equal(await p2.textContent('#sim-state'), 'Detenida');
-  assert.match(await checkChallenge(p2), /necesita un programa compilado/);
-  log('sin servicio: muestra «Servicio de compilación pendiente» y no aprueba');
+  assert.doesNotMatch(await p2.textContent('#eval-result'), /superado|aprobado/i);
+  log('sin servicio: aviso «Compilación próximamente», acciones de compilación desactivadas y sin aprobar');
 }
 
 assert.deepEqual(errors, []);
