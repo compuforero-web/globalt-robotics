@@ -43,7 +43,8 @@ const ruta = (leccionId) => `/borradores/${encodeURIComponent(leccionId)}`;
 
 /**
  * Comprueba la sesión y lee el borrador. Devuelve { estado, borrador?, mensaje? } con estado:
- * 'sin-aula' (no hay API aquí), 'sin-sesion', 'sin-inscripcion', 'error' (reintentar) o 'lista'.
+ * 'sin-aula' (no hay API aquí), 'sin-sesion', 'sin-inscripcion', 'no-disponible' (la API aún no admite esta
+ * lección: solo guardado local), 'error' (reintentar) o 'lista'.
  */
 export async function conectar(leccionId) {
   try {
@@ -59,6 +60,8 @@ export async function conectar(leccionId) {
   } catch (e) {
     if (e.status === 403) return { estado: 'sin-inscripcion', mensaje: e.message };
     if (e.status === 401) return { estado: 'sin-sesion' };
+    // La API responde 404 «Lección no disponible» si aún no admite esta lección (JSON: el aula sí existe).
+    if (e.status === 404) return { estado: 'no-disponible' };
     return { estado: 'error', mensaje: e.message };
   }
 }

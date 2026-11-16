@@ -256,6 +256,11 @@ Sobre aprobaciones en el servidor: la evaluación ocurre en el navegador, así q
 
 ## 5. Siguiente entrega mínima: control digital y PWM
 
+> **Estado (16-11-2026):** implementada en la rama `feature/leccion-semaforo-pwm` (PR pendiente de desplegar la API; procedimiento en `docs/ACTUALIZACION_LECCIONES_2_3.md`, detalle técnico en `docs/LABORATORIO_ARDUINO.md`). Ajustes respecto a este plan, todos anunciados en el reto de cada lección:
+> - Semáforo: se evalúan **17 s** (no 15) para que dos ciclos de 7 s quepan aun con el +10 % de tolerancia; «dos ciclos» = al menos 6 fases completas en orden. Cuesta unos 5,5–6,5 s de reloj en Chromium.
+> - PWM: la frecuencia se exige solo donde hay valores intermedios (0 % y 100 % son salida continua) y se mide con la mediana de los intervalos; se aceptan ventanas sueltas fuera de rango (hasta el 10 %) por el pulso que deja `analogWrite` al cambiar de valor. El reto de PWM no exige monitor serie.
+> - El registro de «reto superado» sigue siendo local; la cuenta guarda solo el código.
+
 **Alcance:** lecciones **1.2 `arduino-protoboard-semaforo`** y **2.1 `arduino-pwm-brillo`**, más la infraestructura de varias lecciones que reutilizarán todas las siguientes. No requiere cambios en el compilador ni migraciones.
 
 ### Trabajo

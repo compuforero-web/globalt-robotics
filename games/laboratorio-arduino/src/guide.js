@@ -6,6 +6,14 @@
 import { explainDiagnostic, GENERIC_HELP } from './compiler-help.js';
 
 
+/** Pista sobre el error del compilador: común a todas las lecciones. */
+export const COMPILE_TOPIC = {
+  label: 'el error del compilador', hints: [
+    (c) => `Revisa la línea ${c.errorLine || 'indicada'} y también la anterior: ${c.errorHelp}`,
+    'Busca parejas: cada «(» necesita su «)», cada «{» su «}», y cada texto entre comillas dobles se cierra.',
+    'Si no encuentras el problema, compara esa parte con el ejemplo de la lección: misma ortografía, mismas mayúsculas y «;» al final.',
+  ] };
+
 // Pistas progresivas por tema: cada tema avanza de una idea general a una más concreta, sin entregar el código
 // completo del reto. El tema se elige con reglas locales sobre el código, el último resultado y el paso actual.
 const TOPICS = {
@@ -29,11 +37,7 @@ const TOPICS = {
     'Pulsa Ejecutar y observa a la vez el LED, el indicador D13 y el monitor serie.',
     'Detener congela el tiempo simulado; Reiniciar vuelve a ejecutar setup() desde el principio.',
   ] },
-  compilar: { label: 'el error del compilador', hints: [
-    (c) => `Revisa la línea ${c.errorLine || 'indicada'} y también la anterior: ${c.errorHelp}`,
-    'Busca parejas: cada «(» necesita su «)», cada «{» su «}», y cada texto entre comillas dobles se cierra.',
-    'Si no encuentras el problema, compara esa parte con el ejemplo de la lección: misma ortografía, mismas mayúsculas y «;» al final.',
-  ] },
+  compilar: COMPILE_TOPIC,
   pinmode: { label: 'el pin del LED', hints: [
     'El LED no se encenderá si D13 no está preparado como salida.',
     'En setup() debe haber un pinMode(…) para el pin 13 con el modo OUTPUT.',
@@ -78,12 +82,12 @@ const TOPICS = {
 const CHECK_TOPIC = { blink: 'pinmode', on: 'ritmo', off: 'ritmo', baud: 'baud' };
 
 /** Quita comentarios y textos para analizar la estructura sin falsos positivos. */
-function strip(code) {
+export function strip(code) {
   return String(code).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
 }
 
 /** Cuerpo de la función `name` (entre sus llaves), o ''. */
-function body(src, name) {
+export function body(src, name) {
   const m = new RegExp(`void\\s+${name}\\s*\\(\\s*\\)\\s*\\{`).exec(src);
   if (!m) return '';
   let depth = 1;
@@ -130,13 +134,18 @@ export function chooseTopic(ctx = {}) {
   return analysis;
 }
 
-/** Texto de la pista `level` (0…) del tema. */
-export function hintText(topic, level, facts = {}) {
-  const t = TOPICS[topic] || TOPICS.comprobar;
-  const i = Math.min(level, t.hints.length - 1);
-  const h = t.hints[i];
-  return { text: `Pista ${i + 1} de ${t.hints.length} sobre ${t.label}: ${typeof h === 'function' ? h(facts) : h}`, last: i === t.hints.length - 1 };
+/** Crea la función de texto de pistas para un conjunto de temas (cada lección tiene los suyos). */
+export function makeHintText(topics) {
+  return (topic, level, facts = {}) => {
+    const t = topics[topic] || topics.comprobar;
+    const i = Math.min(level, t.hints.length - 1);
+    const h = t.hints[i];
+    return { text: `Pista ${i + 1} de ${t.hints.length} sobre ${t.label}: ${typeof h === 'function' ? h(facts) : h}`, last: i === t.hints.length - 1 };
+  };
 }
+
+/** Texto de la pista `level` (0…) del tema (lección 1). */
+export const hintText = makeHintText(TOPICS);
 
 const CHECK_HINTS = {
   blink: ['Comprueba que D13 esté configurado con pinMode(…, OUTPUT) en setup() y que loop() lo cambie entre HIGH y LOW.',
@@ -151,8 +160,18 @@ const CHECK_HINTS = {
     'Mira el monitor serie al ejecutar: ¿empieza en 1? ¿aparece una línea por cada encendido, cerca del HIGH?'],
 };
 
-/** Ayuda preparada: reglas fijas, sin red y sin IA. */
-export const preparedHelp = {
+const LED_TEXTS = {
+  welcome: 'Hola, soy Chispa. Hoy harás que un LED lata a un ritmo exacto y que el Arduino lo cuente por el monitor serie. Recorre los pasos de la lección a tu ritmo y pulsa Ejecutar para ver el ejemplo. Si te atascas, pídeme una pista: se adapta a tu código.',
+  otherPins: (pins) => `Veo actividad en ${pins}, pero el LED del circuito está conectado a D13.`,
+  evalPass: '¡Reto superado! Medí un latido de 200 ms encendido y 800 ms apagado, con su conteo en el monitor serie. Tu avance quedó guardado en este navegador.',
+};
+
+/**
+ * Ayuda preparada de una lección: reglas fijas, sin red y sin IA.
+ * @param {{ hintText: Function, checkHints: Object, texts: { welcome, otherPins, evalPass } }} lesson
+ */
+export function createPreparedHelp({ hintText: hintFor, checkHints, texts }) {
+  return {
   id: 'preparada',
   label: 'Ayuda preparada',
   respond(event, ctx = {}) {
@@ -160,9 +179,9 @@ export const preparedHelp = {
       case 'welcome':
         return { mood: 'idle', text: ctx.completed
           ? 'Ya superaste este reto en este navegador. Puedes seguir experimentando con el código.'
-          : 'Hola, soy Chispa. Hoy harás que un LED lata a un ritmo exacto y que el Arduino lo cuente por el monitor serie. Recorre los pasos de la lección a tu ritmo y pulsa Ejecutar para ver el ejemplo. Si te atascas, pídeme una pista: se adapta a tu código.' };
+          : texts.welcome };
       case 'hint':
-        return { mood: 'idea', text: hintText(ctx.topic, ctx.level, ctx.facts).text };
+        return { mood: 'idea', text: hintFor(ctx.topic, ctx.level, ctx.facts).text };
       case 'service-pending':
         return { mood: 'alert', text: 'Compilar y ejecutar estará disponible próximamente. Mientras tanto puedes leer la lección y editar el código; se guarda en este navegador.' };
       case 'compile-error': {
@@ -176,22 +195,24 @@ export const preparedHelp = {
       case 'compile-ok':
         return { mood: 'happy', text: `Compilado sin errores (${ctx.flash} bytes de flash). Que compile no significa que cumpla el reto: ejecútalo y compruébalo.` };
       case 'run-started':
-        return ctx.otherPins
-          ? { mood: 'idea', text: `Veo actividad en ${ctx.otherPins}, pero el LED del circuito está conectado a D13.` }
-          : null;
+        return ctx.otherPins ? { mood: 'idea', text: texts.otherPins(ctx.otherPins) } : null;
       case 'eval-fail': {
         const failed = ctx.checks.filter((c) => !c.ok);
-        const tips = CHECK_HINTS[failed[0].id] || ['Revisa el primer punto marcado con ✗ en el panel del reto.'];
+        const tips = checkHints[failed[0].id] || ['Revisa el primer punto marcado con ✗ en el panel del reto.'];
         const tip = tips[Math.min(ctx.repeat || 0, tips.length - 1)];
         return { mood: 'idea', text: `Casi: ${failed.length} de ${ctx.checks.length} comprobaciones no se cumplen. ${tip}` };
       }
       case 'eval-pass':
-        return { mood: 'party', text: '¡Reto superado! Medí un latido de 200 ms encendido y 800 ms apagado, con su conteo en el monitor serie. Tu avance quedó guardado en este navegador.' };
+        return { mood: 'party', text: texts.evalPass };
       default:
         return null;
     }
   },
-};
+  };
+}
+
+/** Ayuda preparada de la lección 1. */
+export const preparedHelp = createPreparedHelp({ hintText, checkHints: CHECK_HINTS, texts: LED_TEXTS });
 
 const PREF_KEY = 'globalt.laboratorio.guia.v1';
 function prefs() { try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}'); } catch { return {}; } }
@@ -211,8 +232,9 @@ const ROBOT_SVG = `<svg viewBox="0 0 64 64" class="guide__robot" aria-hidden="tr
 /**
  * getContext() devuelve { code, untouched, step, compileError?, lastChecks?, completed } para elegir la pista.
  * Cada tema recuerda su nivel; al llegar a la última pista vuelve a empezar para poder repasarlas.
+ * `chooseTopic` y `hintText` son los de la lección activa (por defecto, los de la lección 1).
  */
-export function createGuide(root, { providers = [preparedHelp], getContext = () => ({}) } = {}) {
+export function createGuide(root, { providers = [preparedHelp], getContext = () => ({}), chooseTopic: choose = chooseTopic, hintText: hintFor = hintText } = {}) {
   const state = { ...{ minimized: false, muted: false }, ...prefs() };
   const levels = new Map();
   root.innerHTML = `
@@ -263,9 +285,9 @@ export function createGuide(root, { providers = [preparedHelp], getContext = () 
   root.addEventListener('click', (e) => {
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act === 'hint') {
-      const { topic, facts } = chooseTopic(getContext());
+      const { topic, facts } = choose(getContext());
       const level = levels.get(topic) || 0;
-      const { last } = hintText(topic, level, facts);
+      const { last } = hintFor(topic, level, facts);
       levels.set(topic, last ? 0 : level + 1);
       notify('hint', { topic, level, facts }, { direct: true });
     }

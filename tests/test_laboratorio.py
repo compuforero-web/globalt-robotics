@@ -92,6 +92,189 @@ assert.equal(parseIntelHex(':020000000C945E\\n:00000001FF\\n')[0], 0x940C);
 ''')
 
 
+
+def evaluate_lesson(module, fn, duration, watch, names):
+    """Graba la traza de cada HEX con la misma función que usa el Worker y la evalúa (lecciones 2 y 3).
+    Un proceso de Node por HEX, en paralelo: el semáforo simula 17 s por programa."""
+    def script(name):
+        return f"""
+import {{ readFileSync }} from 'node:fs';
+import {{ recordFast }} from './games/laboratorio-arduino/src/sim-worker.js';
+import * as M from './games/laboratorio-arduino/src/lessons/{module}';
+const t0 = performance.now();
+const r = M.{fn}(recordFast(readFileSync('{FIX}/{name}.hex', 'utf8'), M.{duration}, {json.dumps(watch)}));
+console.log(JSON.stringify({{ passed: r.passed, checks: Object.fromEntries(r.checks.map((c) => [c.id, c.ok])), details: r.checks.map((c) => c.detail), ms: performance.now() - t0 }}));
+"""
+    procs = {n: subprocess.Popen(['node', '--input-type=module', '-e', script(n)], cwd=ROOT, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, text=True) for n in names}
+    results = {}
+    for name, proc in procs.items():
+        out, err = proc.communicate(timeout=180)
+        if proc.returncode:
+            raise AssertionError(f'{name}: {err}')
+        results[name] = json.loads(out)
+    return results
+
+
+class LessonTwoThreeTests(unittest.TestCase):
+    """Semáforo y PWM: HEX reales compilados con el servicio (fuentes .ino al lado)."""
+
+    def test_semaforo_solutions_pass_and_failures_explain(self):
+        r = evaluate_lesson('semaforo-eval.js', 'evaluateSemaforo', 'EVAL_DURATION_MS', [2, 3, 4], [
+            'semaforo-solucion', 'semaforo-millis', 'semaforo-solape', 'semaforo-orden', 'semaforo-tiempos',
+            'semaforo-sin-serial', 'semaforo-mensaje-tarde', 'semaforo-ejemplo', 'semaforo-ej-prueba-leds',
+            'semaforo-ej-mensaje-al-cambiar'])
+        self.assertTrue(r['semaforo-solucion']['passed'], r['semaforo-solucion'])
+        self.assertTrue(r['semaforo-millis']['passed'], r['semaforo-millis'])   # sin delay(), con otro texto
+        expected_fail = {'semaforo-solape': 'solape', 'semaforo-orden': 'orden', 'semaforo-tiempos': 'tiempos',
+                         'semaforo-sin-serial': 'baud', 'semaforo-mensaje-tarde': 'serial'}
+        for name, check in expected_fail.items():
+            self.assertFalse(r[name]['passed'], name)
+            self.assertFalse(r[name]['checks'][check], name)
+        self.assertEqual(r['semaforo-mensaje-tarde']['checks'], {'orden': True, 'tiempos': True, 'solape': True, 'baud': True, 'serial': False})
+        self.assertEqual(r['semaforo-orden']['checks']['serial'], True)
+        # Ni el código inicial ni los ejemplos de la lección aprueban.
+        for name in ('semaforo-ejemplo', 'semaforo-ej-prueba-leds', 'semaforo-ej-mensaje-al-cambiar'):
+            self.assertFalse(r[name]['passed'], name)
+
+    def test_pwm_solutions_pass_and_failures_explain(self):
+        r = evaluate_lesson('pwm-eval.js', 'evaluatePwm', 'EVAL_DURATION_MS', [9], [
+            'pwm-solucion', 'pwm-millis', 'pwm-pin-sin-pwm', 'pwm-otro-pin', 'pwm-escalones', 'pwm-lento',
+            'pwm-sin-extremos', 'pwm-digital', 'pwm-ejemplo', 'pwm-ej-niveles', 'pwm-ej-pin-sin-pwm', 'pwm-ej-subida'])
+        self.assertTrue(r['pwm-solucion']['passed'], r['pwm-solucion'])
+        self.assertTrue(r['pwm-millis']['passed'], r['pwm-millis'])   # escribe por serie: no es requisito ni estorba
+        self.assertEqual(r['pwm-escalones']['checks'], {'pwm': True, 'rango': True, 'ciclos': True, 'suave': False})
+        self.assertEqual(r['pwm-lento']['checks'], {'pwm': True, 'rango': True, 'ciclos': False, 'suave': True})
+        self.assertFalse(r['pwm-sin-extremos']['checks']['rango'])
+        self.assertFalse(r['pwm-digital']['checks']['pwm'])            # PWM a mano a ~100 Hz
+        self.assertIn('100 Hz', r['pwm-digital']['details'][0])
+        self.assertIn('D8 no tiene PWM', r['pwm-pin-sin-pwm']['details'][0])
+        self.assertIn('Hay PWM en D10', r['pwm-otro-pin']['details'][0])
+        for name in ('pwm-ejemplo', 'pwm-ej-niveles', 'pwm-ej-pin-sin-pwm', 'pwm-ej-subida'):
+            self.assertFalse(r[name]['passed'], name)
+        # Rendimiento, medido aparte (sin otros procesos en paralelo): 6 s simulados en pocos segundos.
+        alone = evaluate_lesson('pwm-eval.js', 'evaluatePwm', 'EVAL_DURATION_MS', [9], ['pwm-solucion'])
+        self.assertLess(alone['pwm-solucion']['ms'], 8000)
+
+    def test_pwm_measurement_by_windows(self):
+        node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+import {{ recordFast }} from './games/laboratorio-arduino/src/sim-worker.js';
+import {{ isPwmWindow }} from './games/laboratorio-arduino/src/pwm.js';
+const trace = recordFast(readFileSync('{FIX}/pwm-niveles.hex', 'utf8'), 1400, [9]);
+const values = [0, 1, 64, 128, 191, 254, 255];
+for (const pin of [9, 3, 5]) {{
+  values.forEach((v, i) => {{
+    const ws = trace.windows.filter((w) => w.pin === pin && w.t0 >= i * 200 + 40 && w.t1 <= i * 200 + 180);
+    if (pin !== 9 && v === 0) {{ assert.equal(ws.length, 0); return; }}   // sin actividad no se registra
+    assert.ok(ws.length >= 6, `D${{pin}} valor ${{v}}`);
+    for (const w of ws) {{
+      assert.ok(Math.abs(w.duty * 100 - v / 2.55) <= 2, `D${{pin}} ${{v}}: ${{w.duty}}`);
+      if (v === 0 || v === 255) {{ assert.equal(w.freq, null); assert.equal(isPwmWindow(w), false); }}
+      else {{
+        const f = pin === 5 ? 976.6 : 490.2;
+        assert.ok(Math.abs(w.freq - f) < 5, `D${{pin}} ${{v}}: ${{w.freq}} Hz`);
+        assert.equal(isPwmWindow(w), true);
+      }}
+    }}
+  }});
+}}
+// Las ventanas cubren el tiempo sin huecos y el pin vigilado aparece en todas.
+const d9 = trace.windows.filter((w) => w.pin === 9);
+assert.equal(d9.length, 70);
+d9.forEach((w, k) => {{ if (k) assert.equal(w.t0, d9[k - 1].t1); }});
+// Un PWM a ~1 kHz no agota la traza: los flancos de ese pin se limitan y quedan medidos por ventanas.
+assert.ok(trace.pins.length < 20000);
+assert.ok(trace.truncatedPins.includes(5));
+""")
+
+    def test_lesson_one_unchanged_through_new_trace(self):
+        """Regresión: la lección 1 evaluada con la traza del Worker da lo mismo que antes."""
+        out = node(f"""
+import {{ readFileSync }} from 'node:fs';
+import {{ recordFast }} from './games/laboratorio-arduino/src/sim-worker.js';
+import lesson from './games/laboratorio-arduino/src/lessons/led-serie.js';
+const res = {{}};
+for (const name of ['solucion', 'ejemplo', 'ritmo-incorrecto', 'sin-serial', 'baudios-115200', 'mensajes-al-inicio', 'latido-desfasado']) {{
+  const r = lesson.evaluation.evaluate(recordFast(readFileSync('{FIX}/' + name + '.hex', 'utf8'), lesson.evaluation.durationMs, lesson.pins));
+  res[name] = Object.fromEntries(r.checks.map((c) => [c.id, c.ok]));
+}}
+console.log(JSON.stringify(res));
+""")
+        r = json.loads(out)
+        self.assertTrue(all(r['solucion'].values()))
+        self.assertEqual(r['ejemplo'], {'blink': False, 'on': False, 'off': False, 'baud': True, 'serial': False})
+        self.assertFalse(r['ritmo-incorrecto']['on'])
+        self.assertFalse(r['sin-serial']['baud'] or r['sin-serial']['serial'])
+        self.assertFalse(r['baudios-115200']['baud'])
+        for name in ('mensajes-al-inicio', 'latido-desfasado'):
+            self.assertFalse(r[name]['serial'], name)
+
+    def test_manifest_matches_api_and_url_resolution(self):
+        import ast
+        tree = ast.parse((ROOT / 'services/aula-api/app/main.py').read_text())
+        api = next(ast.literal_eval(n.value) for n in tree.body
+                   if isinstance(n, ast.Assign) and getattr(n.targets[0], 'id', '') == 'LECCIONES')
+        out = node("""
+import assert from 'node:assert/strict';
+import { MANIFEST, LESSONS, DEFAULT_LESSON_ID, ID_PATTERN, resolveLesson } from './games/laboratorio-arduino/src/lessons/index.js';
+assert.equal(resolveLesson('').lesson.id, 'arduino-led-serie');
+assert.equal(resolveLesson('?leccion=').lesson.id, 'arduino-led-serie');
+assert.equal(resolveLesson('?leccion=arduino-pwm-brillo').lesson.id, 'arduino-pwm-brillo');
+for (const bad of ['?leccion=no-existe', '?leccion=ARDUINO-PWM-BRILLO', '?leccion=arduino-pwm-brillo%20', '?leccion=__proto__']) {
+  const r = resolveLesson(bad);
+  assert.equal(r.lesson, null, bad);
+  assert.ok(r.requested);
+}
+assert.deepEqual(MANIFEST.map((m) => m.numero), [1, 2, 3]);
+for (const l of LESSONS) {
+  assert.match(l.id, ID_PATTERN);
+  assert.ok(l.steps.length >= 4 && l.challenge.criteria.length >= 4 && l.evaluation.durationMs > 0, l.id);
+  for (const p of l.previas) assert.ok(MANIFEST.some((m) => m.id === p), p);
+}
+console.log(JSON.stringify({ ids: MANIFEST.map((m) => m.id), def: DEFAULT_LESSON_ID }));
+""")
+        data = json.loads(out)
+        self.assertEqual(data['def'], 'arduino-led-serie')
+        self.assertEqual(sorted(data['ids']), sorted(api))
+        self.assertEqual(set(api.values()), {'course-arduino'})
+        self.assertEqual(data['ids'][:3], ['arduino-led-serie', 'arduino-protoboard-semaforo', 'arduino-pwm-brillo'])
+
+    def test_examples_match_fixtures_and_hints_do_not_solve(self):
+        node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+const fx = (n) => readFileSync('{FIX}/' + n + '.ino', 'utf8');
+const S = await import('./games/laboratorio-arduino/src/lessons/semaforo.js');
+const P = await import('./games/laboratorio-arduino/src/lessons/pwm-brillo.js');
+// Los fixtures compilados son exactamente el código inicial y los ejemplos de cada lección.
+assert.equal(fx('semaforo-ejemplo'), S.EXAMPLE_CODE);
+for (const [k, e] of Object.entries(S.EXAMPLES)) assert.equal(fx('semaforo-ej-' + k), e.code);
+assert.equal(fx('pwm-ejemplo'), P.EXAMPLE_CODE);
+for (const [k, e] of Object.entries(P.EXAMPLES)) assert.equal(fx('pwm-ej-' + k), e.code);
+// Pistas: temas según el código y la última evaluación.
+assert.equal(S.chooseTopic({{ code: S.EXAMPLE_CODE, untouched: true, step: 1 }}).topic, 'paso-1');
+assert.equal(S.analyzeCode(S.EXAMPLE_CODE).topic, 'mensajes');
+assert.equal(S.analyzeCode(fx('semaforo-solucion')).topic, 'comprobar');
+assert.equal(S.analyzeCode(fx('semaforo-sin-serial')).topic, 'baud');
+assert.equal(S.chooseTopic({{ code: fx('semaforo-solape'), lastChecks: [{{ id: 'tiempos', ok: true }}, {{ id: 'solape', ok: false }}] }}).topic, 'solape');
+assert.equal(S.chooseTopic({{ code: fx('semaforo-mensaje-tarde'), lastChecks: [{{ id: 'serial', ok: false }}] }}).topic, 'momento');
+assert.equal(P.analyzeCode('void setup(){{}}\\nvoid loop(){{ digitalWrite(9, HIGH); }}').topic, 'analogwrite');
+assert.equal(P.analyzeCode(fx('pwm-pin-sin-pwm')).topic, 'pin');
+assert.equal(P.analyzeCode(P.EXAMPLE_CODE).topic, 'bucle');
+assert.equal(P.analyzeCode(fx('pwm-solucion')).topic, 'comprobar');
+assert.equal(P.chooseTopic({{ code: fx('pwm-lento'), lastChecks: [{{ id: 'pwm', ok: true }}, {{ id: 'rango', ok: true }}, {{ id: 'ciclos', ok: false }}] }}).topic, 'ritmo');
+assert.equal(P.chooseTopic({{ code: fx('pwm-solucion'), completed: true }}).topic, 'superado');
+// Ninguna pista contiene código completo de una solución.
+for (const [M, bad] of [[S, /delay\\(3000\\)[\\s\\S]*delay\\(1000\\)/], [P, /for\\s*\\([\\s\\S]*analogWrite[\\s\\S]*for\\s*\\(/]])
+  for (const t of M.TOPIC_IDS) for (let i = 0; i < 4; i++) assert.doesNotMatch(M.hintText(t, i, {{ delays: [], errorHelp: '' }}).text, bad);
+// El monitor serie no es requisito del reto de PWM; sí lo es en el semáforo.
+assert.ok(!P.CHALLENGE.criteria.some((c) => /serie|baudios/i.test(c)));
+assert.ok(S.CHALLENGE.criteria.some((c) => /9600 baudios/.test(c)));
+""")
+
+
 class InterfaceModuleTests(unittest.TestCase):
     def test_highlight_help_progress_and_guide(self):
         node('''
