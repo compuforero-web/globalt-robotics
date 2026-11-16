@@ -55,8 +55,18 @@ assert.equal(sumo[1].title,'Mi Sumo');
 assert.equal(sumo[1].description,'Descripción propia');
 assert.equal(storage.get('sumoBotChallenge.v1'),'{"done":[1]}');
 assert.deepEqual(migrateLocalGames([customized]),[customized]);
-// A fresh browser also gets exactly the four playable games.
+// SolarLab appears once for browsers with all earlier catalog updates.
+storage.delete(`${CONFIG.STORAGE_PREFIX}games_solar_20261116`);
+storage.set('solarlab.progress.v1', '{"u":3,"done":[1,2]}');
+const solar = migrateLocalGames([customized]);
+assert.equal(solar.length,2);
+assert.equal(solar[1].id,'game-solarlab');
+assert.equal(solar[1].url,'games/solar-lab/index.html');
+assert.equal(storage.get('solarlab.progress.v1'),'{"u":3,"done":[1,2]}');
+assert.deepEqual(migrateLocalGames(solar),solar);
+assert.deepEqual(migrateLocalGames([customized]),[customized]);
+// A fresh browser also gets exactly the five playable games.
 storage.clear();
 const fresh = migrateLocalGames(SEED.games);
-assert.equal(fresh.filter(x => x.url).length, 4);
+assert.equal(fresh.filter(x => x.url).length, 5);
 '''], cwd=ROOT, check=True)
