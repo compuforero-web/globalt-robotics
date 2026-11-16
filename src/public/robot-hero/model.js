@@ -1,4 +1,5 @@
-import { Geometry, mix, ease, pointMix } from './geometry.js';
+import { Geometry, mix, ease } from './geometry.js';
+import { robotPose } from './pose.js';
 
 export function drawRobot(ctx, width, height, time, morph) {
   ctx.clearRect(0, 0, width, height);
@@ -8,9 +9,9 @@ export function drawRobot(ctx, width, height, time, morph) {
   // Plataforma de referencia y sombra; no se desplazan con el mecanismo.
   ctx.save(); ctx.translate(width / 2, height * .91);
   ctx.scale(1, .24); ctx.beginPath(); ctx.arc(0, 0, width * .32, 0, Math.PI * 2);
-  ctx.strokeStyle = 'rgba(134,160,166,.17)'; ctx.lineWidth = 2; ctx.stroke();
+  // Sombra difusa, sin plataforma ni contorno que la separe del fondo.
   const shadow = ctx.createRadialGradient(0, 0, 5, 0, 0, width * .29);
-  shadow.addColorStop(0, 'rgba(0,0,0,.65)'); shadow.addColorStop(1, 'rgba(0,0,0,0)');
+  shadow.addColorStop(0, 'rgba(0,0,0,.24)'); shadow.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = shadow; ctx.fill(); ctx.restore();
   // Bastidor, batería, placa de control y cableado de cobre.
   g.housing([0,.25,0], [1.04,1.3-.4*compact,.62], 'dark');
@@ -39,37 +40,40 @@ export function drawRobot(ctx, width, height, time, morph) {
     g.box([-.24+i*.16,headY+.32-.13*compact,headZ],[.045,.02,.3],'steel');
     g.box([-.25+i*.16,-.14,.342],[.06,.17,.025],'copper');
   }
-  for (const side of [-1,1]) {
-    // Dos brazos y dos piernas pasan a ser cuatro soportes de motor.
-    const armRoot = [side*.66,.65,0];
-    const armEnd = pointMix([side*1.13,-.76,.06],[side*1.86,.24,-1.31],morph);
-    const armJoint = pointMix([side*1.12,.03,.02],[side*1.25,.26,-.69],morph);
-    armJoint[1] += Math.sin(time*1.6)*.025*(1-morph);
+  // Las piernas se recogen bajo el fuselaje; no forman los brazos del dron.
+  const pose = robotPose(morph, time);
+  for (const { side, armRoot, armJoint, hand, hip, knee, foot } of pose.limbs) {
     g.cylinder(armRoot,.22,.32,'dark','x');
     g.link(armRoot,armJoint,.27,.28,'shell');
     g.cylinder(armJoint,.18,.32,'steel','x');
-    g.link(armJoint,armEnd,.20,.24,'dark');
-    g.link([armJoint[0],armJoint[1],armJoint[2]+.14],[armEnd[0],armEnd[1],armEnd[2]+.14],.035,.035,'copper');
-    const legRoot=[side*.32,-.48,0];
-    const knee=pointMix([side*.37,-1.34,.02],[side*1.18,.15,.69],morph);
-    const foot=pointMix([side*.42,-2.12,.17],[side*1.86,.24,1.31],morph);
-    g.cylinder(legRoot,.19,.29,'steel','x');
-    g.link(legRoot,knee,.30,.33,'shell');
+    g.link(armJoint,hand,.20,.24,'dark');
+    g.link([armJoint[0],armJoint[1],armJoint[2]+.14],[hand[0],hand[1],hand[2]+.14],.035,.035,'copper');
+    g.housing(hand,[.24,.21,.23],'dark');
+    g.box([hand[0]+side*.08,hand[1]-.15,hand[2]],[.065,.15,.13],'steel');
+    g.box([hand[0]-side*.08,hand[1]-.15,hand[2]],[.065,.15,.13],'steel');
+    g.cylinder(hip,.19,.29,'steel','x');
+    g.link(hip,knee,.30,.33,'shell');
     g.cylinder(knee,.17,.36,'dark','x');
     g.link(knee,foot,.23,.27,'steel');
-    g.box([foot[0],foot[1]-.06,foot[2]+.07*(1-morph)],[.38,.17,.49-.19*morph],'dark');
-    for (const [i,end] of [armEnd,foot].entries()) {
-      const r = mix(.14,.52,ease((morph-.25)/.75));
-      g.cylinder(end,.18,.22,'black');
-      g.cylinder([end[0],end[1]+.11,end[2]],r,.09,'steel','y',20,Math.max(.04,r-.045));
-      g.cylinder([end[0],end[1]+.13,end[2]],.10,.14,'dark');
-      const speed = ease((morph-.65)/.35);
-      const angle = side * (time*(2+speed*36)) + i*1.4;
-      for (const offset of [0,Math.PI/2]) {
-        g.box([end[0],end[1]+.2,end[2]],[r*1.67,.027,.078],'black',[0,angle+offset,0]);
-      }
-      g.cylinder([end[0],end[1]+.23,end[2]],.065,.045,'amber');
+    g.box([foot[0],foot[1]-.06,foot[2]+.07*(1-morph)],[.34,.17,.42-.14*morph],'dark');
+  }
+  // Módulo dorsal independiente: cuatro brazos telescópicos y cuatro motores.
+  g.housing([0,.61,-.42],[.78,.40,.34],'dark');
+  for (const { side, direction, root, joint, end, deployment } of pose.rotors) {
+    g.cylinder(root,.12,.16,'steel');
+    g.link(root,joint,.14,.16,'shell');
+    g.link(joint,end,.11,.13,'dark');
+    g.link([root[0],root[1]+.08,root[2]],[end[0],end[1]+.08,end[2]],.02,.025,'copper');
+    const r = mix(.10,.49,deployment);
+    g.cylinder(end,.12,.17,'black');
+    g.cylinder([end[0],end[1]+.08,end[2]],r,.07,'steel','y',20,Math.max(.04,r-.035));
+    g.cylinder([end[0],end[1]+.11,end[2]],.075,.12,'dark');
+    const speed = ease((morph-.73)/.27);
+    const angle = side * direction * time*(.5+speed*37);
+    for (const offset of [0,Math.PI/2]) {
+      g.box([end[0],end[1]+.16,end[2]],[r*1.72,.024,.065],'black',[0,angle+offset,0]);
     }
+    g.cylinder([end[0],end[1]+.19,end[2]],.05,.035,'amber');
   }
   g.paint();
 }

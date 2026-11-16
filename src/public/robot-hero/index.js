@@ -1,23 +1,13 @@
 import { drawRobot } from './model.js';
 import { ease } from './geometry.js';
 
-const STAGES = [
-  { mode:'ROBOT', step:'01 / EN ESPERA', line:'servo.lock("humanoid");', hint:'Articulaciones bloqueadas · óptica activa', meter:12 },
-  { mode:'TRANSFORMACIÓN', step:'02 / RECONFIGURAR', line:'chassis.open(); limbs.fold(90);', hint:'Bastidor expuesto · repliegue de articulaciones', meter:48 },
-  { mode:'DRON', step:'03 / VUELO ESTABLE', line:'rotors.arm(); flight.stabilize();', hint:'Cuatro motores activos · fuselaje compacto', meter:100 },
-  { mode:'RECONSTRUCCIÓN', step:'04 / DESPLEGAR', line:'rotors.stop(); humanoid.deploy();', hint:'Extensión de extremidades · retorno a posición', meter:60 },
-];
-
 export function setupRobotHero() {
   const root = document.querySelector('[data-robot-lab]');
   if (!root) return;
   const canvas = root.querySelector('canvas'), ctx = canvas.getContext('2d');
   if (!ctx) { root.dataset.unavailable = 'true'; return; }
-  const mode = root.querySelector('[data-robot-mode]');
-  const step = root.querySelector('[data-robot-step]');
   const code = root.querySelector('[data-robot-code]');
-  const hint = root.querySelector('[data-robot-hint]');
-  const progress = root.querySelector('[data-robot-meter]');
+  const secondary = root.querySelector('[data-robot-code-secondary]');
   const pause = root.querySelector('[data-robot-pause]');
   const transform = root.querySelector('[data-robot-transform]');
   const media = matchMedia('(prefers-reduced-motion: reduce)');
@@ -27,11 +17,11 @@ export function setupRobotHero() {
   function status(index) {
     if (index === stage) return;
     stage = index;
-    mode.textContent = STAGES[index].mode; step.textContent = STAGES[index].step;
-    code.textContent = STAGES[index].line; hint.textContent = STAGES[index].hint;
-    progress.style.width = STAGES[index].meter + '%';
+    const converting = index === 1 || index === 3;
     root.dataset.mode = index === 2 ? 'drone' : 'robot';
-    root.dataset.converting = String(index === 1 || index === 3);
+    root.dataset.converting = String(converting);
+    code.textContent = converting ? (index === 1 ? 'legs.retract();\ncore.reconfigure();' : 'rotors.disarm();\nlegs.extend();') : '';
+    secondary.textContent = converting ? (index === 1 ? 'backpack.deployRotors();\nflight.stabilize();' : 'backpack.foldRotors();\nhumanoid.restore();') : '';
   }
   function render() {
     const t = clock % 18;
@@ -65,16 +55,14 @@ export function setupRobotHero() {
   document.addEventListener('visibilitychange', resume);
   pause.addEventListener('click', () => {
     paused = !paused; pause.setAttribute('aria-pressed', String(paused));
-    pause.textContent = paused ? 'Reanudar' : 'Pausar'; resume();
+    pause.textContent = paused ? 'Reanudar animación' : 'Pausar animación'; resume();
   });
   transform.addEventListener('click', () => {
-    if (media.matches) { staticDrone = !staticDrone; transform.textContent = staticDrone ? 'Ver robot' : 'Ver dron'; }
-    else { clock = 3; paused = false; pause.textContent = 'Pausar'; pause.setAttribute('aria-pressed','false'); }
-    render(); resume();
+    staticDrone = !staticDrone;
+    transform.textContent = staticDrone ? 'Ver robot' : 'Ver dron'; render();
   });
   function motionPreference() {
-    pause.hidden = media.matches;
-    transform.textContent = media.matches ? (staticDrone ? 'Ver robot' : 'Ver dron') : 'Transformar';
+    pause.hidden = media.matches; transform.hidden = !media.matches;
     render(); resume();
   }
   media.addEventListener('change', motionPreference);

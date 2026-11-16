@@ -65,23 +65,13 @@
           </dl>
         </div>
         <div class="hero__art">
-          <div class="robot-lab" data-robot-lab>
-            <div class="robot-lab__header"><span class="robot-lab__id">MORPH / 01</span><span class="robot-lab__badge">ROBOT ↔ CUADRICÓPTERO</span></div>
-            <div class="robot-lab__coordinates" aria-hidden="true"><span>CHASSIS <b>AL-6061</b></span><span>4 × ROTOR / 8 × SERVO</span></div>
-            <span class="robot-lab__mode" data-robot-mode>ROBOT</span>
-            <canvas class="robot-lab__canvas" width="640" height="570" role="img" aria-label="Robot articulado de aluminio y grafito que repliega sus extremidades para convertirse en un dron de cuatro hélices, mostrando su placa y cableado internos."></canvas>
-            <span class="robot-lab__callout robot-lab__callout--left" aria-hidden="true">bus.sync()<br>→ CONTROL PCB</span>
-            <span class="robot-lab__callout robot-lab__callout--right" aria-hidden="true">servo.fold()<br>↳ RECONFIGURAR</span>
-            <p class="robot-lab__fallback">Robot humanoide ↔ dron: cuatro motores y articulaciones reconfigurables.</p>
-            <div class="robot-lab__terminal" aria-label="Secuencia ilustrativa de código durante la transformación">
-              <div class="robot-lab__terminal-head"><span>SECUENCIA DE CONTROL</span><span data-robot-step>01 / EN ESPERA</span></div>
-              <code class="robot-lab__code" data-robot-code>servo.lock("humanoid");</code>
-              <div class="robot-lab__track" aria-hidden="true"><span data-robot-meter></span></div>
-            </div>
-            <div class="robot-lab__footer">
-              <p class="robot-lab__hint" data-robot-hint>Articulaciones bloqueadas · óptica activa</p>
-              <div class="robot-lab__controls"><button class="robot-lab__button" data-robot-pause type="button" aria-pressed="false">Pausar</button><button class="robot-lab__button robot-lab__button--primary" data-robot-transform type="button">Transformar</button></div>
-            </div>
+          <div class="robot-scene" data-robot-lab>
+            <canvas class="robot-scene__canvas" width="640" height="570" role="img" aria-label="Robot que recoge las piernas bajo el cuerpo y despliega cuatro hélices desde un módulo dorsal para convertirse en dron."></canvas>
+            <code class="robot-scene__code robot-scene__code--first" data-robot-code aria-hidden="true">legs.retract();</code>
+            <code class="robot-scene__code robot-scene__code--second" data-robot-code-secondary aria-hidden="true">backpack.deployRotors();</code>
+            <button class="robot-scene__pause" data-robot-pause type="button" aria-pressed="false">Pausar animación</button>
+            <button class="robot-scene__static" data-robot-transform type="button" hidden>Ver dron</button>
+            <p class="robot-scene__fallback">Robot transformable en dron con propulsión dorsal.</p>
           </div>
         </div>
       </div>
