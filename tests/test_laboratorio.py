@@ -5,6 +5,9 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import tempfile
+import threading
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,6 +55,31 @@ console.log(JSON.stringify({{ ...evaluateChallenge(trace), lines: serialLines(tr
         self.assertTrue(checks['on'] and checks['off'])
         self.assertFalse(checks['baud'] or checks['serial'])
         self.assertFalse({c['id']: c['ok'] for c in self.evaluate('baudios-115200')['checks']}['baud'])
+
+    def test_beat_lines_must_match_their_blink_in_time(self):
+        # Regresión: imprimir «Latido 1…5» al inicio o fuera del encendido no debe aprobar.
+        for name in ('mensajes-al-inicio', 'latido-desfasado'):
+            result = self.evaluate(name)
+            checks = {c['id']: c['ok'] for c in result['checks']}
+            self.assertFalse(result['passed'], name)
+            self.assertTrue(checks['on'] and checks['off'] and checks['baud'], name)
+            self.assertFalse(checks['serial'], name)
+
+    def test_beat_window_limits(self):
+        node('''
+import assert from 'node:assert/strict';
+import { evaluateChallenge, LINE_BEFORE_MS, LINE_AFTER_MS } from './games/laboratorio-arduino/src/challenge.js';
+const rises = [100, 1100, 2100, 3100, 4100];
+const pins = rises.flatMap((t) => [{ pin: 13, high: true, t }, { pin: 13, high: false, t: t + 200 }]);
+const trace = (offsets) => ({ durationMs: 5000, pins, serial: rises.flatMap((t, i) =>
+  [...`Latido ${i + 1}\\r\\n`].map((c, k) => ({ byte: c.charCodeAt(0), t: t + offsets[i] + k, baud: 9615 }))) });
+const serialOk = (offsets) => evaluateChallenge(trace(offsets)).checks.find((c) => c.id === 'serial').ok;
+assert.equal(serialOk([0, 0, 0, 0, 0]), true);
+assert.equal(serialOk([-LINE_BEFORE_MS, LINE_AFTER_MS, 0, 0, 0]), true);
+assert.equal(serialOk([0, -LINE_BEFORE_MS - 1, 0, 0, 0]), false);
+assert.equal(serialOk([0, 0, LINE_AFTER_MS + 1, 0, 0]), false);
+assert.equal(evaluateChallenge(trace([0, 0, 0, 0, 0])).passed, true);
+''')
 
     def test_invalid_hex_is_rejected(self):
         node('''
@@ -106,10 +134,51 @@ spec.loader.exec_module(compilador)
 
 class CompilerServiceTests(unittest.TestCase):
     def test_validation_blocks_file_reads(self):
-        self.assertIsNone(compilador.validar('#include <Servo.h>\nvoid setup(){}\nvoid loop(){}'))
+        for code in ['#include <Servo.h>\nvoid setup(){}\nvoid loop(){}',
+                     '// #include "/etc/passwd"\nvoid setup(){ Serial.println("asm"); }\nvoid loop(){}']:
+            self.assertIsNone(compilador.validar(code), code)
         for code in ['#include "/etc/passwd"', '#include <../../x.h>', 'asm(".incbin \\"/etc/hosts\\"");',
-                     '#if __has_include(<x>)\n#endif', '', 'a' * 40000, 'void setup(){}\0']:
-            self.assertIsNotNone(compilador.validar(code), code[:30])
+                     '#if __has_include(<x>)\n#endif', '', 'a' * 40000, 'void setup(){}\0',
+                     # Regresiones: comentarios, continuación de línea, dígrafos y equivalentes del preprocesador.
+                     '#/**/include "/etc/passwd"', '# /* x */ include "/etc/passwd"', '#inc\\\nlude "/etc/passwd"',
+                     '#\\\ninclude "/etc/passwd"', '%:include "/etc/passwd"', '#import "/etc/passwd"',
+                     '#include_next <stdio.h>', '#define F "/etc/passwd"\n#include F', '_Pragma("GCC dependency \\"x\\"")',
+                     '#pragma GCC dependency "/etc/passwd"',
+                     # Regresiones: ensamblador construido con cadenas concatenadas o escapes.
+                     'void f(){ asm(".inc" "bin \\"/etc/hosts\\""); }', 'void f(){ __asm__(".\\x69ncbin x"); }',
+                     'void f(){ asm volatile("nop"); }']:
+            self.assertIsNotNone(compilador.validar(code), code[:40])
+
+    @unittest.skipUnless(shutil.which('avr-g++') and os.environ.get('COMPILADOR_NUCLEO'),
+                         'requiere avr-gcc y COMPILADOR_NUCLEO (ver services/compilador-arduino/README.md)')
+    def test_compiler_blocks_reads_that_bypass_text_filter(self):
+        """La capa decisiva revisa la salida real del preprocesador y el ensamblador generado."""
+        compilador.NUCLEO = Path(os.environ['COMPILADOR_NUCLEO'])
+        with tempfile.NamedTemporaryFile('w', suffix='.txt', delete=False) as secret:
+            secret.write('SECRETO-DE-PRUEBA-42\n')
+        path = secret.name
+        try:
+            loop = '\nvoid setup(){}\nvoid loop(){}\n'
+            cases = {
+                'comentario': f'#/**/include "{path}"' + loop,
+                'continuacion': f'#inc\\\nlude "{path}"' + loop,
+                'digrafo': f'%:include "{path}"' + loop,
+                'import': f'#import "{path}"' + loop,
+                'macro': f'#define F "{path}"\n#include F' + loop,
+                'relativa': '#include <' + '../' * 12 + path.lstrip('/') + '>' + loop,
+                'asm-concatenado': f'void setup(){{ asm(".inc" "bin \\"{path}\\""); }}\nvoid loop(){{}}',
+                'asm-pegado': f'#define P(a,b) a##b\nvoid setup(){{ P(__as,m__)(".\\x69ncbin \\"{path}\\""); }}\nvoid loop(){{}}',
+                'asm-macro-gas': f'void setup(){{ asm(".macro m a\\n.inc\\\\a \\"{path}\\"\\n.endm\\nm bin"); }}\nvoid loop(){{}}',
+                'seccion': f'__attribute__((used, section(".progmem.x\\n.\\x69ncbin \\"{path}\\"\\n#"))) const char d[2] = {{1,2}};'
+                           '\nvoid setup(){ Serial.print((int)*(volatile const char*)d); }\nvoid loop(){}',
+            }
+            for name, code in cases.items():
+                result = compilador.compilar(code)
+                self.assertFalse(result['ok'], name)
+                self.assertNotIn('hex', result, name)
+                self.assertNotIn('SECRETO', json.dumps(result), name)
+        finally:
+            os.unlink(path)
 
     def test_prototypes_and_diagnostics(self):
         protos = compilador.prototipos('void setup(){ parpadear(200); }\nvoid loop(){ if (x) { } }\n'
@@ -134,9 +203,54 @@ class CompilerServiceTests(unittest.TestCase):
         self.assertEqual(bad['diagnosticos'][0]['linea'], 3)
         self.assertNotIn('/tmp/', bad['salida'])
 
-    def test_timeout_kills_process(self):
-        with self.assertRaises(TimeoutError):
-            compilador.ejecutar(['sleep', '5'], Path('/tmp'), 1)
+    def test_runner_has_no_preexec_fn(self):
+        source = (ROOT / 'services/compilador-arduino/server.py').read_text()
+        self.assertNotIn('preexec_fn', source.replace('sin preexec_fn', ''))
+
+    def test_limits_apply_in_parallel_threads(self):
+        results = []
+        def run():
+            results.append(compilador.ejecutar(['sh', '-c', 'ulimit -n; ulimit -t; ulimit -f'], Path('/tmp'), 3))
+        threads = [threading.Thread(target=run) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(len(results), 8)
+        for code, text in results:
+            self.assertEqual(code, 0)
+            nofile, cpu, fsize = text.split()
+            self.assertEqual((nofile, cpu), ('64', '3'))
+            self.assertEqual(int(fsize) * 512, 16 * 1024 ** 2)   # ulimit -f usa bloques de 512 bytes
+
+    def test_timeout_kills_process_group(self):
+        with tempfile.TemporaryDirectory() as carpeta:
+            started = time.monotonic()
+            with self.assertRaises(TimeoutError):
+                compilador.ejecutar(['sh', '-c', 'sleep 30 & echo $! > hijo; sleep 30'], Path(carpeta), 1)
+            self.assertLess(time.monotonic() - started, 5)
+            child = int((Path(carpeta) / 'hijo').read_text())
+            for _ in range(50):
+                try:
+                    estado = Path(f'/proc/{child}/stat').read_text().rsplit(')', 1)[1].split()[0]
+                except FileNotFoundError:
+                    break
+                if estado == 'Z':   # terminado; falta que init lo recoja
+                    break
+                time.sleep(0.05)
+            else:
+                self.fail('el proceso descendiente siguió vivo')
+
+    def test_output_is_bounded_while_running(self):
+        started = time.monotonic()
+        code, text = compilador.ejecutar(['yes', 'SALIDA'], Path('/tmp'), 15)   # nunca termina por sí solo
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertEqual(code, -9)
+        self.assertLessEqual(len(text.encode()), compilador.MAX_SALIDA + 200)
+        self.assertIn('salida recortada', text)
+        code, text = compilador.ejecutar(['head', '-c', '200000', '/dev/zero'], Path('/tmp'), 5)
+        self.assertEqual(code, 0)
+        self.assertIn('salida recortada: 134464 bytes omitidos', text)
 
 
 class CatalogTests(unittest.TestCase):

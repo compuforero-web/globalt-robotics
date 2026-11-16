@@ -16,7 +16,7 @@ import json
 import os
 from pathlib import Path
 import re
-import resource
+import selectors
 import shutil
 import signal
 import socketserver
@@ -40,8 +40,14 @@ FLAGS = ['-mmcu=atmega328p', '-DF_CPU=16000000L', '-DARDUINO=10819', '-DARDUINO_
          '-DARDUINO_ARCH_AVR', '-Os', '-Wall', '-std=gnu++11', '-fpermissive', '-fno-exceptions',
          '-ffunction-sections', '-fdata-sections', '-fno-threadsafe-statics',
          '-fno-diagnostics-color', '-fmax-errors=20']
-# Evita que el código lea archivos del contenedor y los devuelva en el HEX o en errores.
-INCLUDE_VALIDO = re.compile(r'^\s*#\s*include\s*[<"]([A-Za-z0-9_][A-Za-z0-9_.-]*(?:/[A-Za-z0-9_][A-Za-z0-9_.-]*)*)[>"]\s*$')
+# Primera capa (texto): rechaza pronto las directivas de lectura de archivos con un mensaje claro.
+# No es el control de seguridad: el control decisivo usa la salida real del preprocesador y del
+# compilador (ver revisar_preprocesado y revisar_ensamblador), y el aislamiento lo da el contenedor.
+INCLUDE_VALIDO = re.compile(r'^#\s*include\s*[<"]([A-Za-z0-9_][A-Za-z0-9_.-]*(?:/[A-Za-z0-9_][A-Za-z0-9_.-]*)*)[>"]\s*$')
+DIRECTIVAS_PROHIBIDAS = re.compile(r'^#\s*(include_next|import|embed)\b|^#\s*pragma\s+GCC\s+(system_header|dependency|poison)\b')
+IDENTIFICADORES_PROHIBIDOS = re.compile(r'\b(__has_include|__has_include_next|_Pragma|asm|__asm|__asm__)\b')
+# Directivas de GNU as que leen archivos o generan instrucciones que el filtro no podría ver.
+ENSAMBLADOR_PROHIBIDO = re.compile(r'\.(incbin|include|macro|irpc?|rept|altmacro|purgem)\b', re.I)
 DIAGNOSTICO = re.compile(r'^sketch\.ino:(\d+):(?:(\d+):)?\s*(fatal error|error|warning|note):\s*(.*)$')
 
 cola = threading.BoundedSemaphore(SIMULTANEOS)
@@ -56,6 +62,14 @@ def version_compilador():
         return 'avr-gcc (no disponible)'
 
 
+def texto_canonico(codigo):
+    """Aproxima las primeras fases de traducción de C++: une líneas con «\\» final, cambia los
+    dígrafos «%:» por «#» y reemplaza los comentarios por un espacio (fuera de cadenas)."""
+    texto = re.sub(r'\\[ \t]*\r?\n', '', codigo).replace('%:', '#')
+    return re.sub(r'//[^\n]*|/\*.*?(?:\*/|$)|"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'',
+                  lambda m: m[0] if m[0][0] in '"\'' else ' ', texto, flags=re.S)
+
+
 def validar(codigo):
     if not isinstance(codigo, str) or not codigo.strip():
         return 'El programa está vacío.'
@@ -63,11 +77,18 @@ def validar(codigo):
         return 'El programa supera 32 KB.'
     if '\0' in codigo:
         return 'El programa contiene caracteres no válidos.'
-    for numero, linea in enumerate(codigo.splitlines(), 1):
-        if re.match(r'^\s*#\s*include', linea) and (not INCLUDE_VALIDO.match(linea) or '..' in linea):
-            return f'Línea {numero}: solo se permiten #include de bibliotecas por nombre, sin rutas.'
-    if re.search(r'incbin|__has_include|#\s*pragma\s+GCC\s+(system_header|dependency)', codigo, re.I):
-        return 'El programa usa directivas de lectura de archivos no permitidas.'
+    canonico = texto_canonico(codigo)
+    for numero, linea in enumerate(canonico.splitlines(), 1):
+        directiva = linea.strip()
+        if not directiva.startswith('#'):
+            continue
+        if DIRECTIVAS_PROHIBIDAS.match(directiva):
+            return f'Directiva {numero}: no permitida en el laboratorio.'
+        if re.match(r'^#\s*include', directiva) and (not INCLUDE_VALIDO.match(directiva) or '..' in directiva):
+            return f'Directiva {numero}: solo se permiten #include de bibliotecas por nombre, sin rutas ni macros.'
+    sin_cadenas = re.sub(r'"(?:\\.|[^"\\\n])*"', '""', canonico)
+    if IDENTIFICADORES_PROHIBIDOS.search(sin_cadenas) or ENSAMBLADOR_PROHIBIDO.search(canonico):
+        return 'El laboratorio no admite ensamblador en línea ni directivas de lectura de archivos.'
     return None
 
 
@@ -96,27 +117,74 @@ def prototipos(codigo):
     return '\n'.join(dict.fromkeys(declaraciones))
 
 
-def limites():
-    os.setsid()
-    resource.setrlimit(resource.RLIMIT_CPU, (int(TIEMPO), int(TIEMPO) + 1))
-    resource.setrlimit(resource.RLIMIT_AS, (1024 ** 3, 1024 ** 3))
-    resource.setrlimit(resource.RLIMIT_FSIZE, (16 * 1024 ** 2, 16 * 1024 ** 2))
-    resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+MAX_SALIDA = 64 * 1024          # salida que se conserva para el estudiante
+MAX_SALIDA_TOTAL = 4 * 1024 ** 2  # salida que se tolera antes de detener el proceso
+
+
+def con_limites(args, cpu):
+    """Límites por proceso con prlimit(1): se aplican antes de exec, sin preexec_fn en un servidor
+    multihilo. Los descendientes (cc1plus, as, ld) los heredan."""
+    return ['prlimit', f'--cpu={cpu}:{cpu + 1}', f'--as={1024 ** 3}', f'--fsize={16 * 1024 ** 2}',
+            '--nofile=64', '--core=0', '--', *args]
+
+
+def matar_grupo(pid):
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
 
 
 def ejecutar(args, carpeta, limite):
-    entorno = {'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8', 'TMPDIR': str(carpeta)}
-    proceso = subprocess.Popen(args, cwd=carpeta, env=entorno, stdin=subprocess.DEVNULL,
-                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                               preexec_fn=limites)
-    try:
-        salida, _ = proceso.communicate(timeout=max(1, limite))
-    except subprocess.TimeoutExpired:
-        os.killpg(proceso.pid, signal.SIGKILL)
-        proceso.communicate()
+    """Ejecuta un comando del compilador en su propio grupo de procesos (start_new_session).
+
+    Lee la salida mientras se produce: conserva MAX_SALIDA bytes, descarta el resto sin bloquear el
+    proceso y lo detiene si supera MAX_SALIDA_TOTAL. Al vencer el tiempo mata a todo el grupo."""
+    limite = float(limite)
+    if limite <= 0:
         raise TimeoutError
-    return proceso.returncode, salida.decode('utf-8', 'replace')[:20000]
+    entorno = {'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8', 'TMPDIR': str(carpeta)}
+    proceso = subprocess.Popen(con_limites(args, max(1, int(limite + 0.999))), cwd=carpeta, env=entorno,
+                               stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               start_new_session=True)
+    fin = time.monotonic() + limite
+    partes, conservados, total, excedido = [], 0, 0, False
+    try:
+        with selectors.DefaultSelector() as selector:
+            selector.register(proceso.stdout, selectors.EVENT_READ)
+            while True:
+                restante = fin - time.monotonic()
+                if restante <= 0:
+                    raise TimeoutError
+                if not selector.select(timeout=min(restante, 0.5)):
+                    continue
+                bloque = os.read(proceso.stdout.fileno(), 65536)
+                if not bloque:
+                    break
+                total += len(bloque)
+                if conservados < MAX_SALIDA:
+                    partes.append(bloque[:MAX_SALIDA - conservados])
+                    conservados += len(partes[-1])
+                if total > MAX_SALIDA_TOTAL:
+                    excedido = True
+                    break
+        if excedido:
+            matar_grupo(proceso.pid)
+        try:
+            proceso.wait(timeout=max(0.1, fin - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            raise TimeoutError
+    except BaseException:
+        matar_grupo(proceso.pid)
+        proceso.wait()
+        raise
+    finally:
+        proceso.stdout.close()
+    matar_grupo(proceso.pid)  # por si quedó algún descendiente
+    texto = b''.join(partes).decode('utf-8', 'replace')
+    if total > conservados:
+        texto += f'\n[salida recortada: {total - conservados} bytes omitidos]\n'
+    return (proceso.returncode if not excedido else -9), texto
 
 
 def diagnosticos(texto):
@@ -144,22 +212,78 @@ def tamanos(texto):
     return flash, ram
 
 
+LINEMARKER = re.compile(r'^#\s*(?:line\s+)?\d+\s+"((?:\\.|[^"\\])*)"', re.M)
+ARCHIVO_EN_MENSAJE = re.compile(r'^(?:In file included from |\s+from )?([^\s:][^:\n]*):\d+(?::\d+)?[:,]', re.M)
+NOMBRES_INTERNOS = {'<built-in>', '<command-line>', '<stdin>', 'sketch.ino', 'sketch.cpp'}
+_directorios = None
+
+
+def directorios_permitidos():
+    """Carpetas de cabeceras del sistema (según el propio avr-g++) y del núcleo Arduino."""
+    global _directorios
+    if _directorios is None:
+        salida = subprocess.run(['avr-g++', '-xc++', '-E', '-v', '-'], input='', capture_output=True,
+                                text=True, timeout=10).stderr
+        bloque = salida.split('search starts here:')[-1].split('End of search list.')[0]
+        _directorios = [os.path.realpath(l.strip()) for l in bloque.splitlines() if l.strip().startswith('/')]
+    return [*_directorios, os.path.realpath(NUCLEO / 'include')]
+
+
+def archivo_permitido(nombre, carpeta):
+    nombre = nombre.replace('\\"', '"').replace('\\\\', '\\')
+    if nombre in NOMBRES_INTERNOS:
+        return True
+    ruta = os.path.realpath(os.path.join(carpeta, nombre))
+    return any(ruta.startswith(d + os.sep) for d in directorios_permitidos())
+
+
+def revisar_preprocesado(carpeta, mensajes):
+    """Control decisivo de lectura de archivos: el preprocesador real indica en sus marcas de línea
+    y mensajes cada archivo que abrió; todos deben ser cabeceras permitidas."""
+    preprocesado = carpeta / 'sketch.ii'
+    marcas = LINEMARKER.findall(preprocesado.read_text(errors='replace')) if preprocesado.exists() else []
+    nombres = set(marcas) | set(ARCHIVO_EN_MENSAJE.findall(mensajes))
+    return all(archivo_permitido(n, carpeta) for n in nombres)
+
+
+def revisar_ensamblador(carpeta):
+    """El ensamblador generado no puede contener directivas que lean archivos o creen código oculto."""
+    return not ENSAMBLADOR_PROHIBIDO.search((carpeta / 'sketch.s').read_text(errors='replace'))
+
+
+def rechazo(mensaje):
+    return {'ok': False, 'salida': '', 'version': {**VERSION, 'compilador': version_compilador()},
+            'diagnosticos': [{'linea': None, 'columna': None, 'tipo': 'error', 'mensaje': mensaje}]}
+
+
 def compilar(codigo):
     inicio = time.monotonic()
+    restante = lambda: TIEMPO - (time.monotonic() - inicio)
     carpeta = Path(tempfile.mkdtemp(prefix='sketch-'))
     try:
         fuente = carpeta / 'sketch.cpp'
         fuente.write_text('#include <Arduino.h>\n' + prototipos(codigo) + '\n#line 1 "sketch.ino"\n' + codigo + '\n')
         incluir = ['-I', str(NUCLEO / 'include'), '-I', str(NUCLEO / 'include' / 'variant')]
         limpio = lambda t: t.replace(str(carpeta) + '/', '').replace(str(NUCLEO) + '/', '')
-        codigo_salida, texto = ejecutar(['avr-g++', '-c', *FLAGS, *incluir, 'sketch.cpp', '-o', 'sketch.o'],
-                                        carpeta, TIEMPO - (time.monotonic() - inicio))
+        # 1) Preprocesar y comprobar qué archivos se abrieron antes de devolver ningún mensaje.
+        codigo_salida, texto = ejecutar(['avr-g++', '-E', *FLAGS, *incluir, 'sketch.cpp', '-o', 'sketch.ii'],
+                                        carpeta, restante())
+        if not revisar_preprocesado(carpeta, texto):
+            return rechazo('El programa intenta leer archivos que no son bibliotecas del laboratorio.')
+        # 2) Compilar el texto ya revisado a ensamblador y revisarlo antes de ensamblar.
         if codigo_salida == 0:
-            enlace, texto2 = ejecutar(['avr-gcc', '-mmcu=atmega328p', '-Os', '-Wl,--gc-sections',
-                                       '-o', 'sketch.elf', 'sketch.o', str(NUCLEO / 'core.a'), '-lm'],
-                                      carpeta, TIEMPO - (time.monotonic() - inicio))
-            texto += texto2
-            codigo_salida = enlace
+            codigo_salida, texto = ejecutar(['avr-g++', '-S', *FLAGS, 'sketch.ii', '-o', 'sketch.s'],
+                                            carpeta, restante())
+            if codigo_salida == 0 and not revisar_ensamblador(carpeta):
+                return rechazo('El programa genera directivas de ensamblador no permitidas en el laboratorio.')
+        # 3) Ensamblar y enlazar con el núcleo Arduino precompilado.
+        for paso in (['avr-gcc', '-mmcu=atmega328p', '-c', 'sketch.s', '-o', 'sketch.o'],
+                     ['avr-gcc', '-mmcu=atmega328p', '-Os', '-Wl,--gc-sections', '-o', 'sketch.elf',
+                      'sketch.o', str(NUCLEO / 'core.a'), '-lm']):
+            if codigo_salida != 0:
+                break
+            codigo_salida, adicional = ejecutar(paso, carpeta, restante())
+            texto += adicional
         texto = limpio(texto)
         respuesta = {'ok': False, 'diagnosticos': diagnosticos(texto), 'salida': texto,
                      'version': {**VERSION, 'compilador': version_compilador()}}

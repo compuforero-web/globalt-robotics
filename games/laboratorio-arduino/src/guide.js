@@ -18,7 +18,7 @@ const CHECK_HINTS = {
   on: 'Mide el tiempo encendido: es el delay() que va justo después de digitalWrite(…, HIGH).',
   off: 'Mide el tiempo apagado: es el delay() que va después de digitalWrite(…, LOW). Si escribes algo por serie, tarda unos milisegundos, pero cabe en la tolerancia.',
   baud: 'La velocidad del monitor serie se fija con Serial.begin(…) dentro de setup(). El reto pide 9600.',
-  serial: 'Cada línea debe verse exactamente como «Latido 1», «Latido 2»… Una sola línea por latido, contando desde 1.',
+  serial: 'Cada línea debe verse exactamente como «Latido 1», «Latido 2»… y salir en el mismo momento en que se enciende el LED: una sola línea por latido, contando desde 1.',
 };
 
 /** Ayuda preparada: reglas fijas, sin red y sin IA. */

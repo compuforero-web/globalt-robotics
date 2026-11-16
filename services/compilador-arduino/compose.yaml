@@ -5,6 +5,7 @@ services:
     build: .
     image: globalt-compilador-arduino:dev
     network_mode: none
+    init: true          # recoge procesos huérfanos tras un timeout (evita zombis que agoten pids_limit)
     read_only: true
     user: "10001:${COMPILADOR_GID:-10001}"  # el grupo indicado puede usar el socket
     cap_drop: [ALL]

@@ -12,7 +12,7 @@ RUN sh /usr/local/bin/build-core.sh /src/core /opt/nucleo-nano \
 
 FROM ubuntu:24.04@sha256:73b999393d07f2bf65a40373778a44dc9a6d54ad7718d29247d8ff9413c4d6a8
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      gcc-avr avr-libc binutils-avr python3 && rm -rf /var/lib/apt/lists/* \
+      gcc-avr avr-libc binutils-avr python3 util-linux && rm -rf /var/lib/apt/lists/* \
  && useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin compilador
 COPY --from=nucleo /opt/nucleo-nano /opt/nucleo-nano
 COPY server.py /opt/compilador/server.py

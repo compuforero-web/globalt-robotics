@@ -25,7 +25,7 @@ El HEX enlaza el núcleo Arduino (LGPL-2.1), como hace el IDE de Arduino. Se cop
 { "placa": "nano", "codigo": "void setup() {}\nvoid loop() {}" }
 ```
 
-Respuesta `200` (también cuando el código tiene errores):
+Respuesta `200` (también cuando el código tiene errores o lo rechaza el control decisivo, con un único diagnóstico genérico y sin salida del compilador):
 
 ```json
 {
@@ -39,19 +39,30 @@ Respuesta `200` (también cuando el código tiene errores):
 }
 ```
 
-Errores: `400` (JSON o código no válido, `#include` con rutas, `.incbin`), `413` (más de 64 KB), `415`, `429` (cola llena), `503` (ocupado más de 10 s).
+Errores: `400` (JSON o código no válido, directivas no permitidas por el filtro de texto), `413` (más de 64 KB), `415`, `429` (cola llena), `503` (ocupado más de 10 s).
 
 Las líneas de los diagnósticos corresponden al código del estudiante (`#line 1 "sketch.ino"`). Como el IDE de Arduino, el servicio añade `#include <Arduino.h>` y declara antes del programa las funciones de nivel superior con tipos básicos.
 
 ## Límites y aislamiento
 
+El aislamiento lo da el **contenedor**; los filtros de código solo reducen lo que puede intentarse dentro de él y no sustituyen esos límites.
+
 - Contenedor `network_mode: none`: sin red de ningún tipo. Atiende por un **socket Unix** en un volumen.
-- Sistema de archivos de solo lectura; `/tmp` en tmpfs de 64 MB con `noexec`.
-- Usuario sin privilegios (UID 10001), `cap_drop: ALL`, `no-new-privileges`, sin socket de Docker, sin secretos ni variables sensibles.
+- `init: true`: un init mínimo recoge los procesos huérfanos tras un timeout (sin él quedarían zombis que agotan `pids_limit`).
+- Sistema de archivos de solo lectura; `/tmp` en tmpfs de 64 MB con `noexec`. La imagen no contiene secretos ni variables sensibles.
+- Usuario sin privilegios (UID 10001), `cap_drop: ALL`, `no-new-privileges`, sin socket de Docker.
 - `mem_limit` 768 MB, `cpus` 1, `pids_limit` 64.
-- Por compilación: 20 s de reloj y de CPU, 1 GB de memoria virtual, 16 MB por archivo, 64 descriptores; el grupo de procesos se mata al vencer el tiempo. Carpeta temporal propia que se borra siempre.
+- Por paso del compilador: `prlimit` aplica CPU = tiempo restante, 1 GB de memoria virtual, 16 MB por archivo, 64 descriptores y sin volcados; el proceso se lanza con `start_new_session` (sin `preexec_fn`, que no es seguro en un servidor multihilo) y al vencer los 20 s de reloj se mata a **todo su grupo de procesos**.
+- Salida: se lee mientras se genera; se conservan 64 KB (con aviso «salida recortada») y, si supera 4 MB, se detiene el proceso.
+- Carpeta temporal propia por compilación que se borra siempre.
 - Concurrencia: 2 compilaciones a la vez, hasta 8 en espera; el resto recibe 429.
-- Entrada: cuerpo ≤ 64 KB, código ≤ 32 KB; solo `#include <nombre.h>` sin rutas; se rechaza `.incbin`/`__has_include`.
+
+### Lectura de archivos y ensamblador (dos capas)
+
+1. **Filtro de texto** (`validar`, mensaje rápido): trabaja sobre una forma canónica (une líneas con `\` final, convierte el dígrafo `%:` en `#`, quita comentarios). Solo admite `#include <nombre.h>` o `"nombre.h"` sin rutas ni macros; rechaza `#import`, `#include_next`, `#embed`, `#pragma GCC dependency/system_header/poison`, `_Pragma`, `__has_include`, `asm`/`__asm__` y las directivas de GNU as `.incbin`, `.include`, `.macro`, `.irp`, `.rept`, `.altmacro`.
+2. **Control decisivo** (`compilar`): se preprocesa con `avr-g++ -E` y, antes de devolver ningún mensaje, se comprueba que todos los archivos de las marcas de línea y de los diagnósticos estén dentro de las carpetas de cabeceras de avr-gcc o del núcleo (rutas reales, `realpath`). Después se compila ese texto ya revisado a ensamblador (`-S`) y se rechaza si el `.s` generado contiene las directivas anteriores (así se detectan `asm` formado con `##`, escapes `\x..`, cadenas concatenadas o inyecciones en `section(...)`). Solo entonces se ensambla y se enlaza.
+
+Consecuencia conocida: un texto como `Serial.println(".incbin")` también se rechaza.
 
 ## Desarrollo local
 

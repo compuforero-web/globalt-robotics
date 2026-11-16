@@ -9,7 +9,9 @@ Ruta: `games/laboratorio-arduino/index.html` (enlazada desde el curso «Electró
 | Lección, editor, guardado local, guía | HTML/CSS/ES Modules estáticos | nada |
 | Compilación C++ | `avr-gcc` 7.3 + ArduinoCore-avr 1.8.6 en `services/compilador-arduino` | **servicio instalado** (pendiente en Linux) |
 | Ejecución | el HEX real se emula instrucción a instrucción en un ATmega328P (avr8js 0.21.1) dentro de un Web Worker | navegador moderno |
-| Evaluación del reto | ejecuta 5 s simulados y mide los flancos de D13 y los bytes del USART | programa compilado |
+| Evaluación del reto | ejecuta 5 s simulados y mide los flancos de D13 y los bytes del USART (con su instante) | programa compilado |
+
+Criterios del reto: al menos 4 encendidos en 5 s; encendidos de 200 ms y apagados de 800 ms (±10 %); 9600 baudios (±3 %); y cada línea «Latido N» debe **empezar a transmitirse entre 100 ms antes y 250 ms después del N-ésimo encendido** (200 ms encendido + 50 ms de margen; con periodo de 1000 ms las ventanas no se solapan). Emitir todas las líneas al inicio o fuera del encendido no aprueba. Los encendidos de los últimos 250 ms pueden quedar sin línea.
 
 Sin el servicio, la página muestra «Servicio de compilación pendiente» y no simula ni aprueba nada. No hay salidas pregrabadas ni análisis de palabras del código: el evaluador solo mira el comportamiento medido.
 

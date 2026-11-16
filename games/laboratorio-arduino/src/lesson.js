@@ -37,7 +37,7 @@ export const CHALLENGE = {
     'Cada encendido dura 200 ms (±10 %).',
     'Cada apagado dura 800 ms (±10 %).',
     'El monitor serie funciona a 9600 baudios.',
-    'Aparece una línea «Latido N» por cada latido, numerada 1, 2, 3…',
+    'Cada latido escribe su línea «Latido N» al encenderse el LED (de 100 ms antes a 250 ms después), numerada 1, 2, 3…',
   ],
 };
 
