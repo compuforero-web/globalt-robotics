@@ -18,15 +18,26 @@
       "sort_order": 1,
       "featured": true,
       "title": "RoboLab Arduino",
-      "description": "Programa un robot con bloques de movimiento, llega a la meta esquivando obstáculos y mira el código C++ de Arduino que se genera en tiempo real. 6 niveles progresivos.",
+      "description": "Explora Arduino Nano, conecta un LED, controla un microservo, mide distancias con el HC-SR04 y construye un robot evasor con puente H L298N. 5 niveles interactivos.",
       "category": "Arduino",
       "level": "Básico",
       "url": "games/robolab-arduino/index.html",
       "preview": "assets/img/robolab-preview.svg"
     },
     {
-      "id": "game-sensor-ultrasonico",
+      "id": "game-codicamp-agrotech",
       "sort_order": 2,
+      "featured": true,
+      "title": "CodiCamp AgroTech 3D",
+      "description": "Programa por bloques, guía tu robot por escenarios agrícolas y supera 20 niveles en dos fases. Incluye estrellas, personajes y registro de progreso en este navegador.",
+      "category": "Programación por bloques",
+      "level": "Básico",
+      "url": "games/codicamp-agrotech/index.html",
+      "preview": "assets/img/codicamp-preview.svg"
+    },
+    {
+      "id": "game-sensor-ultrasonico",
+      "sort_order": 3,
       "featured": false,
       "title": "Radar Ultrasónico",
       "description": "Calibra un sensor HC-SR04 y programa la reacción del robot según la distancia medida. Próximamente.",
@@ -37,7 +48,7 @@
     },
     {
       "id": "game-sumo-bot",
-      "sort_order": 3,
+      "sort_order": 4,
       "featured": false,
       "title": "Sumo Bot Challenge",
       "description": "Proyecto final: diseña la estrategia de un robot de sumo con puente H, sensores de línea y lógica de ataque. Próximamente.",

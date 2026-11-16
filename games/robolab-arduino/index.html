@@ -2,53 +2,24 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RoboLab Arduino · GLOBALT ROBOTICS</title>
-  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="robolab.css">
-  <script type="module" src="robolab.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1b2d">
+  <meta name="description" content="RoboLab Arduino: simulador educativo de robótica paso a paso.">
+  <title>RoboLab Arduino</title>
+  <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
-  <header class="top">
-    <div class="top__brand"><span class="logo">🤖</span> <strong>RoboLab</strong> <span class="muted">Arduino</span></div>
-    <label class="top__level">Nivel
-      <select id="level-select" aria-label="Elegir nivel"></select>
-    </label>
+  <header class="topbar">
+    <div class="brand" id="brand-logo" aria-hidden="true"></div>
+    <h1>RoboLab <span>Arduino</span></h1>
   </header>
 
-  <main class="lab">
-    <section class="panel panel--board" aria-label="Tablero">
-      <div class="mission">
-        <span id="tier" class="tier">Básico</span>
-        <h1 id="level-name">Nivel</h1>
-        <p id="hint" class="muted"></p>
-      </div>
-      <div id="board" class="board" role="img" aria-label="Tablero del robot"></div>
-      <p id="status" class="status" role="status">Arma tu programa y presiona ▶ Ejecutar.</p>
-    </section>
+  <main id="app" aria-live="polite"></main>
 
-    <section class="panel panel--program" aria-label="Programa">
-      <h2>1 · Bloques</h2>
-      <div class="palette">
-        <button class="block block--F" data-op="F">▲ Avanzar</button>
-        <button class="block block--L" data-op="L">⟲ Girar izq.</button>
-        <button class="block block--R" data-op="R">⟳ Girar der.</button>
-      </div>
-      <h2>2 · Tu programa <small id="count" class="muted">0 bloques</small></h2>
-      <ol id="program" class="program"></ol>
-      <div class="controls">
-        <button id="run" class="btn btn--go">▶ Ejecutar</button>
-        <button id="reset" class="btn">↺ Reiniciar</button>
-        <button id="clear" class="btn">✕ Borrar todo</button>
-      </div>
-      <label class="speed">Velocidad <input id="speed" type="range" min="1" max="5" value="3"></label>
-    </section>
+  <footer class="footer">
+    <button type="button" id="reset-progress" class="link-btn">Reiniciar progreso</button>
+  </footer>
 
-    <section class="panel panel--code" aria-label="Código Arduino generado">
-      <h2>3 · Código Arduino (C++)</h2>
-      <pre><code id="code"></code></pre>
-      <button id="copy" class="btn btn--small">Copiar código</button>
-    </section>
-  </main>
+  <script type="module" src="src/main.js"></script>
 </body>
 </html>

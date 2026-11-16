@@ -1,0 +1,103 @@
+/* Nivel 2 · Microservo SG90. Colores translúcidos para convivir con tema claro u oscuro. */
+.l2 { --l2-line: rgba(127, 127, 127, .35); --l2-soft: rgba(127, 127, 127, .09); --l2-accent: #f77f00;
+  --l2-ok: #15803d; --l2-err: #c1121f; display: grid; gap: 14px; max-width: 1100px; margin: 0 auto;
+  padding: 12px 16px 40px; box-sizing: border-box; min-width: 0; overflow-wrap: anywhere; }
+.l2 *, .l2 *::before, .l2 *::after { box-sizing: border-box; }
+.l2 h2 { margin: 8px 0; font-size: 1.35rem; }
+.l2 h3 { margin: 0 0 10px; font-size: 1.1rem; }
+.l2 p { line-height: 1.45; }
+.l2-head, .l2-panel, .l2-done, .l2-sticky { min-width: 0; }
+
+.l2-steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; font-size: .92rem; }
+.l2-steps .is-done { color: var(--l2-ok); font-weight: 600; }
+
+.l2-panel { border: 1px solid var(--l2-line); background: var(--l2-soft); border-radius: 14px; padding: 14px; }
+.l2-done { border: 2px solid var(--l2-ok); border-radius: 14px; padding: 12px 14px; background: rgba(21, 128, 61, .1); }
+.l2-done p { margin: 6px 0 10px; }
+
+.l2-sticky { position: sticky; top: 0; z-index: 5; border-radius: 14px; border: 1px solid var(--l2-line);
+  background: rgba(15, 23, 42, .94); color: #e2e8f0; padding: 4px; }
+.l2-servo { display: block; width: 100%; max-height: 34vh; touch-action: manipulation; }
+.l2-hit { cursor: pointer; }
+.l2-hit.is-selected { filter: drop-shadow(0 0 4px #facc15) drop-shadow(0 0 2px #facc15); }
+.l2-horn { cursor: pointer; }
+
+.l2-chips, .l2-quick, .l2-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.l2-chips { margin-bottom: 10px; }
+.l2-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px;
+  vertical-align: middle; border: 1px solid rgba(0, 0, 0, .3); flex: none; }
+.l2-card { border-left: 4px solid var(--l2-accent); padding: 4px 12px; }
+.l2-card h4 { margin: 6px 0; }
+
+.l2-chip, .l2-btn, .l2-btn-primary, .l2-pin, .l2-cable, .l2-seg button, .l2 select {
+  min-height: 44px; border-radius: 10px; border: 1px solid var(--l2-line); background: #f8fafc; color: #0f172a;
+  font: inherit; font-size: .92rem; padding: 8px 12px; cursor: pointer; touch-action: manipulation; }
+.l2-chip.is-active, .l2-seg button.is-active { background: #1e3a8a; color: #fff; border-color: #1e3a8a; }
+.l2-btn-primary { background: #c2410c; color: #fff; border-color: #c2410c; font-weight: 700; }
+.l2-btn-primary:disabled { opacity: .55; cursor: default; }
+.l2 button:focus-visible, .l2 select:focus-visible, .l2 input:focus-visible { outline: 3px solid #facc15; outline-offset: 2px; }
+
+/* Cableado */
+.l2-hint { margin-top: 0; }
+.l2-cables { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.l2-cable { display: flex; flex-direction: column; align-items: flex-start; text-align: left; border-left: 6px solid var(--wire); }
+.l2-cable small { opacity: .8; }
+.l2-cable.is-active { outline: 3px solid var(--wire); outline-offset: 1px; font-weight: 700; }
+.l2-dests { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.l2-dests fieldset { border: 1px solid var(--l2-line); border-radius: 12px; margin: 0; padding: 8px 10px 10px; min-width: 0; }
+.l2-dests legend { font-weight: 700; padding: 0 4px; }
+.l2-pins { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 6px; }
+.l2-pin { padding: 6px 4px; font-weight: 600; font-family: ui-monospace, monospace; }
+.l2-pin.is-wired { box-shadow: inset 0 -6px 0 var(--wire); border-color: var(--wire); }
+.l2-check { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 8px; cursor: pointer; }
+.l2-check input { width: 22px; height: 22px; flex: none; }
+.l2-actions { margin-top: 12px; align-items: center; }
+.l2-feedback { min-height: 1.4em; font-weight: 600; }
+.l2-feedback .l2-btn { margin-left: 6px; }
+.is-ok { color: var(--l2-ok); }
+.is-error { color: var(--l2-err); }
+
+/* Nota de energía */
+.l2-power { margin-top: 14px; border: 1px dashed #b45309; border-radius: 12px; padding: 8px 12px; }
+.l2-power summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; }
+.l2-power-ctl { display: grid; gap: 10px; }
+.l2-power-ctl input[type="range"], .l2-range input { width: 100%; min-height: 44px; }
+.l2-seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.l2-seg button { flex: 1 1 140px; }
+.l2-meter { height: 16px; border-radius: 8px; background: var(--l2-soft); border: 1px solid var(--l2-line);
+  overflow: hidden; margin: 12px 0 4px; }
+.l2-meter-bar { height: 100%; transition: width .3s, background .3s; }
+.l2-meter-bar.is-good { background: #16a34a; }
+.l2-meter-bar.is-warn { background: #eab308; }
+.l2-meter-bar.is-bad { background: #dc2626; }
+.l2-power.is-reset .l2-meter { animation: l2-blink .5s steps(2) infinite; }
+@keyframes l2-blink { 50% { opacity: .3; } }
+.l2-small { font-size: .85rem; opacity: .85; }
+
+/* Código */
+.l2-code-host.is-locked { opacity: .45; filter: grayscale(.6); pointer-events: none; }
+.l2-modes { margin-bottom: 10px; }
+.l2-code { background: #0f172a; color: #e2e8f0; border-radius: 10px; padding: 10px 12px; margin: 10px 0;
+  font: .8rem/1.5 ui-monospace, Menlo, Consolas, monospace; overflow-x: auto; max-width: 100%; white-space: pre; }
+.l2-code mark { background: #f77f00; color: #0f172a; border-radius: 3px; padding: 0 3px; }
+.l2-line { display: inline-block; min-width: 100%; border-radius: 4px; padding: 0 4px; }
+.l2-line.is-current { background: #facc15; color: #0f172a; font-weight: 700; }
+.l2-range { display: block; margin: 6px 0; }
+.l2-quick button { flex: 1 1 70px; font-weight: 700; }
+.l2-wave { display: block; width: 100%; max-width: 420px; margin-top: 10px; }
+.l2-vars { font-family: ui-monospace, monospace; font-weight: 600; }
+
+/* Quiz */
+.l2-q { border: 1px solid var(--l2-line); border-radius: 12px; margin: 0 0 10px; padding: 8px 12px; min-width: 0; }
+.l2-q legend { font-weight: 700; padding: 0 4px; }
+.l2-opt { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.l2-opt input { width: 22px; height: 22px; flex: none; }
+.l2-why { margin: 6px 0 0; font-weight: 600; }
+
+@media (min-width: 900px) {
+  .l2 { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); align-items: start; }
+  .l2-head, .l2-done { grid-column: 1 / -1; }
+  .l2-sticky { grid-row: span 4; top: 12px; }
+  .l2-servo { max-height: 70vh; }
+  .l2-panel { grid-column: 2; }
+}

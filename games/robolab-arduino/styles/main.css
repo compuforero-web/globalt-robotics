@@ -1,0 +1,79 @@
+:root {
+  --bg: #0f1b2d;
+  --panel: #17263d;
+  --panel-2: #1e3150;
+  --text: #e8eef6;
+  --muted: #9fb2c8;
+  --accent: #2b9bf0;
+  --ok: #2ecc71;
+  --warn: #f5c542;
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; min-height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.topbar { display: flex; align-items: center; gap: 12px; max-width: 880px; margin: 16px auto 8px; }
+.brand { width: 48px; height: 48px; }
+.brand svg { width: 100%; height: 100%; }
+.topbar h1 { margin: 0; font-size: 1.6rem; letter-spacing: .5px; }
+.topbar h1 span { color: var(--accent); }
+
+#app { max-width: 880px; margin: 0 auto; }
+
+.menu-intro { color: var(--muted); line-height: 1.5; }
+
+.level-list { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 12px; }
+
+.level-card {
+  width: 100%; min-height: 96px; display: flex; align-items: center; gap: 14px;
+  padding: 14px; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: var(--panel); border: 2px solid transparent; border-radius: var(--radius);
+  transition: transform .15s, border-color .15s, background .15s;
+}
+.level-card.open:hover, .level-card.open:focus-visible { border-color: var(--accent); background: var(--panel-2); transform: translateY(-2px); outline: none; }
+.level-card.done { border-color: color-mix(in srgb, var(--ok) 50%, transparent); }
+.level-card.locked { opacity: .5; filter: grayscale(.8); cursor: not-allowed; }
+
+.level-icon { flex: 0 0 64px; height: 64px; }
+.level-icon svg, .level-badge svg { width: 100%; height: 100%; }
+.level-body { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.level-num { font-size: .75rem; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.level-title { font-size: 1.05rem; }
+.level-summary { font-size: .88rem; color: var(--muted); }
+.level-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.level-tags em { font-style: normal; font-family: ui-monospace, monospace; font-size: .75rem; background: #0b1424; padding: 2px 8px; border-radius: 99px; color: var(--warn); }
+.level-badge { flex: 0 0 32px; height: 32px; color: var(--muted); }
+
+.shake { animation: shake .35s; }
+@keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  background: var(--panel-2); border: 1px solid var(--warn); padding: 12px 18px;
+  border-radius: var(--radius); max-width: calc(100% - 32px); margin: 0;
+}
+
+.back-btn, .link-btn {
+  min-height: 44px; font: inherit; cursor: pointer; border-radius: 10px;
+}
+.back-btn { background: var(--panel-2); color: var(--text); border: 0; padding: 0 16px; }
+.link-btn { background: none; border: 0; color: var(--muted); text-decoration: underline; }
+
+.placeholder { background: var(--panel); border-radius: var(--radius); padding: 20px; margin-top: 16px; }
+
+.footer { max-width: 880px; margin: 8px auto 24px; text-align: center; }
+
+@media (max-width: 480px) {
+  .level-icon { flex-basis: 48px; height: 48px; }
+  .level-summary { display: none; }
+}

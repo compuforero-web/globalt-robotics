@@ -1,0 +1,115 @@
+/* Nivel 3 · HC-SR04. Colores neutros para heredar el tema global. */
+.l3 { display: grid; gap: 16px; max-width: 980px; margin: 0 auto; padding: 0 0 32px; min-width: 0; }
+.l3 * { box-sizing: border-box; }
+.l3-head h2 { margin: 12px 0 8px; }
+.l3-steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; font-size: .95rem; }
+.l3-steps li.is-done { color: #1e9e5a; font-weight: 600; }
+.l3-panel {
+  min-width: 0; padding: 16px; border-radius: 14px;
+  background: rgba(127, 127, 127, .08); border: 1px solid rgba(127, 127, 127, .25);
+}
+.l3-panel h3 { margin: 0 0 12px; }
+.l3-done { padding: 16px; border-radius: 14px; background: rgba(30, 158, 90, .14); border: 2px solid #1e9e5a; }
+.l3-done p { margin: 6px 0 10px; }
+
+.l3-btn, .l3-btn-primary, .l3-chip, .l3-opt, .l3-wire-pin, .l3-npin {
+  font: inherit; color: inherit; min-height: 44px; border-radius: 10px; cursor: pointer;
+  border: 1px solid rgba(127, 127, 127, .45); background: rgba(127, 127, 127, .12); padding: 8px 14px;
+}
+.l3-btn-primary { background: #2563eb; border-color: #2563eb; color: #fff; font-weight: 600; }
+.l3-btn-sm { min-height: 36px; padding: 4px 10px; font-size: .85rem; }
+.l3-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.l3-msg { margin-top: 10px; }
+.l3-msg ul { margin: 0; padding-left: 20px; }
+.l3-msg.is-ok { color: #1e9e5a; font-weight: 600; }
+.l3-msg.is-err { color: #d64545; }
+.l3-msg .l3-btn { margin-top: 8px; display: block; }
+
+/* Anatomía */
+.l3-sensor { width: 100%; max-width: 440px; display: block; margin: 0 auto; }
+.l3-silk { fill: #fff; font: 700 14px sans-serif; pointer-events: none; }
+.l3-silk-sm { font-size: 11px; }
+.l3-part { cursor: pointer; outline: none; }
+.l3-part:focus-visible > :nth-child(2), .l3-part.is-selected > :nth-child(2) { stroke: #ffd23f; stroke-width: 4; }
+.l3-part.is-selected .l3-silk { fill: #ffd23f; }
+.l3-ring { fill: none; stroke: #7cc4ff; stroke-width: 3; opacity: 0; transform-box: fill-box; transform-origin: center; }
+.l3-part.is-selected .l3-ring { animation: l3-ring 1.2s ease-out infinite; }
+@keyframes l3-ring { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(1.5); } }
+.l3-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.l3-chip.is-active { background: #2563eb; color: #fff; border-color: #2563eb; }
+.l3-card { padding: 12px 14px; border-radius: 10px; background: rgba(37, 99, 235, .1); line-height: 1.5; }
+.l3-card h4 { margin: 0 0 6px; }
+.l3-card p { margin: 0; }
+
+/* Cableado */
+.l3-hint { margin: 0 0 10px; }
+.l3-wire-sensor { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.l3-wire-pin { display: flex; align-items: center; gap: 8px; text-align: left; }
+.l3-wire-pin.is-sel { outline: 3px solid var(--c); outline-offset: 1px; }
+.l3-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--c); flex: none; }
+.l3-wire-nano { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; margin-top: 12px; }
+.l3-npin { padding: 4px; font-size: .85rem; font-family: monospace; }
+.l3-npin.is-used { background: var(--c); color: #fff; border-color: var(--c); font-weight: 700; }
+
+/* Escenario */
+.l3-scene { position: relative; border-radius: 12px; background: #0f1b2b; overflow: hidden; }
+.l3-scene-svg { width: 100%; display: block; touch-action: pan-y; cursor: ew-resize; user-select: none; }
+.l3-scene.is-locked .l3-scene-svg { opacity: .45; }
+.l3-scene-lock { display: none; position: absolute; inset: auto 8px 8px; margin: 0; padding: 6px 10px;
+  border-radius: 8px; background: rgba(0, 0, 0, .7); color: #fff; font-size: .9rem; text-align: center; }
+.l3-scene.is-locked .l3-scene-lock { display: block; }
+.l3-zone-near { fill: rgba(214, 69, 69, .22); }
+.l3-zone-far { fill: rgba(30, 158, 90, .16); }
+.l3-ground { stroke: #8a9bb0; stroke-width: 2; }
+.l3-tick line { stroke: #8a9bb0; }
+.l3-tick, .l3-tick text { fill: #b9c7d8; font: 10px sans-serif; }
+.l3-sT.is-firing { fill: #ffd23f; }
+.l3-obstacle rect { fill: #c98a3c; stroke: #7a4f1d; stroke-width: 2; }
+.l3-obstacle.is-near rect { fill: #d64545; stroke: #7d1d1d; }
+.l3-ob-label { fill: #fff; font: 700 12px sans-serif; }
+.l3-wave-out, .l3-wave-back { fill: none; stroke-width: 3; stroke-linecap: round; }
+.l3-wave-out { stroke: #7cc4ff; }
+.l3-wave-back { stroke: #ffb347; }
+.l3-range { display: grid; gap: 6px; margin: 12px 0; }
+.l3-range input { width: 100%; min-height: 44px; }
+
+/* Fórmula, código y Monitor Serie */
+.l3-formula { padding: 12px; border-radius: 10px; background: rgba(127, 127, 127, .1); display: grid; gap: 6px;
+  font-size: 1.05rem; overflow-x: auto; }
+.l3-formula > div { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.l3-frac { display: inline-flex; flex-direction: column; text-align: center; vertical-align: middle; }
+.l3-frac > span:first-child { border-bottom: 2px solid currentColor; padding: 0 4px; }
+.l3-formula-live b { color: #2563eb; }
+.l3-note { margin: 0; font-size: .85rem; opacity: .85; }
+.l3-sim-cols { display: grid; gap: 12px; margin-top: 12px; }
+@media (min-width: 760px) { .l3-sim-cols { grid-template-columns: 1.3fr 1fr; } }
+.l3-code, .l3-serial-out {
+  margin: 0; min-width: 0; overflow: auto; border-radius: 10px; background: #111827; color: #d6deeb;
+  font: 12px/1.5 ui-monospace, monospace; padding: 10px;
+}
+.l3-ln { display: inline-block; min-width: 100%; padding: 0 4px; border-radius: 4px; }
+.l3-ln.is-active { background: #ffd23f; color: #111; font-weight: 700; }
+.l3-io { display: grid; gap: 12px; min-width: 0; }
+.l3-serial-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px;
+  font-weight: 600; }
+.l3-serial-out { height: 160px; color: #7ee787; }
+.l3-alert { display: grid; justify-items: center; gap: 6px; padding: 10px; border-radius: 10px;
+  background: rgba(127, 127, 127, .1); text-align: center; }
+.l3-alert svg { width: 150px; max-width: 100%; }
+.l3-alert-txt { margin: 0; font-weight: 600; }
+.l3-leg { stroke: #999; stroke-width: 3; }
+.l3-led { fill: #5a1d1d; stroke: #3a1010; stroke-width: 2; }
+.l3-beep { fill: none; stroke: #d64545; stroke-width: 3; opacity: 0; }
+.l3-alert.is-on .l3-led { fill: #ff3b3b; filter: drop-shadow(0 0 8px #ff3b3b); }
+.l3-alert.is-on .l3-beep { opacity: 1; }
+.l3-alert.is-on .l3-alert-txt { color: #d64545; }
+
+/* Quiz */
+.l3-q { border: 1px solid rgba(127, 127, 127, .3); border-radius: 10px; padding: 12px; margin: 0 0 12px; min-width: 0; }
+.l3-q legend { font-weight: 600; padding: 0 4px; }
+.l3-opt { display: block; width: 100%; text-align: left; margin-top: 8px; }
+.l3-opt.is-sel { border-color: #2563eb; background: rgba(37, 99, 235, .18); }
+.l3-opt.is-right { border-color: #1e9e5a; background: rgba(30, 158, 90, .2); }
+.l3-opt.is-wrong { border-color: #d64545; background: rgba(214, 69, 69, .2); }
+.l3-why { margin: 8px 0 0; font-size: .9rem; }
+@media (prefers-reduced-motion: reduce) { .l3-part.is-selected .l3-ring { animation: none; } }

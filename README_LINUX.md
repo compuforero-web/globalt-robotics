@@ -94,3 +94,10 @@ GitHub y las versiones Linux respaldan el código y el catálogo incluido. Las e
 ## Registro de instalación — 16 de noviembre de 2026
 
 La salida aportada desde `globalt-server` confirma que el instalador completó la publicación inicial del commit `a84a862d463cda6993da848a0fbb5782fc7921a9`, creó el contenedor Nginx y habilitó el temporizador en el puerto 8094. El puerto 8093 permanece asignado a Origen Inmobiliaria. La recepción de este cambio de documentación sirve para comprobar la siguiente actualización automática; aún requiere verificar `revision.txt` y los registros en Linux. El acceso desde otro equipo por NetBird también debe comprobarse en el navegador.
+
+## Juegos integrados
+
+- **RoboLab Arduino**: `/games/robolab-arduino/index.html`, versión web del ZIP recibido, cinco niveles de Arduino Nano, LED, microservo, HC-SR04, L298N y robot evasor.
+- **CodiCamp AgroTech 3D**: `/games/codicamp-agrotech/index.html`, HTML recibido, 20 niveles y dos fases.
+
+Ambos aparecen en la sección `/#juegos`, con apertura en el modal existente y opción de nueva pestaña. La actualización única del catálogo local agrega los dos juegos a los navegadores que conservaban un catálogo anterior, mantiene los demás registros y conserva las ediciones personalizadas. El progreso y los datos ingresados en los juegos permanecen en el almacenamiento de cada navegador; no se sincronizan entre estudiantes/equipos. No es necesario reinstalar servicios Linux para esta entrega.

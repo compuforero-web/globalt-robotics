@@ -1,0 +1,3241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CodiCamp AgroTech 3D</title>
+    <style>
+        :root {
+            --bg-light: #f4f9f4;
+            --bg-grid: #e2efe2;
+            --panel-bg: #d5e6d5;
+            --panel-border: #8ab38a;
+            --slot-empty: #b8d0b8;
+            --slot-border: #769c76;
+            --text-dark: #1e3523;
+            --accent-main: #2ecc71;
+            --dock-bg: rgba(255, 255, 255, 0.95);
+            --card-bg: rgba(255, 255, 255, 0.6);
+        }
+
+        /* TEMA FASE 2: NEXT-GEN CYBER-TECH (NIVELES 11 AL 20) */
+        body.phase-2 {
+            --bg-light: #070b14;
+            --bg-grid: #0f172a;
+            --panel-bg: #0f172a;
+            --panel-border: #00f2fe;
+            --slot-empty: #1e293b;
+            --slot-border: #334155;
+            --text-dark: #f8fafc;
+            --accent-main: #00f2fe;
+            --dock-bg: rgba(15, 23, 42, 0.95);
+            --card-bg: rgba(30, 41, 59, 0.75);
+            background-color: #030712;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #141e27;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 0.4s ease;
+        }
+
+        .game-wrapper {
+            width: 98vw;
+            max-width: 1260px;
+            height: 95vh;
+            max-height: 710px;
+            background-color: var(--bg-light);
+            background-image: 
+                linear-gradient(30deg, var(--bg-grid) 12%, transparent 12.5%, transparent 87%, var(--bg-grid) 87.5%, var(--bg-grid)),
+                linear-gradient(150deg, var(--bg-grid) 12%, transparent 12.5%, transparent 87%, var(--bg-grid) 87.5%, var(--bg-grid)),
+                linear-gradient(30deg, var(--bg-grid) 12%, transparent 12.5%, transparent 87%, var(--bg-grid) 87.5%, var(--bg-grid)),
+                linear-gradient(150deg, var(--bg-grid) 12%, transparent 12.5%, transparent 87%, var(--bg-grid) 87.5%, var(--bg-grid));
+            background-size: 56px 98px;
+            background-position: 0 0, 0 0, 28px 49px, 28px 49px;
+            border-radius: 16px;
+            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.7);
+            display: grid;
+            grid-template-columns: 1fr 370px;
+            overflow: hidden;
+            border: 3px solid #ffffff;
+            position: relative;
+            transition: all 0.4s ease;
+        }
+
+        body.phase-2 .game-wrapper {
+            background-image: 
+                radial-gradient(circle at 50% 45%, rgba(0, 242, 254, 0.12) 0%, transparent 65%),
+                linear-gradient(rgba(0, 242, 254, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 242, 254, 0.05) 1px, transparent 1px);
+            background-size: 100% 100%, 36px 36px, 36px 36px;
+            border-color: #00f2fe;
+            box-shadow: 0 0 35px rgba(0, 242, 254, 0.25), 0 20px 60px rgba(0, 0, 0, 0.9);
+        }
+
+        .stage-area {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .top-hud {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .hud-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+        .brand-pill {
+            background: #ffffff;
+            border: 2px solid #2ecc71;
+            padding: 5px 11px;
+            border-radius: 20px;
+            font-weight: 900;
+            color: #1e3523;
+            font-size: 12.5px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.08);
+        }
+
+        body.phase-2 .brand-pill {
+            background: #0f172a;
+            border-color: #00f2fe;
+            color: #00f2fe;
+            box-shadow: 0 0 12px rgba(0, 242, 254, 0.35);
+        }
+
+        .phase-switcher {
+            display: flex;
+            background: rgba(0,0,0,0.15);
+            border-radius: 10px;
+            padding: 2px;
+            gap: 3px;
+        }
+
+        .phase-btn {
+            border: none;
+            padding: 5px 9px;
+            border-radius: 8px;
+            font-weight: 800;
+            font-size: 11px;
+            cursor: pointer;
+            background: transparent;
+            color: var(--text-dark);
+            transition: all 0.2s;
+        }
+
+        .phase-btn.active-p1 {
+            background: #2ecc71;
+            color: #ffffff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .phase-btn.active-p2 {
+            background: linear-gradient(90deg, #0284c7, #00f2fe);
+            color: #030712;
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
+        }
+
+        .hud-select {
+            background: #3498db;
+            color: white;
+            border: 2px solid #fff;
+            padding: 5px 8px;
+            border-radius: 10px;
+            font-weight: 800;
+            font-size: 11.5px;
+            cursor: pointer;
+            box-shadow: 0 3px 0 #2980b9;
+            outline: none;
+        }
+
+        body.phase-2 .hud-select {
+            background: #1e293b;
+            border-color: #00f2fe;
+            color: #f8fafc;
+            box-shadow: 0 3px 0 #0284c7;
+        }
+
+        .char-select {
+            background: #16a085;
+            box-shadow: 0 3px 0 #117864;
+        }
+
+        body.phase-2 .char-select {
+            background: #311042;
+            border-color: #d946ef;
+            box-shadow: 0 3px 0 #86198f;
+        }
+
+        .hud-btn {
+            background: #ffffff;
+            color: #1e3523;
+            border: 2px solid #8ab38a;
+            padding: 5px 10px;
+            border-radius: 10px;
+            font-weight: 800;
+            font-size: 11px;
+            cursor: pointer;
+            box-shadow: 0 3px 0 #6c916c;
+            transition: transform 0.1s;
+        }
+        .hud-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #6c916c; }
+
+        body.phase-2 .hud-btn {
+            background: #1e293b;
+            color: #e2e8f0;
+            border-color: #475569;
+            box-shadow: 0 3px 0 #0f172a;
+        }
+
+        .energy-widget {
+            background: #ffffff;
+            border: 2px solid #f39c12;
+            padding: 4px 10px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.08);
+        }
+
+        body.phase-2 .energy-widget {
+            background: #0f172a;
+            border-color: #00f2fe;
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.25);
+        }
+
+        .energy-bar-outer {
+            width: 65px;
+            height: 11px;
+            background: #ecf0f1;
+            border-radius: 8px;
+            border: 1px solid #bdc3c7;
+            overflow: hidden;
+        }
+
+        body.phase-2 .energy-bar-outer {
+            background: #1e293b;
+            border-color: #334155;
+        }
+
+        .energy-bar-inner {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #f1c40f, #2ecc71);
+            transition: width 0.35s ease;
+        }
+
+        body.phase-2 .energy-bar-inner {
+            background: linear-gradient(90deg, #00f2fe, #a855f7);
+        }
+
+        .energy-label { font-weight: 800; font-size: 11px; color: #d35400; }
+        body.phase-2 .energy-label { color: #00f2fe; }
+
+        .toast-banner {
+            position: absolute;
+            top: 58px;
+            left: 14px;
+            background: rgba(255, 255, 255, 0.96);
+            border: 2px solid #2ecc71;
+            color: #1e3523;
+            padding: 5px 14px;
+            border-radius: 16px;
+            font-weight: 800;
+            font-size: 12px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+            z-index: 15;
+            max-width: 520px;
+        }
+
+        body.phase-2 .toast-banner {
+            background: rgba(15, 23, 42, 0.95);
+            color: #f8fafc;
+            border-color: #00f2fe;
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.25);
+        }
+
+        .canvas-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding-bottom: 52px;
+        }
+
+        canvas {
+            display: block;
+            width: 780px;
+            height: 520px;
+            max-width: 100%;
+        }
+
+        .bottom-controls-wrapper {
+            position: absolute;
+            bottom: 10px;
+            left: 0;
+            right: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 7px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .play-bar { display: flex; gap: 8px; pointer-events: auto; align-items: center; }
+
+        .btn-run {
+            background: linear-gradient(180deg, #2ecc71, #27ae60);
+            border: 2.5px solid #ffffff;
+            color: white;
+            width: 132px;
+            height: 38px;
+            border-radius: 11px;
+            font-size: 13.5px;
+            font-weight: 900;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #1e8449, 0 6px 14px rgba(0,0,0,0.2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+            touch-action: manipulation;
+        }
+        .btn-run:active { transform: translateY(3px); box-shadow: 0 1px 0 #1e8449; }
+
+        body.phase-2 .btn-run {
+            background: linear-gradient(180deg, #00f2fe, #0284c7);
+            color: #030712;
+            border-color: #e0f2fe;
+            box-shadow: 0 4px 0 #0369a1, 0 0 15px rgba(0, 242, 254, 0.4);
+        }
+
+        .btn-step {
+            background: linear-gradient(180deg, #3498db, #2980b9);
+            border: 2.5px solid #ffffff;
+            color: white;
+            padding: 0 13px;
+            height: 38px;
+            border-radius: 11px;
+            font-size: 12.5px;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #1f618d, 0 6px 14px rgba(0,0,0,0.2);
+            touch-action: manipulation;
+        }
+        .btn-step:active { transform: translateY(3px); box-shadow: 0 1px 0 #1f618d; }
+
+        .btn-reset {
+            background: linear-gradient(180deg, #e74c3c, #c0392b);
+            border: 2.5px solid #ffffff;
+            color: white;
+            width: 44px;
+            height: 38px;
+            border-radius: 11px;
+            font-size: 17px;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #922b21, 0 6px 14px rgba(0,0,0,0.2);
+            touch-action: manipulation;
+        }
+        .btn-reset:active { transform: translateY(3px); box-shadow: 0 1px 0 #922b21; }
+
+        .command-dock {
+            background: var(--dock-bg);
+            padding: 6px 10px;
+            border-radius: 14px;
+            border: 2px solid var(--panel-border);
+            display: flex;
+            gap: 7px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+            pointer-events: auto;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .cmd-tile-btn {
+            width: 54px;
+            height: 49px;
+            background: linear-gradient(180deg, #ffffff, #e8f0e8);
+            border: 2px solid #6c916c;
+            border-radius: 10px;
+            box-shadow: 0 4px 0 #527552;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.08s;
+            touch-action: manipulation;
+        }
+        .cmd-tile-btn:hover { transform: translateY(-2px); border-color: var(--accent-main); }
+        .cmd-tile-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #527552; }
+        .cmd-tile-btn svg { width: 23px; height: 23px; fill: #2c3e50; }
+        .cmd-tile-btn span { font-size: 8.5px; font-weight: 800; color: #34495e; margin-top: 2px; }
+
+        body.phase-2 .cmd-tile-btn {
+            background: linear-gradient(180deg, #1e293b, #0f172a);
+            border-color: #38bdf8;
+            box-shadow: 0 4px 0 #0369a1;
+        }
+        body.phase-2 .cmd-tile-btn svg { fill: #e2e8f0; }
+        body.phase-2 .cmd-tile-btn span { color: #94a3b8; }
+
+        .cmd-tile-btn.loop-btn {
+            background: linear-gradient(180deg, #fff8e1, #ffe082);
+            border-color: #f57f17;
+            box-shadow: 0 4px 0 #e65100;
+        }
+        .cmd-tile-btn.loop-btn strong { font-size: 15px; font-weight: 900; color: #e65100; }
+        .cmd-tile-btn.cond-btn {
+            background: linear-gradient(180deg, #e1f5fe, #81d4fa);
+            border-color: #0277bd;
+            box-shadow: 0 4px 0 #01579b;
+        }
+        .cmd-tile-btn.cond-btn strong { font-size: 15px; }
+        .code-slot.loop-slot { background: linear-gradient(180deg, #fff8e1, #ffe082); border-color: #f57f17; }
+        .code-slot.cond-slot { background: linear-gradient(180deg, #e1f5fe, #b3e5fc); border-color: #0277bd; }
+        .code-slot.call-slot { background: linear-gradient(180deg, #f3e5f5, #e1bee7); border-color: #8e24aa; }
+        .code-slot.loop-running { box-shadow: 0 0 0 3px #f57f17 !important; }
+        .name-link { cursor: pointer; text-decoration: underline dotted; }
+        .phase-btn.active-p3 {
+            background: #0288d1;
+            color: #ffffff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .cmd-tile-btn.proc-btn {
+            background: linear-gradient(180deg, #f3e5f5, #e1bee7);
+            border-color: #8e24aa;
+            box-shadow: 0 4px 0 #6a1b9a;
+        }
+        .cmd-tile-btn.proc-btn strong { font-size: 15px; font-weight: 900; color: #6a1b9a; }
+
+        body.phase-2 .cmd-tile-btn.proc-btn {
+            background: linear-gradient(180deg, #3b0764, #1e1b4b);
+            border-color: #c084fc;
+            box-shadow: 0 4px 0 #6b21a8;
+        }
+        body.phase-2 .cmd-tile-btn.proc-btn strong { color: #e879f9; }
+
+        .code-sidebar {
+            background-color: var(--panel-bg);
+            border-left: 3px solid var(--panel-border);
+            padding: 9px 11px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 100%;
+            position: relative;
+            transition: all 0.4s ease;
+        }
+
+        .sidebar-top-row { display: flex; gap: 6px; align-items: center; }
+
+        .efficiency-bar {
+            flex: 1;
+            background: var(--card-bg);
+            border: 2px solid var(--slot-border);
+            border-radius: 9px;
+            padding: 4px 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--text-dark);
+        }
+
+        .btn-cpp-toggle {
+            background: #1e293b;
+            color: #38bdf8;
+            border: 2px solid #0284c7;
+            border-radius: 9px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 900;
+            cursor: pointer;
+            box-shadow: 0 2px 0 #0f172a;
+        }
+
+        .proc-box {
+            background: var(--card-bg);
+            border: 2.5px solid var(--slot-border);
+            border-radius: 11px;
+            padding: 5px 8px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .proc-box.active-target {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: var(--accent-main);
+            box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.22);
+        }
+
+        body.phase-2 .proc-box.active-target {
+            background: rgba(15, 23, 42, 0.95);
+            border-color: #00f2fe;
+            box-shadow: 0 0 12px rgba(0, 242, 254, 0.3);
+        }
+
+        .proc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .proc-title { font-weight: 900; font-size: 11px; color: var(--text-dark); }
+
+        .active-badge {
+            font-size: 8px;
+            background: var(--accent-main);
+            color: #030712;
+            font-weight: 900;
+            padding: 1.5px 6px;
+            border-radius: 8px;
+            display: none;
+        }
+        .proc-box.active-target .active-badge { display: inline-block; }
+
+        .slots-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 5px;
+        }
+
+        .code-slot {
+            height: 41px;
+            background-color: var(--slot-empty);
+            border: 2px solid var(--slot-border);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.12);
+        }
+
+        .code-slot.locked-slot {
+            background: repeating-linear-gradient(45deg, rgba(0,0,0,0.15), rgba(0,0,0,0.15) 5px, transparent 5px, transparent 10px);
+            opacity: 0.45;
+            pointer-events: none;
+        }
+
+        .code-slot.filled {
+            background: linear-gradient(180deg, #ffffff, #ecf0f1);
+            border: 2px solid #34495e;
+            box-shadow: 0 2px 0 #7f8c8d;
+            cursor: pointer;
+        }
+
+        body.phase-2 .code-slot.filled {
+            background: linear-gradient(180deg, #1e293b, #0f172a);
+            border-color: #00f2fe;
+            box-shadow: 0 2px 0 #0284c7;
+        }
+
+        .code-slot.filled:hover { border-color: #e74c3c; }
+        .code-slot.filled:hover::after {
+            content: "×";
+            position: absolute;
+            top: -3px; right: 3px;
+            color: #e74c3c; font-weight: 900; font-size: 13px;
+        }
+
+        .code-slot.executing {
+            border-color: #f39c12 !important;
+            background: #fef9e7 !important;
+            box-shadow: 0 0 12px #f1c40f !important;
+            transform: scale(1.05);
+        }
+
+        body.phase-2 .code-slot.executing {
+            background: #311042 !important;
+            border-color: #f43f5e !important;
+            box-shadow: 0 0 14px #f43f5e !important;
+        }
+
+        .arduino-viewer {
+            display: none;
+            background: #090d16;
+            color: #e2e8f0;
+            border: 2px solid #38bdf8;
+            border-radius: 11px;
+            padding: 10px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 11px;
+            height: 460px;
+            overflow-y: auto;
+            line-height: 1.45;
+            box-shadow: inset 0 4px 12px rgba(0,0,0,0.6);
+        }
+
+        .kw { color: #c678dd; font-weight: bold; }
+        .fn { color: #61afef; font-weight: bold; }
+        .cm { color: #64748b; font-style: italic; }
+        .st { color: #98c379; }
+
+        .sidebar-footer { display: flex; gap: 6px; margin-top: 4px; }
+
+        .btn-util {
+            flex: 1; padding: 7px;
+            border-radius: 8px; border: 2px solid #7f8c8d;
+            background: #ffffff; color: #2c3e50;
+            font-weight: 800; font-size: 11px; cursor: pointer;
+            box-shadow: 0 2px 0 #95a5a6;
+            touch-action: manipulation;
+        }
+        .btn-util:active { transform: translateY(2px); box-shadow: none; }
+
+        body.phase-2 .btn-util {
+            background: #1e293b;
+            color: #e2e8f0;
+            border-color: #475569;
+            box-shadow: 0 2px 0 #0f172a;
+        }
+
+        .modal-overlay {
+            position: fixed; inset: 0;
+            background: rgba(10, 15, 25, 0.82);
+            backdrop-filter: blur(5px);
+            display: none; justify-content: center; align-items: center;
+            z-index: 100;
+            padding: 12px;
+        }
+        .modal-card {
+            background: #ffffff; border: 4px solid #2ecc71;
+            border-radius: 20px; padding: 20px 24px; text-align: center;
+            max-width: 450px; width: 100%;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+            animation: popIn 0.25s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+            color: #1e3523;
+        }
+        @keyframes popIn {
+            from { transform: scale(0.75); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .stars-row { font-size: 42px; margin: 6px 0; letter-spacing: 6px; }
+        .victory-stats {
+            background: #f4f9f4; border-radius: 12px;
+            padding: 10px; margin: 10px 0 16px 0;
+            font-size: 13px; color: #2c3e50; font-weight: 700;
+        }
+        .modal-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+        .input-field {
+            width: 100%; padding: 9px 12px; margin: 6px 0;
+            border: 2px solid #bdc3c7; border-radius: 10px;
+            font-size: 13.5px; font-weight: 700; outline: none;
+        }
+
+        
+        .score-pill {
+            background: #ffffff;
+            border: 2px solid #f39c12;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 900;
+            color: #1e3523;
+            font-size: 11.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.08);
+            cursor: pointer;
+        }
+        body.phase-2 .score-pill {
+            background: #0f172a;
+            border-color: #f59e0b;
+            color: #fef08a;
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+        }
+        .hud-btn.hint-exhausted {
+            background: #95a5a6 !important;
+            border-color: #7f8c8d !important;
+            color: #ecf0f1 !important;
+            opacity: 0.7;
+            box-shadow: 0 2px 0 #566573 !important;
+        }
+        .leaderboard-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 12px;
+            text-align: left;
+        }
+        .leaderboard-table th {
+            background: #1e3523;
+            color: #ffffff;
+            padding: 7px 8px;
+            font-weight: 800;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        .leaderboard-table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #dce9ed;
+            color: #2c3e50;
+            font-weight: 700;
+        }
+        .leaderboard-table tr:nth-child(even) td {
+            background: #f8fbf8;
+        }
+        .leaderboard-table tr.current-player-row td {
+            background: #fff8e1 !important;
+            color: #d35400;
+            font-weight: 900;
+            border-top: 1.5px solid #f39c12;
+            border-bottom: 1.5px solid #f39c12;
+        }
+        .badge-status {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 9.5px;
+            font-weight: 800;
+        }
+        .badge-frozen { background: #e2e8f0; color: #475569; }
+        .badge-active { background: #d1fae5; color: #065f46; }
+        .error-msg {
+            color: #e74c3c;
+            font-size: 12px;
+            font-weight: 800;
+            margin: 4px 0;
+            min-height: 18px;
+        }
+
+        /* =========================================================
+           DISEÑO RESPONSIVE PARA CELULARES Y TABLETS (SIN ESTORBOS)
+           ========================================================= */
+        @media (max-width: 960px) {
+            body {
+                height: auto;
+                min-height: 100dvh;
+                overflow-x: hidden;
+                overflow-y: auto;
+                align-items: flex-start;
+                padding: 6px;
+            }
+
+            .game-wrapper {
+                display: flex;
+                flex-direction: column;
+                width: 100%;
+                height: auto;
+                max-height: none;
+                overflow: visible;
+                border-radius: 14px;
+            }
+
+            .stage-area {
+                display: flex;
+                flex-direction: column;
+                height: auto;
+                overflow: visible;
+            }
+
+            .top-hud {
+                position: relative;
+                top: 0; left: 0; right: 0;
+                padding: 8px 10px;
+                background: rgba(0, 0, 0, 0.08);
+                justify-content: center;
+                gap: 6px;
+            }
+
+            .hud-group {
+                justify-content: center;
+            }
+
+            .toast-banner {
+                position: relative;
+                top: 0; left: 0;
+                margin: 6px 10px 0 10px;
+                max-width: none;
+                text-align: center;
+                font-size: 11.5px;
+                padding: 6px 10px;
+            }
+
+            .canvas-container {
+                padding: 0;
+                height: auto;
+                margin: 2px 0;
+            }
+
+            canvas {
+                width: 100%;
+                height: auto;
+                max-height: 44vh;
+                object-fit: contain;
+            }
+
+            .bottom-controls-wrapper {
+                position: relative;
+                bottom: 0;
+                padding: 6px 8px 10px 8px;
+                background: rgba(0, 0, 0, 0.06);
+            }
+
+            .cmd-tile-btn {
+                width: 47px;
+                height: 45px;
+            }
+            .cmd-tile-btn svg { width: 20px; height: 20px; }
+            .cmd-tile-btn span { font-size: 7.5px; }
+
+            .code-sidebar {
+                width: 100%;
+                height: auto;
+                border-left: none;
+                border-top: 3px solid var(--panel-border);
+                padding: 10px;
+                gap: 8px;
+            }
+
+            .slots-grid {
+                grid-template-columns: repeat(6, 1fr);
+            }
+
+            .arduino-viewer {
+                height: 260px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .slots-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+            .brand-pill { font-size: 11px; padding: 4px 8px; }
+            .hud-select, .hud-btn { font-size: 10.5px; padding: 4px 7px; }
+            .btn-run { width: 115px; height: 35px; font-size: 12px; }
+            .btn-step { height: 35px; font-size: 11.5px; }
+            .btn-reset { height: 35px; width: 38px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-wrapper">
+    <div class="stage-area">
+        <div class="top-hud">
+            <div class="hud-group">
+                <div class="brand-pill" id="brandBadge">🌱 CodiCamp 3D</div>
+                <div class="phase-switcher">
+                    <button class="phase-btn active-p1" id="btnPhase1" onclick="jumpToPhase(1)">🌱 F1 (1-10)</button>
+                    <button class="phase-btn" id="btnPhase2" onclick="jumpToPhase(2)">⚡ F2 PRO (11-20)</button>
+                    <button class="phase-btn" id="btnPhase3" onclick="jumpToPhase(3)">💧 F3 Sensores (21-25)</button>
+                </div>
+                <select class="hud-select" id="levelDropdown" onchange="initLevel(parseInt(this.value))"></select>
+                <select class="hud-select char-select" id="charDropdown" onchange="changeCharacter(this.value)">
+                    <option value="rover" id="optRover">🤖 Codi-Rover (Orugas)</option>
+                    <option value="drone" id="optDrone">🚁 Dron Xtrude (Arduino)</option>
+                    <option value="cat" id="optCat">🐱 Mecha-Cat (Biónico)</option>
+                </select>
+                <button class="hud-btn" id="speedBtn" onclick="toggleSpeed()">⏩ 1x</button>
+                <button class="hud-btn" id="soundBtn" onclick="toggleSound()">🔊</button>
+            </div>
+
+            <div class="hud-group">
+                <div class="score-pill" onclick="openLeaderboardModal()" title="Ver tabla de récords y perfil activo">
+                    <span id="hudPlayerName" class="name-link" onclick="event.stopPropagation(); openRegisterPlayerModal()" title="Guardar mi nombre (opcional)">👤 Guardar mi nombre</span>
+                    <span>|</span>
+                    <span id="hudScoreTxt">🏆 0 pts</span>
+                </div>
+                <button class="hud-btn" id="hintBtn" style="background:#16a085;color:#fff;border-color:#fff;" onclick="showLevelHint()" title="Pistas gratuitas: idea, estructura y solución">💡 Pista</button>
+                <button class="hud-btn" style="background:#d35400;color:#fff;border-color:#fff;" onclick="openLeaderboardModal()">🏆 Top 10</button>
+                <button class="hud-btn" style="background:#c0392b;color:#fff;border-color:#fff;" onclick="openEndSessionModal('manual')">🏁 Reiniciar / Finalizar</button>
+                <button class="hud-btn" style="background:#2980b9;color:#fff;border-color:#fff;" onclick="openTutorialModal()">❓ Ayuda</button>
+                <button class="hud-btn" style="background:#f39c12;color:#fff;border-color:#fff;" onclick="openDiplomaModal()">🎓 Nota</button>
+                <button class="hud-btn" style="background:#8e44ad;color:#fff;border-color:#fff;" onclick="downloadSelf()">💾 HTML</button>
+                <div class="energy-widget">
+                    <span id="energyIcon">☀️</span>
+                    <div class="energy-bar-outer"><div class="energy-bar-inner" id="energyFill"></div></div>
+                    <span class="energy-label" id="energyText">0/1</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="toast-banner" id="statusBanner">Cargando escenario...</div>
+
+        <div class="canvas-container">
+            <canvas id="isoCanvas" width="780" height="520"></canvas>
+        </div>
+
+        <div class="bottom-controls-wrapper">
+            <div class="play-bar">
+                <button class="btn-run" onclick="runProgram()">▶ EJECUTAR</button>
+                <button class="btn-step" onclick="stepProgram()">⏯ PASO</button>
+                <button class="btn-reset" onclick="resetRobotOnly()">↺</button>
+            </div>
+
+            <div class="command-dock">
+                <button class="cmd-tile-btn" onclick="addCmd('FWD')">
+                    <svg viewBox="0 0 24 24"><path d="M12 4l-8 8h5v8h6v-8h5z"/></svg>
+                    <span>AVANZAR</span>
+                </button>
+                <button class="cmd-tile-btn" onclick="addCmd('ACT')">
+                    <svg viewBox="0 0 24 24" style="fill:#0288d1" id="actIcon"><path d="M12 2.5c-.3 0-.6.15-.78.4C9.6 5.2 6 10.3 6 14a6 6 0 0 0 12 0c0-3.7-3.6-8.8-5.22-11.1A.96.96 0 0 0 12 2.5zm-2.5 12.3c.4 1.4 1.5 2.4 2.9 2.6.4.06.6.4.55.8-.06.36-.4.6-.8.55-1.9-.3-3.5-1.7-4-3.6-.1-.4.12-.76.5-.86.37-.1.75.12.85.5z"/></svg>
+                    <span id="actLabel">REGAR</span>
+                </button>
+                <button class="cmd-tile-btn" onclick="addCmd('LEFT')">
+                    <svg viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
+                    <span>GIRO IZQ</span>
+                </button>
+                <button class="cmd-tile-btn" onclick="addCmd('RIGHT')">
+                    <svg viewBox="0 0 24 24"><path d="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg>
+                    <span>GIRO DER</span>
+                </button>
+                <button class="cmd-tile-btn" onclick="addCmd('JUMP')">
+                    <svg viewBox="0 0 24 24" style="fill:#27ae60"><path d="M12 3L6 9h4v4h4V9h4L12 3zm-6 14v2h12v-2H6zm2-3v2h8v-2H8z"/></svg>
+                    <span>SALTAR</span>
+                </button>
+                <button class="cmd-tile-btn proc-btn" onclick="addCmd('A')">
+                    <strong>A</strong><span>RUTINA A</span>
+                </button>
+                <button class="cmd-tile-btn proc-btn" onclick="addCmd('B')">
+                    <strong>B</strong><span>RUTINA B</span>
+                </button>
+                <button class="cmd-tile-btn loop-btn" data-tool="X2" onclick="addCmd('X2')" title="Repite 2 veces la instrucción siguiente">
+                    <strong>×2</strong><span>REPETIR</span>
+                </button>
+                <button class="cmd-tile-btn loop-btn" data-tool="X3" onclick="addCmd('X3')" title="Repite 3 veces la instrucción siguiente">
+                    <strong>×3</strong><span>REPETIR</span>
+                </button>
+                <button class="cmd-tile-btn loop-btn" data-tool="X4" onclick="addCmd('X4')" title="Repite 4 veces la instrucción siguiente">
+                    <strong>×4</strong><span>REPETIR</span>
+                </button>
+                <button class="cmd-tile-btn cond-btn" data-tool="IFDRY" onclick="addCmd('IFDRY')" title="Mide la humedad y riega solo si el suelo está seco">
+                    <strong>🌡️</strong><span>SI SECO</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="code-sidebar">
+        <div class="sidebar-top-row">
+            <div class="efficiency-bar">
+                <span>📦 Bloques: <strong id="usedBlocksTxt">0</strong></span>
+                <span>⭐ Meta: <strong id="parBlocksTxt">4</strong></span>
+            </div>
+            <button class="btn-cpp-toggle" id="cppToggleBtn" onclick="toggleCppView()">&lt;/&gt; C++ Arduino</button>
+            <button class="btn-cpp-toggle" id="copyCppBtn" onclick="copyCppCode()" style="display:none">📋 Copiar</button>
+        </div>
+
+        <div id="visualBlocksContainer" style="display:flex;flex-direction:column;gap:8px;flex:1;justify-content:space-around;">
+            <div class="proc-box active-target" id="box-main" onclick="selectTarget('main')">
+                <div class="proc-header">
+                    <span class="proc-title">📋 PROGRAMA PRINCIPAL (MAIN)</span>
+                    <span class="active-badge">ACTIVO</span>
+                </div>
+                <div class="slots-grid" id="grid-main"></div>
+            </div>
+
+            <div class="proc-box" id="box-a" onclick="selectTarget('a')">
+                <div class="proc-header">
+                    <span class="proc-title">🅰️ RUTINA A · rutinaA()</span>
+                    <span class="active-badge">ACTIVO</span>
+                </div>
+                <div class="slots-grid" id="grid-a"></div>
+            </div>
+
+            <div class="proc-box" id="box-b" onclick="selectTarget('b')">
+                <div class="proc-header">
+                    <span class="proc-title">🅱️ RUTINA B · rutinaB()</span>
+                    <span class="active-badge">ACTIVO</span>
+                </div>
+                <div class="slots-grid" id="grid-b"></div>
+            </div>
+        </div>
+
+        <div class="arduino-viewer" id="arduinoViewer"></div>
+
+        <div class="sidebar-footer">
+            <button class="btn-util" onclick="undoLastCmd()">⬅ Borrar Último</button>
+            <button class="btn-util" style="color:#e74c3c;" onclick="clearAllCode()">🗑️ Vaciar Todo</button>
+        </div>
+    </div>
+
+    <!-- MODAL DE TUTORIAL -->
+    <div class="modal-overlay" id="tutorialModal">
+        <div class="modal-card" style="max-width:490px;text-align:left;">
+            <h2 style="margin:0 0 10px 0;color:#1e3523;text-align:center;">📖 Manual CodiCamp AgroTech</h2>
+            <div style="font-size:12.5px;color:#2c3e50;line-height:1.5;max-height:360px;overflow-y:auto;padding-right:4px;">
+                <p><strong>🎯 Objetivo:</strong> programa al robot con bloques para cuidar el invernadero: <strong>regar</strong> las plantas secas o <strong>energizar</strong> los sensores del laboratorio.</p>
+                <p><strong>🌱 Fase 1 (Niveles 1-10):</strong> invernadero solar. Secuencias, giros, saltos, trampas ⚡ y la <strong>Rutina A</strong> desde el nivel 5. En los niveles 9 y 10 la <strong>Rutina B</strong> llama a la Rutina A.</p>
+                <p><strong>⚡ Fase 2 PRO (Niveles 11-20):</strong> laboratorio Cyber-Tech con sensores IoT y personajes <strong>MK-II</strong>.</p>
+                <p><strong>💧 Fase 3 Sensores (Niveles 21-25):</strong> riego inteligente. Aparecen <strong>REPETIR ×2 ×3 ×4</strong> (el <code>for</code> de Arduino) y <strong>SI SECO</strong> (un <code>if</code> con el sensor de humedad). Cada día amanecen secas plantas distintas y el mismo programa debe funcionar todos los días. ¡Regar una planta húmeda la encharca!</p>
+                <p><strong>&lt;/&gt; C++ Arduino:</strong> tus bloques se convierten en un programa real para un robot con Arduino, puente H L298N, sensor de humedad y bomba de agua. Puedes copiarlo y cargarlo.</p>
+                <p><strong>💡 Pistas gratuitas:</strong> cada nivel tiene 3 pistas: la idea, la estructura y una solución. Pedir ayuda no resta puntos.</p>
+                <p><strong>🏆 Puntos:</strong> 1⭐ = 100, 2⭐ = 250, 3⭐ = 500 por nivel. Guardar tu nombre es <strong>opcional</strong> y solo sirve para el Top 10 de este dispositivo; nada sale de tu equipo.</p>
+            </div>
+            <div class="modal-btns" style="margin-top:14px;">
+                <button class="btn-run" style="width:170px;" onclick="closeTutorialModal()">¡Empezar a Jugar!</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE VICTORIA -->
+    <div class="modal-overlay" id="victoryModal">
+        <div class="modal-card">
+            <h2 style="margin:0;color:#1e3523;" id="modalTitle">¡Nivel Completado!</h2>
+            <div class="stars-row" id="modalStars">⭐⭐⭐</div>
+            <div class="victory-stats" id="modalStats"></div>
+            <div class="modal-btns">
+                <button class="btn-step" style="background:#7f8c8d;box-shadow:0 4px 0 #566573;" onclick="replayLevel()">↺ Mejorar Código</button>
+                <button class="btn-run" style="width:155px;" onclick="advanceNextLevel()">Siguiente Nivel ⏭️</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE DIPLOMA / CALIFICACIÓN -->
+    <div class="modal-overlay" id="diplomaModal">
+        <div class="modal-card">
+            <h2 style="margin:0 0 6px 0;color:#1e3523;">🎓 Reporte de Robótica y Algoritmos</h2>
+            <div style="font-size:12px;color:#555;margin-bottom:10px;">Globalt Robotics — Evaluación Automática (25 Niveles)</div>
+            <input type="text" id="studentNameInput" class="input-field" placeholder="Nombre completo del estudiante" oninput="saveStudentData()">
+            <input type="text" id="studentGradeInput" class="input-field" placeholder="Grado / Curso (Ej: Grado 8°)" oninput="saveStudentData()">
+            <div class="victory-stats" id="diplomaSummary"></div>
+            <div class="modal-btns">
+                <button class="btn-step" style="background:#d35400;box-shadow:0 4px 0 #a04000;" onclick="closeDiplomaModal(); openLeaderboardModal();">🏆 Ver Top 10</button>
+                <button class="btn-step" style="background:#c0392b;box-shadow:0 4px 0 #922b21;" onclick="closeDiplomaModal(); openEndSessionModal('diploma');">🏁 Finalizar Partida</button>
+                <button class="btn-run" style="width:130px;" onclick="closeDiplomaModal()">✔ Continuar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL OBLIGATORIO DE REGISTRO DE JUGADOR -->
+    <div class="modal-overlay" id="registerPlayerModal">
+        <div class="modal-card" style="max-width:440px;">
+            <h2 style="margin:0 0 6px 0;color:#1e3523;">👤 Guardar mi nombre (opcional)</h2>
+            <div style="font-size:12.5px;color:#555;margin-bottom:10px;">
+                Solo hace falta si quieres aparecer en el <strong>Top 10 de este dispositivo</strong>. Puedes usar un apodo. Tu nombre no sale de este equipo.
+            </div>
+            <input type="text" id="regPlayerNameInput" class="input-field" placeholder="Nombre o apodo" maxlength="28" onkeydown="if(event.key==='Enter') confirmPlayerRegistration()">
+            <input type="text" id="regPlayerGradeInput" class="input-field" placeholder="Grado / Curso (Opcional, ej: Grado 8°)" maxlength="24" onkeydown="if(event.key==='Enter') confirmPlayerRegistration()">
+            <div style="background:#f4f9f4;border-radius:10px;padding:8px 10px;margin:8px 0;font-size:11.5px;color:#2c3e50;text-align:left;line-height:1.45;">
+                ⭐ <strong>Puntaje por Nivel:</strong> 1★ = 100 pts &nbsp;|&nbsp; 2★ = 250 pts &nbsp;|&nbsp; 3★ = 500 pts<br>
+                💡 <strong>Pistas:</strong> gratuitas, no restan puntos.
+            </div>
+            <div class="error-msg" id="regErrorMsg"></div>
+            <div class="modal-btns">
+                <button class="btn-step" style="background:#7f8c8d;box-shadow:0 4px 0 #566573;" onclick="skipPlayerRegistration()">Jugar sin nombre</button>
+                <button class="btn-run" style="width:170px;" onclick="confirmPlayerRegistration()">💾 Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE TABLA TOP 10 RÉCORDS GLOBALES -->
+    <div class="modal-overlay" id="leaderboardModal">
+        <div class="modal-card" style="max-width:540px;">
+            <h2 style="margin:0 0 4px 0;color:#1e3523;">🏆 Top 10 de este dispositivo</h2>
+            <div style="font-size:11.5px;color:#555;margin-bottom:8px;">
+                Los 10 mejores puntajes guardados en este equipo (1★=100, 2★=250, 3★=500)
+            </div>
+            <div style="max-height:330px;overflow-y:auto;border:2px solid #dce9ed;border-radius:12px;">
+                <table class="leaderboard-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Jugador</th>
+                            <th>Estrellas</th>
+                            <th>Estado</th>
+                            <th style="text-align:right;">Puntaje</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboardBody"></tbody>
+                </table>
+            </div>
+            <div class="victory-stats" id="currentPlayerRecordSummary" style="margin:10px 0 12px 0;font-size:12px;"></div>
+            <div class="modal-btns">
+                <button class="btn-step" style="background:#c0392b;box-shadow:0 4px 0 #922b21;" onclick="closeLeaderboardModal(); openEndSessionModal('leaderboard');">🏁 Finalizar / Cambiar Jugador</button>
+                <button class="btn-run" style="width:140px;" onclick="closeLeaderboardModal()">✔ Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE REINICIO / FINALIZACIÓN DE PARTIDA -->
+    <div class="modal-overlay" id="sessionEndModal">
+        <div class="modal-card" style="max-width:480px;">
+            <h2 style="margin:0 0 6px 0;color:#1e3523;" id="sessionEndTitle">🏁 Gestión de Partida y Récord</h2>
+            <div style="font-size:12.5px;color:#2c3e50;margin-bottom:8px;" id="sessionEndSubtitle">
+                ¿Deseas finalizar la partida actual y registrar un nuevo jugador, o continuar con el mismo nombre?
+            </div>
+            <div class="victory-stats" id="sessionEndSummary" style="text-align:left;line-height:1.55;"></div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">
+                <button class="btn-run" style="width:100%;height:40px;background:linear-gradient(180deg,#e67e22,#d35400);box-shadow:0 4px 0 #a04000;" onclick="handleSessionChoice('new_player')">
+                    🆕 Ingresar un Nombre Nuevo (Congelar récord actual en Top 10)
+                </button>
+                <button class="btn-step" style="width:100%;height:40px;background:linear-gradient(180deg,#2ecc71,#27ae60);box-shadow:0 4px 0 #1e8449;" onclick="handleSessionChoice('same_continue')">
+                    ▶️ Continuar Jugando con el Mismo Nombre (<span id="sameNameBtnLabel">Jugador</span>)
+                </button>
+                <button class="btn-step" style="width:100%;height:38px;background:linear-gradient(180deg,#3498db,#2980b9);box-shadow:0 4px 0 #1f618d;" onclick="handleSessionChoice('same_reset')">
+                    🔄 Reiniciar Niveles desde Cero con el Mismo Nombre
+                </button>
+                <button class="btn-util" style="width:100%;padding:8px;" onclick="closeEndSessionModal()">
+                    ↩️ Cancelar y Volver al Nivel Actual
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('isoCanvas');
+const ctx = canvas.getContext('2d');
+
+let soundEnabled = true;
+let audioCtx = null;
+
+function playTone(freq, type = 'sine', duration = 0.12, slideFreq = null, vol = 0.12) {
+    if (!soundEnabled) return;
+    try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        if (slideFreq) osc.frequency.exponentialRampToValueAtTime(slideFreq, audioCtx.currentTime + duration);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + duration);
+    } catch (e) {}
+}
+
+function sfxStep() { playTone(isPhase2() ? 310 : 260, 'triangle', 0.09, isPhase2() ? 390 : 320, 0.1); }
+function sfxTurn() { playTone(400, 'sine', 0.08, 460, 0.08); }
+function sfxJump() { playTone(290, 'sine', 0.22, 680, 0.14); }
+function sfxActivate() {
+    playTone(523.25, 'triangle', 0.12, 659.25, 0.15);
+    setTimeout(() => playTone(783.99, 'triangle', 0.2, 1046.5, 0.15), 90);
+}
+function sfxError() { playTone(150, 'sawtooth', 0.28, 85, 0.16); }
+function sfxSpark() {
+    playTone(900, 'sawtooth', 0.08, 200, 0.18);
+    setTimeout(() => playTone(1200, 'square', 0.06, 400, 0.12), 40);
+}
+function sfxWin() {
+    [523.25, 659.25, 783.99, 1046.5].forEach((n, idx) =>
+        setTimeout(() => playTone(n, 'triangle', 0.22, null, 0.16), idx * 110)
+    );
+}
+
+function toggleSound() {
+    soundEnabled = !soundEnabled;
+    document.getElementById('soundBtn').innerText = soundEnabled ? '🔊' : '🔇';
+}
+
+// LOGIC-START
+// (lógica pura del juego: sin dibujo ni pantalla; la usa también la prueba automática)
+// Cada nivel:
+//   h: filas de alturas (0 = vacío). El tablero puede tener cualquier tamaño.
+//   t: objetivos [columna, fila]   hazards: trampas [columna, fila]   s: inicio [columna, fila, dirección]
+//   limits: casillas disponibles en main, Rutina A (a) y Rutina B (b)
+//   ideas: [pista 1 = idea, pista 2 = estructura]. La pista 3 (solución) se genera desde sol.
+//   sol: una solución verificada. La meta (par) se calcula sola contando sus bloques.
+//   best (opcional): una solución aún más corta encontrada por la búsqueda automática (reto extra).
+//   days (opcional): por cada día, qué objetivos amanecen SECOS. El mismo programa debe servir todos los días.
+//   tools (opcional): bloques extra que aparecen en ese nivel.
+const LOOP_TOOLS = ['X2', 'X3', 'X4'];
+const LEVELS = [
+    // ================= FASE 1: INVERNADERO SOLAR (NIVELES 1 AL 10) =================
+    {
+        title: "F1 - Nivel 1 [Básico]: Primer Riego (Avanzar y Regar)",
+        ideas: ["Cuenta las casillas que hay entre el robot y la planta seca.", "Solo necesitas AVANZAR varias veces y luego REGAR."],
+        h: ["000000","011110","011110","011110","000000","000000"],
+        t: [[4,2]], hazards: [], s: [1,2,3], limits: { main: 8, a: 0, b: 0 },
+        sol: { main: ['FWD','FWD','FWD','ACT'] }
+    },
+    {
+        title: "F1 - Nivel 2 [Básico]: Esquina de Riego (Giros de 90°)",
+        ideas: ["Al llegar a la esquina, ponte en el lugar del robot: ¿la segunda planta queda a su izquierda o a su derecha?", "Riega la primera planta, gira y avanza hasta la segunda."],
+        h: ["000000","011100","000100","000100","000000","000000"],
+        t: [[3,1],[3,3]], hazards: [], s: [1,1,3], limits: { main: 10, a: 0, b: 0 },
+        sol: { main: ['FWD','FWD','ACT','RIGHT','FWD','FWD','ACT'] }
+    },
+    {
+        title: "F1 - Nivel 3 [Básico]: Escalones del Invernadero (Uso de Saltar)",
+        ideas: ["AVANZAR solo funciona en terreno plano. Para subir o bajar un escalón se usa SALTAR.", "Sube la escalera saltando, riega arriba y luego baja por el otro lado."],
+        h: ["000000","012340","012330","000000","000000","000000"],
+        t: [[4,1],[4,2]], hazards: [], s: [1,1,3], limits: { main: 10, a: 0, b: 0 },
+        sol: { main: ['JUMP','JUMP','JUMP','ACT','RIGHT','JUMP','ACT'] }
+    },
+    {
+        title: "F1 - Nivel 4 [Básico+]: Terrazas Solares (Esquiva la Trampa Eléctrica)",
+        ideas: ["La baldosa roja ⚡ hace cortocircuito. Busca un camino que la rodee.", "Riega la primera planta, sube a la terraza por la izquierda y sigue hacia la derecha."],
+        h: ["000000","002230","011120","000000","000000","000000"],
+        t: [[2,2],[4,1]], hazards: [[3,2]], s: [1,2,3], limits: { main: 10, a: 0, b: 0 },
+        sol: { main: ['FWD','ACT','LEFT','JUMP','RIGHT','FWD','JUMP','ACT'] }
+    },
+    {
+        title: "F1 - Nivel 5 [Intermedio]: Mi Primera Rutina (¡Descubre la Rutina A!)",
+        ideas: ["MAIN solo tiene 4 espacios. Busca un grupo de bloques que se repita y guárdalo en la Rutina A.", "La Rutina A puede ser: avanzar dos veces y regar. Úsala desde MAIN con un giro en el medio."],
+        h: ["000000","011111","000001","000001","000000","000000"],
+        t: [[3,1],[5,1],[5,3]], hazards: [], s: [1,1,3], limits: { main: 4, a: 4, b: 0 },
+        sol: { main: ['A','A','RIGHT','A'], a: ['FWD','FWD','ACT'] }
+    },
+    {
+        title: "F1 - Nivel 6 [Intermedio]: Escalera de Hidroponía (Rutina A + Saltar)",
+        ideas: ["Los tres tramos son iguales: saltos, riego y giro.", "Guarda un tramo completo en la Rutina A y llámala tres veces."],
+        h: ["012340","000030","000020","043210","000000","000000"],
+        t: [[4,0],[4,3],[1,3]], hazards: [], s: [1,0,3], limits: { main: 4, a: 6, b: 0 },
+        sol: { main: ['A','A','A'], a: ['JUMP','JUMP','JUMP','ACT','RIGHT'] },
+        best: { main: ['A'], a: ['ACT','JUMP','JUMP','JUMP','RIGHT','A'] } // récord: la rutina se llama a sí misma (bucle)
+    },
+    {
+        title: "F1 - Nivel 7 [Intermedio+]: Pirámide AgroTech Central (Ciclo en la Cumbre)",
+        ideas: ["Primero sube a la cumbre. Arriba, las cuatro plantas forman un cuadrado.", "En la cumbre repite: regar, avanzar y girar a la derecha."],
+        h: ["111111","122221","123321","123321","122221","111111"],
+        t: [[2,2],[3,2],[3,3],[2,3]], hazards: [[1,1],[4,1],[4,4],[1,4]], s: [0,2,3], limits: { main: 6, a: 5, b: 0 },
+        sol: { main: ['JUMP','JUMP','A','A','A','A'], a: ['ACT','FWD','RIGHT'] },
+        best: { main: ['JUMP','JUMP','A'], a: ['FWD','ACT','RIGHT','A'] } // récord: la rutina se llama a sí misma (bucle)
+    },
+    {
+        title: "F1 - Nivel 8 [Avanzado]: Circuito en Zig-Zag Automatizado",
+        ideas: ["Cada escalón de la diagonal se recorre igual. Observa uno solo.", "Rutina A: saltar, regar, y moverte un paso hacia el siguiente escalón con dos giros."],
+        h: ["120000","023000","003400","000450","000050","000000"],
+        t: [[1,0],[2,1],[3,2],[4,3]], hazards: [], s: [0,0,3], limits: { main: 4, a: 6, b: 0 },
+        sol: { main: ['A','A','A','A'], a: ['JUMP','ACT','RIGHT','FWD','LEFT'] },
+        best: { main: ['A'], a: ['JUMP','ACT','RIGHT','FWD','LEFT','A'] } // récord: la rutina se llama a sí misma (bucle)
+    },
+    {
+        title: "F1 - Nivel 9 [Avanzado+]: Torres Gemelas de Riego (Rutina B llama a la Rutina A)",
+        ideas: ["¡Una rutina puede usar otra! La Rutina B puede llamar a la Rutina A.", "Rutina A = dos saltos y regar. Rutina B = A dos veces y un giro."],
+        h: ["123210","002020","123210","000000","000000","000000"],
+        t: [[2,0],[4,0],[4,2],[2,2],[0,2]], hazards: [[2,1]], s: [0,0,3], limits: { main: 4, a: 4, b: 4 },
+        sol: { main: ['B','A','RIGHT','B'], a: ['JUMP','JUMP','ACT'], b: ['A','A','RIGHT'] }
+    },
+    {
+        title: "F1 - Nivel 10 [Maestro F1]: Granja Inteligente Globalt (Final Fase 1)",
+        ideas: ["El camino rodea el domo central con tres lados iguales y un tramo final.", "Rutina A = saltar, avanzar y regar. Rutina B = A dos veces y girar."],
+        h: ["344330","300020","205520","205510","122210","000000"],
+        t: [[0,2],[0,0],[2,0],[4,0],[4,2],[4,4],[2,4]], hazards: [[2,2],[3,3]], s: [0,4,2], limits: { main: 4, a: 4, b: 4 },
+        sol: { main: ['B','B','B','A'], a: ['JUMP','FWD','ACT'], b: ['A','A','RIGHT'] }
+    },
+
+    // ================= FASE 2 PRO: CYBER-TECH (NIVELES 11 AL 20) =================
+    {
+        title: "⚡ F2 - Nivel 11 [Cyber 1]: Puente de Sensores (Gráficos MK-II)",
+        ideas: ["Los sensores apagados (LED rojo) se encienden con ENERGIZAR.", "Rutina A = saltar, avanzar y energizar. Úsala dos veces y termina con un salto."],
+        h: ["000000","000000","122331","000000","000000","000000"],
+        t: [[2,2],[4,2],[5,2]], hazards: [], s: [0,2,3], limits: { main: 6, a: 4, b: 0 },
+        sol: { main: ['A','A','JUMP','ACT'], a: ['JUMP','FWD','ACT'] }
+    },
+    {
+        title: "⚡ F2 - Nivel 12 [Cyber 2]: Anillo Cibernético (Ciclo de 4 lados)",
+        ideas: ["El anillo tiene 4 lados iguales con un sensor en cada esquina.", "Rutina A = un lado completo, energizar y girar."],
+        h: ["000000","022220","020020","020020","022220","000000"],
+        t: [[4,1],[4,4],[1,4],[1,1]], hazards: [], s: [1,1,3], limits: { main: 4, a: 6, b: 0 },
+        sol: { main: ['A','A','A','A'], a: ['FWD','FWD','FWD','ACT','RIGHT'] },
+        best: { main: ['A'], a: ['FWD','FWD','FWD','ACT','RIGHT','A'] } // récord: la rutina se llama a sí misma (bucle)
+    },
+    {
+        title: "⚡ F2 - Nivel 13 [Cyber 3]: Ciudadela de Precisión (Perímetro)",
+        ideas: ["Cada lado baja y sube (3-2-1-2-3). Todos los pasos son saltos.", "Rutina A = cuatro saltos, energizar y girar a la izquierda."],
+        h: ["321230","200020","104010","200020","321230","000000"],
+        t: [[0,4],[4,4],[4,0],[0,0]], hazards: [[2,2]], s: [0,0,0], limits: { main: 4, a: 6, b: 0 },
+        sol: { main: ['A','A','A','A'], a: ['JUMP','JUMP','JUMP','JUMP','ACT','LEFT'] }
+    },
+    {
+        title: "⚡ F2 - Nivel 14 [Cyber 4]: Escalera Diagonal Doble",
+        ideas: ["Hay dos sensores por escalón: uno al avanzar y otro al subir.", "Rutina A = avanzar, energizar, girar, saltar, energizar y volver a girar."],
+        h: ["110000","022000","003300","000440","000055","000000"],
+        t: [[1,0],[1,1],[2,1],[2,2],[3,2],[3,3],[4,3],[4,4]], hazards: [], s: [0,0,3], limits: { main: 4, a: 6, b: 0 },
+        sol: { main: ['A','A','A','A'], a: ['FWD','ACT','RIGHT','JUMP','ACT','LEFT'] }
+    },
+    {
+        title: "⚡ F2 - Nivel 15 [Quantum 1]: Reactores Gemelos (Escalones en Escuadra)",
+        ideas: ["El camino forma dos escuadras iguales.", "Rutina A = avanzar, saltar y energizar. Rutina B = A, girar a la derecha y A."],
+        h: ["112000","002000","003340","000040","000050","000000"],
+        t: [[2,0],[2,2],[4,2],[4,4]], hazards: [], s: [0,0,3], limits: { main: 6, a: 4, b: 4 },
+        sol: { main: ['B','LEFT','B'], a: ['FWD','JUMP','ACT'], b: ['A','RIGHT','A'] }
+    },
+    {
+        title: "⚡ F2 - Nivel 16 [Quantum 2]: Ascenso al Servidor Central",
+        ideas: ["Cada lado exige cuatro saltos seguidos.", "Rutina A = dos saltos. Rutina B = A dos veces, energizar y girar."],
+        h: ["543210","400020","300030","200040","100050","000000"],
+        t: [[0,0],[4,0],[4,4]], hazards: [], s: [0,4,2], limits: { main: 6, a: 4, b: 4 },
+        sol: { main: ['B','B','B'], a: ['JUMP','JUMP'], b: ['A','A','ACT','RIGHT'] }
+    },
+    {
+        title: "⚡ F2 - Nivel 17 [Quantum 3]: Matriz de Cuarzo (Ondulación)",
+        ideas: ["En las filas 1-2-1-2 cada paso cambia de altura, así que todo es saltar.", "Rutina A = saltar, energizar, saltar. Rutina B = A dos veces y girar."],
+        h: ["000000","121210","000020","121210","000000","000000"],
+        t: [[1,1],[3,1],[4,2],[3,3],[1,3]], hazards: [], s: [0,1,3], limits: { main: 6, a: 4, b: 4 },
+        sol: { main: ['B','A','RIGHT','B'], a: ['JUMP','ACT','JUMP'], b: ['A','A','RIGHT'] }
+    },
+    {
+        title: "⚡ F2 - Nivel 18 [Quantum 4]: Trincheras de Plasma (Rodea las Bobinas)",
+        ideas: ["Las bobinas del centro son trampas: rodéalas por arriba y por abajo.", "Rutina A = avanzar dos veces y energizar. Rutina B = A dos veces y girar."],
+        h: ["000000","222220","011120","222220","000000","000000"],
+        t: [[2,1],[4,1],[4,3],[2,3],[0,3]], hazards: [[1,2],[2,2],[3,2]], s: [0,1,3], limits: { main: 6, a: 4, b: 4 },
+        sol: { main: ['B','A','RIGHT','B'], a: ['FWD','FWD','ACT'], b: ['A','A','RIGHT'] }
+    },
+    {
+        title: "⚡ F2 - Nivel 19 [Maestro F2]: Cañón de Sensores (Sincroniza A + B)",
+        ideas: ["El recorrido tiene forma de U con un tramo corto en la curva.", "Rutina A = saltar, avanzar y energizar. Rutina B = A dos veces. En MAIN combina B, giros y A."],
+        h: ["111110","122330","011140","223340","000000","000000"],
+        t: [[2,1],[4,1],[4,3],[2,3],[0,3]], hazards: [[1,0],[3,0],[1,2],[2,2]], s: [0,1,3], limits: { main: 6, a: 4, b: 4 },
+        sol: { main: ['B','RIGHT','A','RIGHT','B'], a: ['JUMP','FWD','ACT'], b: ['A','A'] }
+    },
+    {
+        title: "⚡ F2 - Nivel 20 [Gran Maestro]: Núcleo Globalt Omega (Final Fase 2)",
+        ideas: ["Igual que el final de la Fase 1: tres lados iguales y un tramo final.", "Rutina A = saltar, avanzar y energizar. Rutina B = A dos veces y girar."],
+        h: ["000000","344550","306640","206640","200030","102230"],
+        t: [[0,3],[0,1],[2,1],[4,1],[4,3],[4,5],[2,5]], hazards: [[3,2],[2,3]], s: [0,5,2], limits: { main: 4, a: 4, b: 4 },
+        sol: { main: ['B','B','B','A'], a: ['JUMP','FWD','ACT'], b: ['A','A','RIGHT'] }
+    },
+
+    // ================= FASE 3: RIEGO INTELIGENTE CON SENSORES (NIVELES 21 AL 25) =================
+    {
+        title: "💧 F3 - Nivel 21 [Riego 1]: El Bloque REPETIR",
+        ideas: ["Nuevo bloque: ×2, ×3 o ×4 repite la instrucción que va justo después. Es el for() de Arduino.", "Rutina A = avanzar y regar. En MAIN: A, luego ×4 y A otra vez."],
+        h: ["111111"],
+        t: [[1,0],[2,0],[3,0],[4,0],[5,0]], hazards: [], s: [0,0,3], limits: { main: 3, a: 2, b: 0 },
+        tools: [...LOOP_TOOLS],
+        sol: { main: ['A','X4','A'], a: ['FWD','ACT'] }
+    },
+    {
+        title: "💧 F3 - Nivel 22 [Riego 2]: Sensor de Humedad",
+        ideas: ["Cada día amanecen secas plantas distintas. Si riegas una planta húmeda, la encharcas. Usa SI SECO: el robot mide antes de regar.", "Rutina A = avanzar y SI SECO. En MAIN repite A cuatro veces."],
+        h: ["11111"],
+        t: [[1,0],[2,0],[3,0],[4,0]], hazards: [], s: [0,0,3], limits: { main: 3, a: 2, b: 0 },
+        days: [[0,2],[1,3]],
+        tools: [...LOOP_TOOLS, 'IFDRY'],
+        sol: { main: ['X4','A'], a: ['FWD','IFDRY'] }
+    },
+    {
+        title: "💧 F3 - Nivel 23 [Riego 3]: Dos Surcos",
+        ideas: ["Recorre el primer surco, baja por el pasillo y regresa por el segundo surco.", "Rutina A = avanzar y SI SECO. Usa ×4 con A en cada surco y ×2 para el pasillo."],
+        h: ["11111","00001","11111"],
+        t: [[1,0],[2,0],[3,0],[4,0],[3,2],[2,2],[1,2],[0,2]], hazards: [], s: [0,0,3], limits: { main: 8, a: 3, b: 3 },
+        days: [[0,3,5,6],[1,2,4,7],[0,1,2,3,4,5,6,7]],
+        tools: [...LOOP_TOOLS, 'IFDRY'],
+        sol: { main: ['X4','A','RIGHT','X2','FWD','RIGHT','X4','A'], a: ['FWD','IFDRY'] }
+    },
+    {
+        title: "💧 F3 - Nivel 24 [Riego 4]: Terrazas de Café (Repetir dentro de repetir)",
+        ideas: ["Dos bloques de repetir seguidos se multiplican: ×2 ×3 = 6 veces.", "Rutina A = saltar y SI SECO. En MAIN: ×2, ×3 y A."],
+        h: ["1234321"],
+        t: [[1,0],[2,0],[3,0],[4,0],[5,0],[6,0]], hazards: [], s: [0,0,3], limits: { main: 3, a: 2, b: 0 },
+        days: [[0,2,4],[1,3,5]],
+        tools: [...LOOP_TOOLS, 'IFDRY'],
+        sol: { main: ['X2','X3','A'], a: ['JUMP','IFDRY'] }
+    },
+    {
+        title: "💧 F3 - Nivel 25 [Gran Final]: Invernadero Inteligente",
+        ideas: ["El invernadero tiene 4 lados iguales con 3 plantas cada uno. El transformador del centro no se toca.", "Rutina A = avanzar y SI SECO. Rutina B = ×3 A, avanzar a la esquina y girar. En MAIN: ×4 B."],
+        h: ["11111","10001","10101","10001","11111"],
+        t: [[1,0],[2,0],[3,0],[4,1],[4,2],[4,3],[3,4],[2,4],[1,4],[0,3],[0,2],[0,1]], hazards: [[2,2]], s: [0,0,3], limits: { main: 3, a: 2, b: 4 },
+        days: [[0,4,8,9],[1,2,5,7,10],[0,3,6,11]],
+        tools: [...LOOP_TOOLS, 'IFDRY'],
+        sol: { main: ['X4','B'], a: ['FWD','IFDRY'], b: ['X3','A','FWD','RIGHT'] }
+    }
+];
+LEVELS.forEach(l => {
+    l.par = ['main', 'a', 'b'].reduce((n, k) => n + ((l.sol[k] || []).length), 0);
+    l.rows = l.h.length;
+    l.cols = Math.max(...l.h.map(r => r.length));
+    l.bestCount = l.best ? ['main', 'a', 'b'].reduce((n, k) => n + ((l.best[k] || []).length), 0) : l.par;
+});
+
+const MAX_SLOTS = { main: 10, a: 6, b: 6 };
+const STEP_LIMIT = 200;      // pasos máximos por ejecución (detecta bucles infinitos)
+const DEPTH_LIMIT = 40;      // llamadas anidadas máximas entre rutinas
+const DIR_VEC = [
+    { dc: 0, dr: 1 },  // 0: Sur
+    { dc: -1, dr: 0 }, // 1: Oeste
+    { dc: 0, dr: -1 }, // 2: Norte
+    { dc: 1, dr: 0 }   // 3: Este
+];
+function phaseOf(idx) { return idx < 10 ? 1 : idx < 20 ? 2 : 3; }
+function levelDays(lvl) { return lvl.days || [lvl.t.map((_, i) => i)]; }
+function heightAt(lvl, c, r) {
+    if (r < 0 || r >= lvl.rows || c < 0 || c >= lvl.cols) return 0;
+    return Number(lvl.h[r][c] || 0);
+}
+
+// Crea el mundo de un día: posición del robot y estado de cada objetivo (activo = regado/energizado).
+function makeWorld(lvl, dayIdx = 0) {
+    const dry = levelDays(lvl)[dayIdx];
+    return {
+        c: lvl.s[0], r: lvl.s[1], dir: lvl.s[2], z: heightAt(lvl, lvl.s[0], lvl.s[1]),
+        strict: !!lvl.days,   // con días, regar una planta húmeda la encharca
+        targets: lvl.t.map((p, i) => ({ c: p[0], r: p[1], active: !dry.includes(i) })),
+        hazards: (lvl.hazards || []).map(p => ({ c: p[0], r: p[1] }))
+    };
+}
+function worldDone(w) { return w.targets.every(t => t.active); }
+
+// Ejecuta UNA instrucción básica sobre el mundo y describe qué pasó (sin animar nada).
+function applyCmd(lvl, w, cmd) {
+    if (cmd === 'LEFT' || cmd === 'RIGHT') {
+        w.dir = (w.dir + (cmd === 'LEFT' ? 3 : 1)) % 4;
+        return { type: 'turn' };
+    }
+    const v = DIR_VEC[w.dir];
+    const nc = w.c + v.dc, nr = w.r + v.dr;
+    const onHazard = () => w.hazards.some(h => h.c === w.c && h.r === w.r);
+    if (cmd === 'FWD') {
+        const th = heightAt(lvl, nc, nr);
+        if (th === 0) return { type: 'fail', reason: 'edge' };
+        if (th !== w.z) return { type: 'fail', reason: 'step', bump: { dc: v.dc, dr: v.dr } };
+        w.c = nc; w.r = nr;
+        if (onHazard()) return { type: 'fail', reason: 'hazard', moved: true };
+        return { type: 'move' };
+    }
+    if (cmd === 'JUMP') {
+        const th = heightAt(lvl, nc, nr);
+        if (th === 0) return { type: 'fail', reason: 'jumpEdge', hop: true };
+        if (!(th - w.z === 1 || th < w.z)) return { type: 'fail', reason: th === w.z ? 'jumpFlat' : 'jumpHigh', hop: true };
+        w.c = nc; w.r = nr; w.z = th;
+        if (onHazard()) return { type: 'fail', reason: 'hazardJump', moved: true, jump: true };
+        return { type: 'move', jump: true };
+    }
+    if (cmd === 'ACT' || cmd === 'IFDRY') {
+        const t = w.targets.find(t => t.c === w.c && t.r === w.r);
+        if (!t) return { type: 'act', hit: false, sensed: cmd === 'IFDRY' };
+        if (t.active) {
+            if (cmd === 'IFDRY') return { type: 'act', hit: false, sensed: true, wet: true };
+            if (w.strict) return { type: 'fail', reason: 'overwater' };
+            return { type: 'act', hit: true, already: true };
+        }
+        t.active = true;
+        return { type: 'act', hit: true, sensed: cmd === 'IFDRY' };
+    }
+    return { type: 'noop' };
+}
+
+// Despliega MAIN con sus rutinas y repeticiones en una lista de pasos básicos.
+// Marca 'truncated' si el programa no termina (bucle infinito o rutinas que se llaman sin fin).
+function buildCallQueue(programs) {
+    const q = [];
+    let truncated = false, dangling = false;
+    function expand(name, depth) {
+        if (depth > DEPTH_LIMIT) { truncated = true; return; }
+        const list = programs[name] || [];
+        let mult = 1, multFrom = -1;
+        for (let i = 0; i < list.length; i++) {
+            if (truncated) return;
+            const c = list[i];
+            if (c[0] === 'X') { mult *= Number(c.slice(1)); if (multFrom < 0) multFrom = i; continue; }
+            for (let k = 0; k < mult; k++) {
+                if (q.length >= STEP_LIMIT) { truncated = true; return; }
+                if (c === 'A' || c === 'B') expand(c.toLowerCase(), depth + 1);
+                else q.push({ cmd: c, source: name, idx: i, loopIdx: multFrom, rep: mult > 1 ? k + 1 : 0, of: mult });
+                if (truncated) return;
+            }
+            mult = 1; multFrom = -1;
+        }
+        if (mult !== 1) dangling = true;
+    }
+    expand('main', 0);
+    return { q, truncated, dangling };
+}
+
+// Simula un nivel completo (todos los días) sin animación. Lo usa la prueba automática.
+function simulateLevel(lvl, programs) {
+    const { q, truncated } = buildCallQueue(programs);
+    const days = levelDays(lvl);
+    for (let d = 0; d < days.length; d++) {
+        const w = makeWorld(lvl, d);
+        for (const step of q) {
+            const res = applyCmd(lvl, w, step.cmd);
+            if (res.type === 'fail') return { win: false, day: d, reason: res.reason };
+            if (days.length === 1 && worldDone(w)) return { win: true };
+        }
+        if (!worldDone(w)) return { win: false, day: d, reason: truncated ? 'loop' : 'missing' };
+    }
+    return { win: true };
+}
+// LOGIC-END
+
+
+let currentLevelIdx = 0;
+let activeTarget = 'main';
+let selectedCharacter = 'rover';
+let showCppCode = false;
+let programs = { main: [], a: [], b: [] };
+let levelStars = new Array(LEVELS.length).fill(0);
+let studentInfo = { name: '', grade: '' };
+let sessionData = {
+    sessionId: 'sess_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+    hintsUsed: 0,          // solo informativo para el docente: no resta puntos
+    hintedLevels: [],
+    finalized: false
+};
+const STAR_POINTS = { 0: 0, 1: 100, 2: 250, 3: 500 };
+let hintStage = {};        // nivel -> cuántas pistas se han mostrado (0..3)
+let top10Records = [];
+
+let world = null;          // estado lógico del día actual (ver makeWorld)
+let currentDay = 0;
+let robot = { c: 0, r: 0, z: 1, dir: 3, visC: 0, visR: 0, visZ: 1, jumpArc: 0 };
+let heights = [];
+let targets = [];
+let hazards = [];
+let isExecuting = false;
+let stopRequested = false;
+let speedMult = 1;
+let stepState = null;      // modo paso a paso: { q, truncated, dangling, cursor, day }
+let particles = [];
+let view = { k: 1, ox: 0, oy: 0 };   // escala y desplazamiento para centrar tableros de cualquier tamaño
+
+function isPhase2() {
+    return phaseOf(currentLevelIdx) === 2;
+}
+function isPhase3() {
+    return phaseOf(currentLevelIdx) === 3;
+}
+function curLevel() { return LEVELS[currentLevelIdx]; }
+
+function jumpToPhase(phaseNum) {
+    initLevel(phaseNum === 1 ? 0 : phaseNum === 2 ? 10 : 20);
+}
+
+// Nombre del bloque de acción según la fase: en el invernadero se riega, en el laboratorio se energiza.
+function actionName() { return isPhase2() ? 'ENERGIZAR' : 'REGAR'; }
+
+function applyPhaseTheme() {
+    const ph = phaseOf(currentLevelIdx);
+    const p2 = ph === 2;
+    document.body.classList.toggle('phase-2', p2);
+    document.getElementById('btnPhase1').className = 'phase-btn' + (ph === 1 ? ' active-p1' : '');
+    document.getElementById('btnPhase2').className = 'phase-btn' + (ph === 2 ? ' active-p2' : '');
+    document.getElementById('btnPhase3').className = 'phase-btn' + (ph === 3 ? ' active-p3' : '');
+    document.getElementById('brandBadge').innerText = ph === 2 ? '⚡ CodiCamp PRO' : ph === 3 ? '💧 CodiCamp Riego' : '🌱 CodiCamp 3D';
+    document.getElementById('energyIcon').innerText = p2 ? '🔋' : '💧';
+
+    // Bloque de acción y bloques nuevos según el nivel
+    document.getElementById('actLabel').innerText = actionName();
+    const actIcon = document.getElementById('actIcon');
+    if (!actIcon.dataset.drop) actIcon.dataset.drop = actIcon.innerHTML;
+    actIcon.innerHTML = p2 ? '<path d="M13 2L4.5 13.5h6L9.5 22 19 10h-6.2L13 2z"/>' : actIcon.dataset.drop;
+    actIcon.style.fill = p2 ? '#f59e0b' : '#0288d1';
+    requestAnimationFrame(positionBanner);
+    const tools = curLevel().tools || [];
+    document.querySelectorAll('[data-tool]').forEach(btn => {
+        btn.style.display = tools.includes(btn.dataset.tool) ? '' : 'none';
+    });
+
+    // Actualizar nombres de los personajes según la fase (MK-I vs MK-II Next-Gen)
+    document.getElementById('optRover').innerText = p2 ? '🤖 Codi-Rover MK-II (Tank)' : '🤖 Codi-Rover (Orugas)';
+    document.getElementById('optDrone').innerText = p2 ? '🚁 Dron Xtrude MK-II (Pro)' : '🚁 Dron Xtrude (Arduino)';
+    document.getElementById('optCat').innerText = p2 ? '🐾 Cyber-Cat MK-II (Laser)' : '🐱 Mecha-Cat (Biónico)';
+}
+
+// Puntaje: solo suma por estrellas. Consultar pistas NO resta puntos.
+function calculateCurrentScore() {
+    return levelStars.reduce((sum, s) => sum + (STAR_POINTS[s || 0] || 0), 0);
+}
+
+function updateScoreAndHintHUD() {
+    const score = calculateCurrentScore();
+    const hasName = studentInfo.name && studentInfo.name.trim();
+    const nameEl = document.getElementById('hudPlayerName');
+    const scoreEl = document.getElementById('hudScoreTxt');
+    if (nameEl) nameEl.innerText = hasName ? `👤 ${studentInfo.name.trim()}` : '👤 Guardar mi nombre';
+    if (scoreEl) scoreEl.innerText = `🏆 ${score} pts`;
+
+    const hintBtn = document.getElementById('hintBtn');
+    if (hintBtn) {
+        const stage = hintStage[currentLevelIdx] || 0;
+        hintBtn.innerText = stage === 0 ? '💡 Pista' : stage === 1 ? '💡 Otra pista' : stage === 2 ? '🧩 Ver solución' : '🧩 Solución';
+    }
+}
+
+function syncActiveSessionToLeaderboard(forceFreeze = false) {
+    if (!studentInfo.name || !studentInfo.name.trim()) return;
+    const score = calculateCurrentScore();
+    const totalStars = levelStars.reduce((a, b) => a + b, 0);
+    const completed = levelStars.filter(s => s > 0).length;
+
+    if (forceFreeze) sessionData.finalized = true;
+
+    const recordObj = {
+        sessionId: sessionData.sessionId,
+        name: studentInfo.name.trim(),
+        grade: (studentInfo.grade || '').trim() || 'General',
+        score: score,
+        stars: totalStars,
+        completed: completed,
+        finalized: Boolean(sessionData.finalized),
+        timestamp: Date.now()
+    };
+
+    const idx = top10Records.findIndex(r => r.sessionId === sessionData.sessionId);
+    if (idx !== -1) top10Records[idx] = recordObj;
+    else if (score > 0 || forceFreeze) top10Records.push(recordObj);
+
+    // Ordenar de mayor a menor puntaje (desempate por estrellas y más reciente)
+    top10Records.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (b.stars !== a.stars) return b.stars - a.stars;
+        return (b.timestamp || 0) - (a.timestamp || 0);
+    });
+    top10Records = top10Records.slice(0, 10);
+
+    try {
+        localStorage.setItem('codicamp_top10_records_v1', JSON.stringify(top10Records));
+    } catch (e) {}
+}
+
+function loadSavedProgress() {
+    let firstVisit = true;
+    try {
+        const savedTop10 = localStorage.getItem('codicamp_top10_records_v1');
+        const parsedTop = savedTop10 ? JSON.parse(savedTop10) : [];
+        // Se descartan los récords de ejemplo que traían versiones anteriores (sessionId "seed_...")
+        top10Records = Array.isArray(parsedTop)
+            ? parsedTop.filter(r => r && !String(r.sessionId || '').startsWith('seed_')).slice(0, 10)
+            : [];
+
+        const savedStars = localStorage.getItem('codicamp_stars_v2');
+        if (savedStars) {
+            const parsed = JSON.parse(savedStars);
+            for (let i = 0; i < Math.min(parsed.length, LEVELS.length); i++) {
+                levelStars[i] = parsed[i] || 0;
+            }
+        }
+        const savedStudent = localStorage.getItem('codicamp_student');
+        if (savedStudent) {
+            studentInfo = JSON.parse(savedStudent);
+            document.getElementById('studentNameInput').value = studentInfo.name || '';
+            document.getElementById('studentGradeInput').value = studentInfo.grade || '';
+        }
+        const savedSession = localStorage.getItem('codicamp_session_v1');
+        if (savedSession) {
+            const parsedSess = JSON.parse(savedSession);
+            sessionData.sessionId = parsedSess.sessionId || sessionData.sessionId;
+            sessionData.hintsUsed = Number(parsedSess.hintsUsed || 0);
+            sessionData.hintedLevels = Array.isArray(parsedSess.hintedLevels) ? parsedSess.hintedLevels : [];
+            sessionData.finalized = Boolean(parsedSess.finalized);
+        }
+        const savedChar = localStorage.getItem('codicamp_char');
+        if (savedChar) {
+            selectedCharacter = savedChar;
+            document.getElementById('charDropdown').value = savedChar;
+        }
+        firstVisit = !localStorage.getItem('codicamp_tutorial_seen');
+    } catch (e) {
+        top10Records = [];
+    }
+    updateScoreAndHintHUD();
+    // El manual solo se abre solo la primera vez; después está en el botón ❓ Ayuda.
+    if (firstVisit) openTutorialModal();
+}
+
+function saveProgress() {
+    try {
+        localStorage.setItem('codicamp_stars_v2', JSON.stringify(levelStars));
+        localStorage.setItem('codicamp_char', selectedCharacter);
+        localStorage.setItem('codicamp_session_v1', JSON.stringify(sessionData));
+    } catch (e) {}
+    updateScoreAndHintHUD();
+    syncActiveSessionToLeaderboard(false);
+}
+
+function saveStudentData() {
+    const newName = document.getElementById('studentNameInput').value;
+    const newGrade = document.getElementById('studentGradeInput').value;
+    if (newName && newName.trim()) {
+        studentInfo.name = newName.trim();
+    }
+    studentInfo.grade = newGrade;
+    try { localStorage.setItem('codicamp_student', JSON.stringify(studentInfo)); } catch (e) {}
+    updateScoreAndHintHUD();
+    syncActiveSessionToLeaderboard(false);
+    updateDiplomaSummary();
+}
+
+function changeCharacter(charKey) {
+    selectedCharacter = charKey;
+    saveProgress();
+    playTone(520, 'triangle', 0.1, 680, 0.12);
+}
+
+function updateDropdownStars() {
+    const dropdown = document.getElementById('levelDropdown');
+    dropdown.innerHTML = '';
+    LEVELS.forEach((l, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        const ph = phaseOf(i);
+        const tag = ph === 1 ? 'F1' : ph === 2 ? '⚡F2' : '💧F3';
+        const starsStr = levelStars[i] > 0 ? ' ' + '⭐'.repeat(levelStars[i]) : '';
+        opt.innerText = `${tag} - Niv ${i + 1}/${LEVELS.length}${starsStr}`;
+        dropdown.appendChild(opt);
+    });
+    dropdown.value = currentLevelIdx;
+}
+
+function toggleSpeed() {
+    speedMult = speedMult === 1 ? 2 : 1;
+    const btn = document.getElementById('speedBtn');
+    btn.innerText = `⏩ ${speedMult}x`;
+}
+
+function toggleCppView() {
+    showCppCode = !showCppCode;
+    document.getElementById('visualBlocksContainer').style.display = showCppCode ? 'none' : 'flex';
+    document.getElementById('arduinoViewer').style.display = showCppCode ? 'block' : 'none';
+    document.getElementById('copyCppBtn').style.display = showCppCode ? '' : 'none';
+    document.getElementById('cppToggleBtn').innerText = showCppCode ? '🧩 Ver Bloques' : '</> C++ Arduino';
+    updateArduinoCodeView();
+}
+
+function copyCppCode() {
+    const text = generateArduinoSketch();
+    const btn = document.getElementById('copyCppBtn');
+    const done = ok => { btn.innerText = ok ? '✔ Copiado' : 'Selecciona y copia'; setTimeout(() => btn.innerText = '📋 Copiar', 1800); };
+    try {
+        navigator.clipboard.writeText(text).then(() => done(true), () => { selectCppText(); done(false); });
+    } catch (e) { selectCppText(); done(false); }
+}
+function selectCppText() {
+    const pre = document.querySelector('#arduinoViewer pre');
+    if (!pre) return;
+    const range = document.createRange(); range.selectNodeContents(pre);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+}
+
+function getActiveLimit(targetKey) {
+    return curLevel().limits[targetKey] || 0;
+}
+
+function initLevel(idx) {
+    document.getElementById('victoryModal').style.display = 'none';
+    isExecuting = false;
+    stopRequested = true;
+    stepState = null;
+    currentLevelIdx = idx;
+
+    applyPhaseTheme();
+
+    const lvl = curLevel();
+    heights = lvl.h.map(rowStr => rowStr.padEnd(lvl.cols, '0').split('').map(Number));
+    computeView();
+    const daysTxt = lvl.days ? ` · Programa para ${lvl.days.length} días` : '';
+    setBanner(lvl.title + daysTxt, isPhase2() ? '#00f2fe' : '#2ecc71');
+    document.getElementById('parBlocksTxt').innerText = lvl.par;
+
+    programs = { main: [], a: [], b: [] };
+    activeTarget = 'main';
+    ['main', 'a', 'b'].forEach(k => {
+        document.getElementById(`box-${k}`).classList.toggle('active-target', k === 'main');
+    });
+    updateDropdownStars();
+    resetRobotState();
+    renderAllSlots();
+    updateScoreAndHintHUD();
+}
+
+// Pone el robot en la salida y prepara el estado de las plantas o sensores del día indicado.
+function resetRobotState(dayIdx = 0) {
+    const lvl = curLevel();
+    currentDay = dayIdx;
+    world = makeWorld(lvl, dayIdx);
+    targets = world.targets;
+    hazards = world.hazards;
+    syncRobotFromWorld(true);
+    robot.jumpArc = 0;
+    updateEnergyHUD();
+}
+function syncRobotFromWorld(snap) {
+    robot.c = world.c; robot.r = world.r; robot.z = world.z; robot.dir = world.dir;
+    if (snap) { robot.visC = robot.c; robot.visR = robot.r; robot.visZ = robot.z; }
+}
+
+function resetRobotOnly() {
+    if (isExecuting) { stopRequested = true; isExecuting = false; }
+    stepState = null;
+    resetRobotState();
+    renderAllSlots();
+    setBanner("Posición reiniciada. ¡Ajusta tu algoritmo!", isPhase2() ? "#00f2fe" : "#3498db");
+}
+
+function updateEnergyHUD() {
+    const done = targets.filter(t => t.active).length;
+    const total = targets.length;
+    document.getElementById('energyFill').style.width = ((done / total) * 100) + '%';
+    const days = levelDays(curLevel()).length;
+    document.getElementById('energyText').innerText = days > 1 ? `${done}/${total} · Día ${currentDay + 1}/${days}` : `${done}/${total}`;
+}
+
+function positionBanner() {
+    const hud = document.querySelector('.top-hud');
+    const banner = document.getElementById('statusBanner');
+    if (window.matchMedia('(max-width: 960px)').matches) { banner.style.top = ''; return; }
+    banner.style.top = (hud.offsetTop + hud.offsetHeight + 6) + 'px';
+}
+window.addEventListener('resize', positionBanner);
+
+function setBanner(text, borderColor = '#2ecc71') {
+    const b = document.getElementById('statusBanner');
+    b.innerText = text;
+    b.style.borderColor = borderColor;
+}
+
+// Proyección isométrica. El origen es (0,0); computeView() escala y centra cualquier tamaño de tablero en el canvas.
+const ISO = { tileW: 86, tileH: 43, blockH: 24 };
+function isoProject(c, r, z) {
+    const { tileW, tileH, blockH } = ISO;
+    const x = (c - r) * (tileW / 2);
+    const y = (c + r) * (tileH / 2) - (z * blockH);
+    return { x, y, tileW, tileH, blockH };
+}
+function computeView() {
+    const lvl = curLevel();
+    const { tileW, tileH, blockH } = ISO;
+    const maxZ = Math.max(1, ...heights.flat());
+    const xmin = -lvl.rows * tileW / 2, xmax = lvl.cols * tileW / 2;
+    const ymin = -maxZ * blockH - 78;                               // espacio para el personaje encima
+    const ymax = (lvl.cols + lvl.rows - 2) * tileH / 2 + tileH + 6;
+    const k = Math.min(1.3, (canvas.width - 40) / (xmax - xmin), (canvas.height - 30) / (ymax - ymin));
+    view = { k, ox: canvas.width / 2 - k * (xmin + xmax) / 2, oy: canvas.height / 2 - k * (ymin + ymax) / 2 };
+}
+
+// ============================================================================
+// MOTOR GRÁFICO DE BLOQUES: FASE 1 (CLÁSICO) vs FASE 2 (NEXT-GEN PS2 TEXTURIZADO)
+// ============================================================================
+function drawCyberFloorGrid() {
+    if (!isPhase2()) return;
+    const lvl = curLevel();
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0, 242, 254, 0.14)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= lvl.cols; i++) {
+        const p1 = isoProject(i, 0, 0);
+        const p2 = isoProject(i, lvl.rows, 0);
+        ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+    }
+    for (let i = 0; i <= lvl.rows; i++) {
+        const q1 = isoProject(0, i, 0);
+        const q2 = isoProject(lvl.cols, i, 0);
+        ctx.beginPath(); ctx.moveTo(q1.x, q1.y); ctx.lineTo(q2.x, q2.y); ctx.stroke();
+    }
+    ctx.restore();
+}
+
+function drawBlock(c, r, z, isTop) {
+    if (isPhase2()) {
+        drawBlockPhase2(c, r, z, isTop);
+    } else {
+        drawBlockPhase1(c, r, z, isTop);
+    }
+}
+
+function drawBlockPhase1(c, r, z, isTop) {
+    const { x, y, tileW, tileH, blockH } = isoProject(c, r, z);
+    const hw = tileW / 2, hh = tileH / 2;
+    const target = isTop ? targets.find(t => t.c === c && t.r === r) : null;
+    const hazard = isTop ? hazards.find(h => h.c === c && h.r === r) : null;
+
+    ctx.fillStyle = '#a3b8c2';
+    ctx.beginPath();
+    ctx.moveTo(x - hw, y + hh); ctx.lineTo(x, y + tileH);
+    ctx.lineTo(x, y + tileH + blockH); ctx.lineTo(x - hw, y + hh + blockH);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#607d8b'; ctx.lineWidth = 1.3; ctx.stroke();
+
+    ctx.fillStyle = '#78909c';
+    ctx.beginPath();
+    ctx.moveTo(x, y + tileH); ctx.lineTo(x + hw, y + hh);
+    ctx.lineTo(x + hw, y + hh + blockH); ctx.lineTo(x, y + tileH + blockH);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    if (hazard) {
+        ctx.fillStyle = '#ffebee';
+    } else if (target) {
+        ctx.fillStyle = target.active ? '#6d4c41' : '#bca58a';   // tierra húmeda / tierra seca
+    } else {
+        ctx.fillStyle = (c + r) % 2 === 0 ? '#ecf4f6' : '#dce9ed';
+    }
+    ctx.beginPath();
+    ctx.moveTo(x, y); ctx.lineTo(x + hw, y + hh);
+    ctx.lineTo(x, y + tileH); ctx.lineTo(x - hw, y + hh);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = hazard ? '#e53935' : '#546e7a'; ctx.stroke();
+
+    if (hazard) {
+        ctx.fillStyle = '#e53935';
+        ctx.beginPath(); ctx.arc(x, y + hh, 9, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffeb3b';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('⚡', x, y + hh + 4);
+    }
+
+    if (target) drawPlant(x, y + hh, target.active);
+}
+
+// Planta de cultivo: marchita y café cuando está seca, verde y erguida cuando está regada.
+function drawPlant(gx, gy, wet) {
+    ctx.save();
+    // surco de tierra
+    ctx.fillStyle = wet ? '#4e342e' : '#8d6e63';
+    ctx.beginPath(); ctx.ellipse(gx, gy + 2, 15, 6, 0, 0, Math.PI * 2); ctx.fill();
+    if (!wet) {
+        // grietas de suelo seco
+        ctx.strokeStyle = 'rgba(62, 39, 35, 0.6)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(gx - 10, gy + 2); ctx.lineTo(gx - 4, gy + 4); ctx.lineTo(gx + 1, gy + 1);
+        ctx.moveTo(gx + 4, gy + 5); ctx.lineTo(gx + 9, gy + 2); ctx.stroke();
+    }
+    const stemTopX = wet ? gx : gx + 7, stemTopY = wet ? gy - 24 : gy - 15;
+    ctx.strokeStyle = wet ? '#2e7d32' : '#8d6e3f'; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(gx, gy); ctx.quadraticCurveTo(gx + (wet ? 1 : 2), gy - 12, stemTopX, stemTopY); ctx.stroke();
+    const leaf = (lx, ly, ang, len, color) => {
+        ctx.save(); ctx.translate(lx, ly); ctx.rotate(ang);
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(len * 0.5, -len * 0.35, len, 0); ctx.quadraticCurveTo(len * 0.5, len * 0.35, 0, 0); ctx.fill();
+        ctx.restore();
+    };
+    if (wet) {
+        const sway = Math.sin(Date.now() / 600 + gx) * 0.06;
+        leaf(gx, gy - 9, -2.5 + sway, 13, '#43a047');
+        leaf(gx, gy - 11, -0.6 + sway, 13, '#66bb6a');
+        leaf(gx, gy - 18, -2.2 + sway, 11, '#66bb6a');
+        leaf(gx, gy - 19, -0.9 + sway, 11, '#43a047');
+        leaf(gx, gy - 24, -1.57 + sway, 9, '#81c784');
+        // gotas de agua
+        ctx.fillStyle = 'rgba(41, 182, 246, 0.85)';
+        [[-11, -3], [10, -6], [-6, -16]].forEach(([dx, dy]) => {
+            ctx.beginPath(); ctx.arc(gx + dx, gy + dy, 1.8, 0, Math.PI * 2); ctx.fill();
+        });
+    } else {
+        leaf(gx + 1, gy - 7, 2.3, 11, '#b08d57');
+        leaf(gx + 2, gy - 9, 0.9, 10, '#c8a165');
+        leaf(stemTopX, stemTopY, 1.2, 9, '#a1887f');
+    }
+    ctx.restore();
+}
+
+// Sensor IoT de la Fase 2: LED rojo apagado, LED verde y señal inalámbrica cuando está energizado.
+function drawSensorNode(gx, gy, on) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.beginPath(); ctx.ellipse(gx, gy + 2, 12, 5, 0, 0, Math.PI * 2); ctx.fill();
+    // poste y caja
+    ctx.fillStyle = '#475569'; ctx.fillRect(gx - 2, gy - 12, 4, 12);
+    ctx.fillStyle = '#1e293b'; ctx.strokeStyle = on ? '#34d399' : '#64748b'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(gx - 9, gy - 26, 18, 15, 3); ctx.fill(); ctx.stroke();
+    // antena
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(gx + 5, gy - 26); ctx.lineTo(gx + 8, gy - 36); ctx.stroke();
+    // LED de estado
+    ctx.fillStyle = on ? '#10b981' : '#f43f5e';
+    if (on) { ctx.shadowColor = '#10b981'; ctx.shadowBlur = 10; }
+    ctx.beginPath(); ctx.arc(gx - 3, gy - 18.5, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    if (on) {
+        const t = (Date.now() / 500) % 1;
+        ctx.strokeStyle = `rgba(52, 211, 153, ${1 - t})`; ctx.lineWidth = 1.5;
+        for (let i = 1; i <= 2; i++) {
+            ctx.beginPath(); ctx.arc(gx + 8, gy - 36, 4 * i + t * 4, -2.4, -0.7); ctx.stroke();
+        }
+    }
+    ctx.restore();
+}
+
+// DISEÑO AVANZADO FASE 2 (TEXTURAS METÁLICAS, CIRCUITOS NEÓN Y NODOS CUÁNTICOS)
+function drawBlockPhase2(c, r, z, isTop) {
+    const { x, y, tileW, tileH, blockH } = isoProject(c, r, z);
+    const hw = tileW / 2, hh = tileH / 2;
+    const target = isTop ? targets.find(t => t.c === c && t.r === r) : null;
+    const hazard = isTop ? hazards.find(h => h.c === c && h.r === r) : null;
+
+    // Cara lateral izquierda con gradiente metálico oscuro
+    const leftGrad = ctx.createLinearGradient(x - hw, y + hh, x, y + tileH + blockH);
+    leftGrad.addColorStop(0, '#1e293b');
+    leftGrad.addColorStop(1, '#0f172a');
+    ctx.fillStyle = leftGrad;
+    ctx.beginPath();
+    ctx.moveTo(x - hw, y + hh); ctx.lineTo(x, y + tileH);
+    ctx.lineTo(x, y + tileH + blockH); ctx.lineTo(x - hw, y + hh + blockH);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#00f2fe'; ctx.lineWidth = 0.9; ctx.stroke();
+
+    // Línea de circuito neón en cara izquierda
+    ctx.strokeStyle = 'rgba(0, 242, 254, 0.35)';
+    ctx.beginPath();
+    ctx.moveTo(x - hw * 0.5, y + hh * 1.5);
+    ctx.lineTo(x - hw * 0.5, y + hh * 1.5 + blockH);
+    ctx.stroke();
+
+    // Cara lateral derecha con sombreado profundo
+    const rightGrad = ctx.createLinearGradient(x, y + tileH, x + hw, y + hh + blockH);
+    rightGrad.addColorStop(0, '#0f172a');
+    rightGrad.addColorStop(1, '#020617');
+    ctx.fillStyle = rightGrad;
+    ctx.beginPath();
+    ctx.moveTo(x, y + tileH); ctx.lineTo(x + hw, y + hh);
+    ctx.lineTo(x + hw, y + hh + blockH); ctx.lineTo(x, y + tileH + blockH);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#0284c7'; ctx.lineWidth = 0.9; ctx.stroke();
+
+    // Luz LED lateral en cada piso del bloque
+    ctx.fillStyle = '#00f2fe';
+    ctx.beginPath();
+    ctx.arc(x + hw * 0.5, y + hh * 1.5 + blockH * 0.5, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Cara superior biselada con textura tecnológica
+    const topGrad = ctx.createLinearGradient(x - hw, y, x + hw, y + tileH);
+    if (hazard) {
+        topGrad.addColorStop(0, '#450a0a');
+        topGrad.addColorStop(1, '#7f1d1d');
+    } else {
+        if ((c + r) % 2 === 0) {
+            topGrad.addColorStop(0, '#1e293b');
+            topGrad.addColorStop(1, '#334155');
+        } else {
+            topGrad.addColorStop(0, '#0f172a');
+            topGrad.addColorStop(1, '#1e293b');
+        }
+    }
+
+    ctx.fillStyle = topGrad;
+    ctx.beginPath();
+    ctx.moveTo(x, y); ctx.lineTo(x + hw, y + hh);
+    ctx.lineTo(x, y + tileH); ctx.lineTo(x - hw, y + hh);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = hazard ? '#f43f5e' : '#38bdf8';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+
+    // Placa interna biselada (Textura Cyber-Tech en el techo del cuadro)
+    if (isTop && !hazard) {
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y + 6);
+        ctx.lineTo(x + hw - 10, y + hh);
+        ctx.lineTo(x, y + tileH - 6);
+        ctx.lineTo(x - hw + 10, y + hh);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Pequeño nodo central en cada baldosa
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+        ctx.beginPath(); ctx.arc(x, y + hh, 2.2, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Bobina Tesla en baldosas de peligro
+    if (hazard) {
+        const pulse = Math.sin(Date.now() / 120) * 2 + 10;
+        ctx.fillStyle = 'rgba(244, 63, 94, 0.35)';
+        ctx.beginPath(); ctx.arc(x, y + hh, pulse, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#f43f5e';
+        ctx.beginPath(); ctx.arc(x, y + hh, 7, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('⚡', x, y + hh + 4);
+    }
+
+    // Sensor IoT sobre las baldosas objetivo
+    if (target) drawSensorNode(x, y + hh, target.active);
+}
+
+// ============================================================================
+// MOTOR DE PERSONAJES: FASE 1 (CLÁSICOS) vs FASE 2 (MK-II NEXT-GEN)
+// ============================================================================
+function drawCharacterDispatcher() {
+    const pos = isoProject(robot.visC, robot.visR, robot.visZ);
+    const x = pos.x;
+    const groundY = pos.y + pos.tileH / 2;
+    const y = groundY - robot.jumpArc;
+
+    const isoDirs = [
+        { ax: -20, ay: 10 }, { ax: -20, ay: -10 },
+        { ax: 20,  ay: -10 }, { ax: 20,  ay: 10 }
+    ];
+    const ad = isoDirs[robot.dir];
+    ctx.fillStyle = isPhase2() ? '#00f2fe' : '#ff6d00';
+    ctx.beginPath(); ctx.arc(x + ad.ax, groundY + ad.ay, 4.2, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.stroke();
+
+    if (selectedCharacter === 'rover') {
+        isPhase2() ? drawCodiRoverMK2(x, y, groundY) : drawCodiRover(x, y, groundY);
+    } else if (selectedCharacter === 'drone') {
+        isPhase2() ? drawAgroDroneMK2(x, y, groundY) : drawAgroDrone(x, y, groundY);
+    } else {
+        isPhase2() ? drawMechaCatMK2(x, y, groundY) : drawMechaCat(x, y, groundY);
+    }
+}
+
+// --- PERSONAJES FASE 1 ---
+function drawCodiRover(x, y, groundY) {
+    const shadowScale = Math.max(0.4, 1 - robot.jumpArc / 85);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    ctx.beginPath(); ctx.ellipse(x, groundY + 2, 18 * shadowScale, 9 * shadowScale, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = '#263238'; ctx.strokeStyle = '#cfd8dc'; ctx.lineWidth = 1;
+    const isNS = (robot.dir === 0 || robot.dir === 2);
+    const wOffX = 9, wOffY = isNS ? 4.5 : -4.5, angle = isNS ? -0.45 : 0.45;
+
+    ctx.beginPath(); ctx.ellipse(x - wOffX, y - 2 - wOffY * 0.4, 8, 4.5, angle, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(x + wOffX, y - 2 + wOffY * 0.4, 8, 4.5, angle, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#263238'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(x - 14, y - 24, 28, 20, 7); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#2ecc71'; ctx.fillRect(x - 13, y - 10, 26, 3.5);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(x, y - 33, 14, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+    const dirOffsets = [
+        { vx: -6, vy: 3.5 }, { vx: -6, vy: -2.5 },
+        { vx: 6,  vy: -2.5 }, { vx: 6,  vy: 3.5 }
+    ];
+    const off = dirOffsets[robot.dir];
+
+    ctx.fillStyle = '#102027';
+    ctx.beginPath(); ctx.roundRect(x + off.vx - 7.5, y - 37 + off.vy, 15, 8.5, 4); ctx.fill();
+
+    ctx.fillStyle = '#00e5ff';
+    ctx.beginPath();
+    ctx.arc(x + off.vx - 2.8, y - 33 + off.vy, 2, 0, Math.PI * 2);
+    ctx.arc(x + off.vx + 2.8, y - 33 + off.vy, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#455a64'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(x, y - 47); ctx.lineTo(x, y - 55); ctx.stroke();
+
+    const glow = Math.sin(Date.now() / 180) * 1.5 + 5.5;
+    ctx.fillStyle = '#ffeb3b';
+    ctx.beginPath(); ctx.arc(x, y - 57, glow, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#fbc02d'; ctx.stroke();
+}
+
+function drawAgroDrone(x, y, groundY) {
+    const hover = Math.sin(Date.now() / 140) * 3.5 + 14;
+    const dy = y - hover;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+    ctx.beginPath(); ctx.ellipse(x, groundY + 2, 16, 8, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.strokeStyle = '#37474f'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x - 10, dy); ctx.lineTo(x - 14, dy + 8);
+    ctx.moveTo(x + 10, dy); ctx.lineTo(x + 14, dy + 8);
+    ctx.stroke();
+
+    const arms = [{ ax: -20, ay: -10 }, { ax: 20, ay: -10 }, { ax: -20, ay: 8 }, { ax: 20, ay: 8 }];
+    ctx.strokeStyle = '#263238'; ctx.lineWidth = 3.5;
+    arms.forEach(a => {
+        ctx.beginPath(); ctx.moveTo(x, dy - 6); ctx.lineTo(x + a.ax, dy - 6 + a.ay); ctx.stroke();
+    });
+
+    ctx.fillStyle = '#0288d1'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.ellipse(x, dy - 7, 15, 9, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#ffeb3b';
+    ctx.beginPath(); ctx.arc(x, dy - 11, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#f57f17'; ctx.stroke();
+
+    const spin = (Date.now() / 35) % (Math.PI * 2);
+    arms.forEach((a, idx) => {
+        const rx = x + a.ax, ry = dy - 8 + a.ay;
+        ctx.fillStyle = idx < 2 ? 'rgba(46, 204, 113, 0.45)' : 'rgba(52, 152, 219, 0.45)';
+        ctx.beginPath(); ctx.ellipse(rx, ry, 10, 5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(rx - Math.cos(spin) * 9, ry - Math.sin(spin) * 4);
+        ctx.lineTo(rx + Math.cos(spin) * 9, ry + Math.sin(spin) * 4);
+        ctx.stroke();
+    });
+
+    const dirOffsets = [
+        { vx: -9, vy: 4 }, { vx: -9, vy: -4 },
+        { vx: 9,  vy: -4 }, { vx: 9,  vy: 4 }
+    ];
+    const off = dirOffsets[robot.dir];
+    ctx.fillStyle = '#ff1744';
+    ctx.beginPath(); ctx.arc(x + off.vx, dy - 7 + off.vy, 3.8, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2; ctx.stroke();
+}
+
+function drawMechaCat(x, y, groundY) {
+    const shadowScale = Math.max(0.4, 1 - robot.jumpArc / 85);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.26)';
+    ctx.beginPath(); ctx.ellipse(x, groundY + 2, 18 * shadowScale, 9 * shadowScale, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = '#455a64'; ctx.strokeStyle = '#263238'; ctx.lineWidth = 1.5;
+    [-10, -4, 4, 10].forEach(px => {
+        ctx.beginPath(); ctx.roundRect(x + px - 2.5, y - 9, 5, 9, 2); ctx.fill(); ctx.stroke();
+    });
+
+    const tailWave = Math.sin(Date.now() / 160) * 5;
+    ctx.strokeStyle = '#f39c12'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(x, y - 14); ctx.quadraticCurveTo(x - 18, y - 24, x - 14 + tailWave, y - 36); ctx.stroke();
+
+    ctx.fillStyle = '#fff8e1'; ctx.strokeStyle = '#263238'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(x - 13, y - 22, 26, 15, 7); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#ffb300'; ctx.fillRect(x - 11, y - 15, 22, 3);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(x, y - 32, 13.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#ff8f00';
+    ctx.beginPath(); ctx.moveTo(x - 12, y - 39); ctx.lineTo(x - 15, y - 51); ctx.lineTo(x - 4, y - 44); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + 12, y - 39); ctx.lineTo(x + 15, y - 51); ctx.lineTo(x + 4, y - 44); ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    const dirOffsets = [
+        { vx: -6, vy: 3.5 }, { vx: -6, vy: -2.5 },
+        { vx: 6,  vy: -2.5 }, { vx: 6,  vy: 3.5 }
+    ];
+    const off = dirOffsets[robot.dir];
+
+    ctx.fillStyle = '#1b2631';
+    ctx.beginPath(); ctx.roundRect(x + off.vx - 8, y - 36 + off.vy, 16, 9, 4); ctx.fill();
+
+    ctx.fillStyle = '#00e676';
+    ctx.beginPath();
+    ctx.arc(x + off.vx - 3.2, y - 32 + off.vy, 2.2, 0, Math.PI * 2);
+    ctx.arc(x + off.vx + 3.2, y - 32 + off.vy, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ff4081';
+    ctx.beginPath(); ctx.arc(x + off.vx, y - 29.5 + off.vy, 1.5, 0, Math.PI * 2); ctx.fill();
+}
+
+// --- PERSONAJES EVOLUCIONADOS MK-II (FASE 2 PRO NEXT-GEN) ---
+function drawCodiRoverMK2(x, y, groundY) {
+    // Halo de energía debajo del Mecha-Tank
+    ctx.fillStyle = 'rgba(0, 242, 254, 0.25)';
+    ctx.beginPath(); ctx.ellipse(x, groundY + 2, 22, 11, 0, 0, Math.PI * 2); ctx.fill();
+
+    // Orugas blindadas pesadas con rodillos metálicos
+    ctx.fillStyle = '#0f172a'; ctx.strokeStyle = '#00f2fe'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(x - 19, y - 9, 12, 10, 4); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.roundRect(x + 7, y - 9, 12, 10, 4); ctx.fill(); ctx.stroke();
+
+    // Chasis blindado con gradiente de titanio
+    const bodyGrad = ctx.createLinearGradient(x - 16, y - 28, x + 16, y - 5);
+    bodyGrad.addColorStop(0, '#334155');
+    bodyGrad.addColorStop(1, '#0f172a');
+    ctx.fillStyle = bodyGrad; ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(x - 16, y - 27, 32, 21, 6); ctx.fill(); ctx.stroke();
+
+    // Reactor cuántico central en el pecho
+    const pulse = Math.sin(Date.now() / 150) * 1.2 + 4.5;
+    ctx.fillStyle = '#00f2fe';
+    ctx.beginPath(); ctx.arc(x, y - 16, pulse, 0, Math.PI * 2); ctx.fill();
+
+    // Módulos sensores de hombro
+    ctx.fillStyle = '#1e293b'; ctx.strokeStyle = '#a855f7'; ctx.lineWidth = 1.5;
+    ctx.fillRect(x - 20, y - 25, 5, 11); ctx.strokeRect(x - 20, y - 25, 5, 11);
+    ctx.fillRect(x + 15, y - 25, 5, 11); ctx.strokeRect(x + 15, y - 25, 5, 11);
+
+    // Cabeza Mecha-Dome articulada
+    const headGrad = ctx.createRadialGradient(x - 4, y - 38, 2, x, y - 35, 16);
+    headGrad.addColorStop(0, '#475569');
+    headGrad.addColorStop(1, '#0f172a');
+    ctx.fillStyle = headGrad; ctx.strokeStyle = '#00f2fe'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x, y - 36, 14.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+    const dirOffsets = [
+        { vx: -6, vy: 3.5 }, { vx: -6, vy: -2.5 },
+        { vx: 6,  vy: -2.5 }, { vx: 6,  vy: 3.5 }
+    ];
+    const off = dirOffsets[robot.dir];
+
+    // Visor Cyber-Plasma
+    ctx.fillStyle = '#020617';
+    ctx.beginPath(); ctx.roundRect(x + off.vx - 9, y - 40 + off.vy, 18, 9, 4); ctx.fill();
+    ctx.strokeStyle = '#ec4899'; ctx.lineWidth = 1.2; ctx.stroke();
+
+    ctx.fillStyle = '#00f2fe';
+    ctx.beginPath();
+    ctx.arc(x + off.vx - 3.5, y - 35.5 + off.vy, 2.3, 0, Math.PI * 2);
+    ctx.arc(x + off.vx + 3.5, y - 35.5 + off.vy, 2.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Radar superior rotatorio
+    const radarSpin = Math.cos(Date.now() / 160) * 7;
+    ctx.strokeStyle = '#00f2fe'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, y - 50); ctx.lineTo(x, y - 58); ctx.stroke();
+    ctx.strokeStyle = '#f43f5e'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(x - radarSpin, y - 58); ctx.lineTo(x + radarSpin, y - 58); ctx.stroke();
+}
+
+function drawAgroDroneMK2(x, y, groundY) {
+    const hover = Math.sin(Date.now() / 120) * 4 + 16;
+    const dy = y - hover;
+
+    // Anillo de escaneo láser proyectado en el suelo
+    const scanRadius = 14 + Math.sin(Date.now() / 180) * 3;
+    ctx.strokeStyle = 'rgba(0, 242, 254, 0.55)'; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.ellipse(x, groundY + 2, scanRadius, scanRadius * 0.5, 0, 0, Math.PI * 2); ctx.stroke();
+
+    const arms = [{ ax: -22, ay: -11 }, { ax: 22, ay: -11 }, { ax: -22, ay: 9 }, { ax: 22, ay: 9 }];
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 3.5;
+    arms.forEach(a => {
+        ctx.beginPath(); ctx.moveTo(x, dy - 6); ctx.lineTo(x + a.ax, dy - 6 + a.ay); ctx.stroke();
+    });
+
+    // Chasis central en fibra de carbono y oro
+    ctx.fillStyle = '#0f172a'; ctx.strokeStyle = '#00f2fe'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(x, dy - 7, 16, 10, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath(); ctx.arc(x, dy - 11, 7.5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#fef08a'; ctx.lineWidth = 1.5; ctx.stroke();
+
+    // 4 Anillos LED neón protectores de hélices
+    const spin = (Date.now() / 25) % (Math.PI * 2);
+    arms.forEach((a, idx) => {
+        const rx = x + a.ax, ry = dy - 8 + a.ay;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+        ctx.strokeStyle = idx < 2 ? '#00f2fe' : '#e879f9';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(rx, ry, 11, 6, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(rx - Math.cos(spin) * 9, ry - Math.sin(spin) * 4.5);
+        ctx.lineTo(rx + Math.cos(spin) * 9, ry + Math.sin(spin) * 4.5);
+        ctx.stroke();
+    });
+
+    const dirOffsets = [
+        { vx: -10, vy: 4.5 }, { vx: -10, vy: -4.5 },
+        { vx: 10,  vy: -4.5 }, { vx: 10,  vy: 4.5 }
+    ];
+    const off = dirOffsets[robot.dir];
+    ctx.fillStyle = '#10b981';
+    ctx.beginPath(); ctx.arc(x + off.vx, dy - 7 + off.vy, 4.2, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.stroke();
+}
+
+function drawMechaCatMK2(x, y, groundY) {
+    ctx.fillStyle = 'rgba(217, 70, 239, 0.25)';
+    ctx.beginPath(); ctx.ellipse(x, groundY + 2, 20, 10, 0, 0, Math.PI * 2); ctx.fill();
+
+    // Patas biónicas de titanio con articulaciones neón
+    ctx.fillStyle = '#1e293b'; ctx.strokeStyle = '#00f2fe'; ctx.lineWidth = 1.5;
+    [-11, -4, 4, 11].forEach(px => {
+        ctx.beginPath(); ctx.roundRect(x + px - 2.5, y - 10, 5, 10, 2); ctx.fill(); ctx.stroke();
+    });
+
+    // Cola láser segmentada
+    const tailWave = Math.sin(Date.now() / 130) * 6;
+    ctx.strokeStyle = '#d946ef'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(x, y - 15); ctx.quadraticCurveTo(x - 20, y - 26, x - 15 + tailWave, y - 39); ctx.stroke();
+    ctx.fillStyle = '#00f2fe';
+    ctx.beginPath(); ctx.arc(x - 15 + tailWave, y - 39, 3.5, 0, Math.PI * 2); ctx.fill();
+
+    // Cuerpo blindado oscuro
+    ctx.fillStyle = '#0f172a'; ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(x - 14, y - 24, 28, 16, 6); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#d946ef'; ctx.fillRect(x - 12, y - 16, 24, 3);
+
+    // Cabeza Cyber-Panther
+    ctx.fillStyle = '#1e293b'; ctx.strokeStyle = '#00f2fe'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x, y - 34, 14, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+    // Orejas con antenas láser
+    ctx.fillStyle = '#d946ef';
+    ctx.beginPath(); ctx.moveTo(x - 12, y - 41); ctx.lineTo(x - 16, y - 54); ctx.lineTo(x - 4, y - 46); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + 12, y - 41); ctx.lineTo(x + 16, y - 54); ctx.lineTo(x + 4, y - 46); ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    const dirOffsets = [
+        { vx: -6, vy: 3.5 }, { vx: -6, vy: -2.5 },
+        { vx: 6,  vy: -2.5 }, { vx: 6,  vy: 3.5 }
+    ];
+    const off = dirOffsets[robot.dir];
+
+    ctx.fillStyle = '#020617';
+    ctx.beginPath(); ctx.roundRect(x + off.vx - 8.5, y - 38 + off.vy, 17, 9, 4); ctx.fill();
+
+    ctx.fillStyle = '#10b981';
+    ctx.beginPath();
+    ctx.arc(x + off.vx - 3.5, y - 33.5 + off.vy, 2.4, 0, Math.PI * 2);
+    ctx.arc(x + off.vx + 3.5, y - 33.5 + off.vy, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+function spawnParticles(c, r, z, isSpark = false) {
+    const pos = isoProject(c, r, z);
+    for (let i = 0; i < 20; i++) {
+        particles.push({
+            x: pos.x, y: pos.y + pos.tileH / 2,
+            vx: (Math.random() - 0.5) * 6.5, vy: -Math.random() * 5.5 - 2,
+            life: 1.0,
+            color: isSpark ? '#f43f5e' : (isPhase2() ? (i % 2 === 0 ? '#00f2fe' : '#34d399') : (i % 2 === 0 ? '#29b6f6' : '#81d4fa'))
+        });
+    }
+}
+
+function renderLoop() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(view.k, 0, 0, view.k, view.ox, view.oy);
+
+    drawCyberFloorGrid();
+
+    let renderList = [];
+    for (let r = 0; r < heights.length; r++) {
+        for (let c = 0; c < heights[r].length; c++) {
+            const h = heights[r][c];
+            for (let z = 1; z <= h; z++) {
+                renderList.push({
+                    type: 'block',
+                    c, r, z, isTop: z === h,
+                    depth: (c + r) * 100 + z * 100
+                });
+            }
+        }
+    }
+
+    const effectiveZ = robot.visZ + 1.05 + (robot.jumpArc / 24);
+    renderList.push({
+        type: 'robot',
+        depth: (robot.visC + robot.visR) * 100 + effectiveZ * 100
+    });
+
+    renderList.sort((a, b) => a.depth - b.depth);
+
+    for (let item of renderList) {
+        if (item.type === 'block') {
+            drawBlock(item.c, item.r, item.z, item.isTop);
+        } else {
+            drawCharacterDispatcher();
+        }
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy; p.vy += 0.22; p.life -= 0.035;
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1.0;
+    requestAnimationFrame(renderLoop);
+}
+
+const BOX_NAMES = { main: 'MAIN', a: 'RUTINA A', b: 'RUTINA B' };
+
+function selectTarget(t) {
+    if (isExecuting) return;
+    if (getActiveLimit(t) === 0) {
+        sfxError();
+        setBanner(`🔒 ${BOX_NAMES[t]} no se usa en este nivel. ¡Usa las cajas activas!`, '#e67e22');
+        return;
+    }
+    activeTarget = t;
+    ['main', 'a', 'b'].forEach(k => {
+        document.getElementById(`box-${k}`).classList.toggle('active-target', k === t);
+    });
+}
+
+// Texto legible de un programa, para la pista 3 (solución).
+function describeProgram(p) {
+    const name = c => getCmdVisual(c).word;
+    return ['main', 'a', 'b']
+        .filter(k => p[k] && p[k].length)
+        .map(k => `${BOX_NAMES[k]} = [${p[k].map(name).join(', ')}]`)
+        .join('  ·  ');
+}
+
+// Pistas graduales y gratuitas: 1) la idea, 2) la estructura, 3) la solución completa.
+function showLevelHint() {
+    const lvl = curLevel();
+    const stage = Math.min(3, (hintStage[currentLevelIdx] || 0) + 1);
+    hintStage[currentLevelIdx] = stage;
+    if (!sessionData.hintedLevels) sessionData.hintedLevels = [];
+    if (!sessionData.hintedLevels.includes(currentLevelIdx)) {
+        sessionData.hintedLevels.push(currentLevelIdx);
+        sessionData.hintsUsed = sessionData.hintedLevels.length;
+        saveProgress();
+    }
+    playTone(587.33, 'sine', 0.12, 880, 0.12);
+    let text;
+    if (stage === 1) text = `💡 Pista 1 (idea): ${lvl.ideas[0]}`;
+    else if (stage === 2) text = `💡 Pista 2 (estructura): ${lvl.ideas[1]}`;
+    else text = `🧩 Una solución (${lvl.par} bloques): ${describeProgram(lvl.sol)}. Pruébala y luego intenta crear la tuya.`;
+    setBanner(text, '#f39c12');
+    updateScoreAndHintHUD();
+}
+
+function getTotalUsedBlocks() {
+    return programs.main.length + programs.a.length + programs.b.length;
+}
+
+function addCmd(cmd) {
+    if (isExecuting) return;
+    const list = programs[activeTarget];
+    const limit = getActiveLimit(activeTarget);
+    if (list.length < limit) {
+        list.push(cmd);
+        stepState = null;
+        playTone(440, 'sine', 0.05, null, 0.06);
+        renderAllSlots();
+    } else {
+        sfxError();
+        setBanner(`🔒 ${BOX_NAMES[activeTarget]} admite ${limit} bloques en este nivel. ¡Usa una rutina o el bloque REPETIR!`, '#e67e22');
+    }
+}
+
+function undoLastCmd() {
+    if (isExecuting) return;
+    programs[activeTarget].pop();
+    stepState = null;
+    renderAllSlots();
+}
+
+function clearAllCode() {
+    if (isExecuting) return;
+    programs = { main: [], a: [], b: [] };
+    resetRobotOnly();
+}
+
+function getCmdVisual(cmd) {
+    const act = isPhase2() ? { icon: '🔋', label: 'ENERG', word: 'ENERGIZAR' } : { icon: '💧', label: 'REGAR', word: 'REGAR' };
+    const map = {
+        'FWD':   { icon: '⬆️', label: 'AVZ', word: 'AVANZAR' },
+        'ACT':   act,
+        'LEFT':  { icon: '↩️', label: 'IZQ', word: 'GIRO IZQ' },
+        'RIGHT': { icon: '↪️', label: 'DER', word: 'GIRO DER' },
+        'JUMP':  { icon: '⏫', label: 'SLT', word: 'SALTAR' },
+        'A':     { icon: 'A', label: 'RUTINA', word: 'RUTINA A' },
+        'B':     { icon: 'B', label: 'RUTINA', word: 'RUTINA B' },
+        'X2':    { icon: '×2', label: 'REPETIR', word: '×2' },
+        'X3':    { icon: '×3', label: 'REPETIR', word: '×3' },
+        'X4':    { icon: '×4', label: 'REPETIR', word: '×4' },
+        'IFDRY': { icon: '🌡️', label: 'SI SECO', word: 'SI SECO → REGAR' }
+    };
+    return map[cmd];
+}
+
+function renderAllSlots(hlTarget = null, hlIdx = -1, hlLoop = -1, repTxt = '') {
+    document.getElementById('usedBlocksTxt').innerText = getTotalUsedBlocks();
+    const p2 = isPhase2();
+    ['main', 'a', 'b'].forEach(key => {
+        const container = document.getElementById(`grid-${key}`);
+        container.innerHTML = '';
+        const list = programs[key];
+        const activeLimit = getActiveLimit(key);
+
+        for (let i = 0; i < MAX_SLOTS[key]; i++) {
+            const slot = document.createElement('div');
+            slot.className = 'code-slot';
+            if (i >= activeLimit) {
+                slot.classList.add('locked-slot');
+                slot.title = "Ranura bloqueada en este nivel para fomentar el uso de rutinas";
+            } else if (i < list.length) {
+                const cmd = list[i];
+                slot.classList.add('filled');
+                if (cmd[0] === 'X') slot.classList.add('loop-slot');
+                if (cmd === 'IFDRY') slot.classList.add('cond-slot');
+                if (cmd === 'A' || cmd === 'B') slot.classList.add('call-slot');
+                if (hlTarget === key && hlIdx === i) slot.classList.add('executing');
+                if (hlTarget === key && hlLoop === i) slot.classList.add('loop-running');
+                const vis = getCmdVisual(cmd);
+                const txtColor = p2 ? '#00f2fe' : '#1e3523';
+                const subColor = p2 ? '#cbd5e1' : '#555';
+                const sub = (hlTarget === key && hlLoop === i && repTxt) ? repTxt : vis.label;
+                slot.innerHTML = `<span style="font-size:13px;font-weight:900;color:${txtColor};">${vis.icon}</span><span style="font-size:8px;font-weight:800;color:${subColor};">${sub}</span>`;
+                slot.onclick = (e) => {
+                    e.stopPropagation();
+                    if (!isExecuting) { programs[key].splice(i, 1); stepState = null; renderAllSlots(); }
+                };
+            }
+            container.appendChild(slot);
+        }
+    });
+    updateArduinoCodeView();
+}
+
+// ============================================================================
+// GENERADOR DE CÓDIGO ARDUINO REAL (compila en Arduino UNO / Nano)
+// ============================================================================
+function cppLines(list, indent) {
+    const pad = '  '.repeat(indent);
+    const call = {
+        'FWD': 'avanzar();', 'LEFT': 'girarIzquierda();', 'RIGHT': 'girarDerecha();', 'JUMP': 'saltar();',
+        'ACT': isPhase2() ? 'energizar();' : 'regar();',
+        'IFDRY': 'if (sueloSeco()) regar();',
+        'A': 'rutinaA();', 'B': 'rutinaB();'
+    };
+    const out = [];
+    let loops = [];
+    const vars = ['i', 'j', 'k', 'm'];
+    for (const c of list) {
+        if (c[0] === 'X') { loops.push(Number(c.slice(1))); continue; }
+        let p = pad;
+        loops.forEach((n, d) => {
+            const v = vars[d] || ('n' + d);
+            out.push(`${p}for (int ${v} = 0; ${v} < ${n}; ${v}++) {`);
+            p += '  ';
+        });
+        out.push(p + call[c]);
+        for (let d = loops.length - 1; d >= 0; d--) { p = p.slice(2); out.push(p + '}'); }
+        loops = [];
+    }
+    if (loops.length) out.push(`${pad}// (el bloque REPETIR del final no tiene instrucción después)`);
+    return out.length ? out : [`${pad}// vacío`];
+}
+
+function generateArduinoSketch() {
+    const selfCall = programs.a.includes('A') || programs.b.includes('B') || (programs.a.includes('B') && programs.b.includes('A'));
+    const lines = [
+        '// CodiCamp AgroTech: programa generado desde tus bloques',
+        '// Robot de 2 motores DC con puente H L298N,',
+        '// sensor de humedad del suelo en A0 y bomba de agua o actuador con relé en el pin 7.',
+        '// Ajusta los pines y los tiempos a tu robot antes de cargarlo.',
+        '',
+        '// --- Pines ---',
+        'const int IN1 = 5;    // motor izquierdo',
+        'const int IN2 = 6;',
+        'const int IN3 = 9;    // motor derecho',
+        'const int IN4 = 10;',
+        'const int PIN_RELE = 7;      // bomba de agua o actuador',
+        'const int PIN_HUMEDAD = A0;  // sensor de humedad del suelo',
+        '',
+        '// --- Calibración ---',
+        'const int TIEMPO_CASILLA = 800;  // ms para avanzar una casilla',
+        'const int TIEMPO_GIRO = 450;     // ms para girar 90 grados',
+        'const int TIEMPO_RIEGO = 1500;   // ms con el relé encendido',
+        'const int UMBRAL_SECO = 600;     // lectura mayor = suelo más seco (calíbralo con tu sensor)',
+        '',
+        'void rutinaA();',
+        'void rutinaB();',
+        '',
+        'void motores(int a, int b, int c, int d) {',
+        '  digitalWrite(IN1, a); digitalWrite(IN2, b);',
+        '  digitalWrite(IN3, c); digitalWrite(IN4, d);',
+        '}',
+        'void detener() { motores(LOW, LOW, LOW, LOW); delay(150); }',
+        'void avanzar() { motores(HIGH, LOW, HIGH, LOW); delay(TIEMPO_CASILLA); detener(); }',
+        'void girarIzquierda() { motores(LOW, HIGH, HIGH, LOW); delay(TIEMPO_GIRO); detener(); }',
+        'void girarDerecha() { motores(HIGH, LOW, LOW, HIGH); delay(TIEMPO_GIRO); detener(); }',
+        '// En el juego SALTAR sube o baja un escalón. En un robot real puede ser una rampa:',
+        'void saltar() { avanzar(); }',
+        'void regar() { digitalWrite(PIN_RELE, HIGH); delay(TIEMPO_RIEGO); digitalWrite(PIN_RELE, LOW); }',
+        'void energizar() { digitalWrite(PIN_RELE, HIGH); delay(500); digitalWrite(PIN_RELE, LOW); }',
+        'bool sueloSeco() { return analogRead(PIN_HUMEDAD) > UMBRAL_SECO; }',
+        '',
+        'void setup() {',
+        '  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);',
+        '  pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);',
+        '  pinMode(PIN_RELE, OUTPUT);',
+        '  detener();',
+        '  delay(2000);  // 2 segundos para poner el robot en la salida',
+        '',
+        '  // ===== MAIN =====',
+        ...cppLines(programs.main, 1),
+        '}',
+        '',
+        'void loop() {',
+        '  // Vacío a propósito: el programa del juego se ejecuta una sola vez en setup().',
+        '}',
+        '',
+        ...(selfCall ? ['// Ojo: una rutina se llama a sí misma. En el juego se detiene al terminar;', '// en Arduino se repite hasta llenar la memoria. Úsalo solo para experimentar.'] : []),
+        'void rutinaA() {',
+        ...cppLines(programs.a, 1),
+        '}',
+        '',
+        'void rutinaB() {',
+        ...cppLines(programs.b, 1),
+        '}'
+    ];
+    return lines.join('\n');
+}
+
+function escapeHtml(t) {
+    return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function updateArduinoCodeView() {
+    const viewer = document.getElementById('arduinoViewer');
+    if (!showCppCode) return;
+    const html = generateArduinoSketch().split('\n').map(line => {
+        const esc = escapeHtml(line);
+        const ci = esc.indexOf('//');
+        const code = ci >= 0 ? esc.slice(0, ci) : esc;
+        const comment = ci >= 0 ? `<span class="cm">${esc.slice(ci)}</span>` : '';
+        const hl = code
+            .replace(/\b(void|const|int|bool|for|if|return)\b/g, '<span class="kw">$1</span>')
+            .replace(/\b(setup|loop|rutinaA|rutinaB|avanzar|girarIzquierda|girarDerecha|saltar|regar|energizar|sueloSeco|detener|motores)\b(?=\()/g, '<span class="fn">$1</span>');
+        return hl + comment;
+    }).join('\n');
+    viewer.innerHTML = `<pre style="margin:0;white-space:pre;">${html}</pre>`;
+}
+
+function animateRobotMove(tC, tR, tZ, isJump, baseDuration = 320) {
+    const duration = baseDuration / speedMult;
+    return new Promise(resolve => {
+        const sC = robot.visC, sR = robot.visR, sZ = robot.visZ;
+        const start = performance.now();
+        function step(now) {
+            if (stopRequested) { resolve(); return; }
+            const t = Math.min(1, (now - start) / duration);
+            const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+            robot.visC = sC + (tC - sC) * ease;
+            robot.visR = sR + (tR - sR) * ease;
+            robot.visZ = sZ + (tZ - sZ) * ease;
+            if (isJump) robot.jumpArc = Math.sin(t * Math.PI) * 34;
+            if (t < 1) requestAnimationFrame(step);
+            else {
+                robot.visC = tC; robot.visR = tR; robot.visZ = tZ; robot.jumpArc = 0;
+                resolve();
+            }
+        }
+        requestAnimationFrame(step);
+    });
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms / speedMult));
+
+const FAIL_MESSAGES = {
+    edge: ["⚠️ ¡Borde de la plataforma!", "#e67e22"],
+    step: ["💥 ¡Desnivel detectado! Usa SALTAR.", "#e74c3c"],
+    hazard: ["⚡ ¡Cortocircuito eléctrico! Rodea esa baldosa.", "#e74c3c"],
+    hazardJump: ["⚡ ¡Caíste en una trampa eléctrica!", "#e74c3c"],
+    jumpEdge: ["⚠️ ¡No puedes saltar fuera de la plataforma!", "#e67e22"],
+    jumpFlat: ["⚠️ Mismo nivel de altura: usa AVANZAR en terreno plano.", "#e67e22"],
+    jumpHigh: ["⚠️ Escalón demasiado alto (máximo +1 por salto).", "#e67e22"],
+    overwater: ["💦 ¡Encharcaste una planta que ya estaba húmeda! Usa SI SECO para que el robot mida antes de regar.", "#e74c3c"]
+};
+
+// Ejecuta un paso: primero la regla (applyCmd) y después la animación de lo que pasó.
+async function executeSingleStep(stepObj) {
+    const repTxt = stepObj.rep ? `${stepObj.rep} de ${stepObj.of}` : '';
+    renderAllSlots(stepObj.source, stepObj.idx, stepObj.loopIdx, repTxt);
+    const res = applyCmd(curLevel(), world, stepObj.cmd);
+
+    if (res.type === 'turn') {
+        sfxTurn();
+        syncRobotFromWorld(false);
+        await sleep(220);
+        return true;
+    }
+    if (res.type === 'move') {
+        res.jump ? sfxJump() : sfxStep();
+        syncRobotFromWorld(false);
+        await animateRobotMove(world.c, world.r, world.z, !!res.jump, res.jump ? 360 : 300);
+        return true;
+    }
+    if (res.type === 'act') {
+        await animateRobotMove(robot.c, robot.r, robot.z, true, 180);
+        if (res.hit && !res.already) {
+            sfxActivate();
+            spawnParticles(robot.c, robot.r, robot.z, false);
+            updateEnergyHUD();
+        } else if (res.wet) {
+            playTone(330, 'sine', 0.12, 392, 0.08);
+            setBanner('🌡️ Sensor: el suelo está húmedo, no hace falta regar.', '#3498db');
+        } else if (res.already) {
+            playTone(330, 'sine', 0.1, null, 0.08);
+            setBanner(isPhase2() ? 'Este sensor ya estaba energizado. Sigo…' : 'Esta planta ya estaba regada. Sigo…', '#3498db');
+        } else if (res.sensed) {
+            playTone(300, 'sine', 0.08, null, 0.06);
+        } else {
+            sfxError();
+            setBanner(isPhase2() ? 'Aquí no hay sensor para energizar. Sigo…' : 'Aquí no hay planta para regar. Sigo…', '#e67e22');
+        }
+        await sleep(160);
+        return worldDone(world) ? 'DONE' : true;
+    }
+    if (res.type === 'fail') {
+        const [msg, color] = FAIL_MESSAGES[res.reason] || ["⚠️ Movimiento no válido.", "#e67e22"];
+        if (res.moved) {
+            syncRobotFromWorld(false);
+            await animateRobotMove(world.c, world.r, world.z, !!res.jump, res.jump ? 360 : 300);
+            sfxSpark();
+            spawnParticles(robot.c, robot.r, robot.z, true);
+        } else if (res.bump) {
+            sfxError();
+            await animateRobotMove(robot.c + res.bump.dc * 0.2, robot.r + res.bump.dr * 0.2, robot.z, false, 110);
+            await animateRobotMove(robot.c, robot.r, robot.z, false, 110);
+        } else if (res.hop) {
+            sfxError();
+            await animateRobotMove(robot.c, robot.r, robot.z, true, 240);
+        } else {
+            sfxError();
+            await sleep(200);
+        }
+        setBanner(msg, color);
+        return false;
+    }
+    return true;
+}
+
+// Mensaje cuando el programa termina sin completar el nivel.
+function endMessage(plan, day, totalDays) {
+    const what = isPhase2() ? 'sensores por energizar' : 'plantas por regar';
+    const left = world.targets.filter(t => !t.active).length;
+    const dayTxt = totalDays > 1 ? ` el día ${day + 1}` : '';
+    if (plan.truncated) {
+        return `🔁 Tu programa se repite sin fin (bucle infinito) y se detuvo después de ${STEP_LIMIT} pasos. Revisa qué rutina se llama a sí misma.`;
+    }
+    let msg = `🔄 Fin del algoritmo: quedaron ${left} ${what}${dayTxt}.`;
+    if (plan.dangling) msg += ' Ojo: un bloque REPETIR quedó al final, sin instrucción después.';
+    return msg;
+}
+
+async function runProgram() {
+    if (isExecuting) return;
+    if (programs.main.length === 0) {
+        sfxError();
+        setBanner("⚠️ Agrega comandos en MAIN primero.", "#e67e22");
+        return;
+    }
+    const days = levelDays(curLevel());
+    const plan = buildCallQueue(programs);
+    stepState = null;
+    isExecuting = true;
+    stopRequested = false;
+
+    for (let d = 0; d < days.length; d++) {
+        resetRobotState(d);
+        if (days.length > 1) {
+            setBanner(`📅 Día ${d + 1} de ${days.length}: hoy amanecieron secas otras plantas…`, "#3498db");
+            await sleep(700);
+        } else {
+            setBanner("🤖 Ejecutando algoritmo...", isPhase2() ? "#00f2fe" : "#3498db");
+        }
+        let res = true;
+        for (const stepObj of plan.q) {
+            if (stopRequested) break;
+            res = await executeSingleStep(stepObj);
+            if (res === false) break;
+            if (res === 'DONE' && days.length === 1) break;
+        }
+        if (stopRequested || res === false) { isExecuting = false; renderAllSlots(); return; }
+        if (!worldDone(world)) {
+            isExecuting = false;
+            renderAllSlots();
+            setBanner(endMessage(plan, d, days.length), "#e67e22");
+            return;
+        }
+        if (d < days.length - 1) {
+            playTone(660, 'triangle', 0.15, 880, 0.1);
+            setBanner(`✅ Día ${d + 1} completo. Mañana cambia la humedad: el mismo programa debe servir otra vez.`, "#2ecc71");
+            await sleep(1100);
+            if (stopRequested) { isExecuting = false; renderAllSlots(); return; }
+        }
+    }
+    isExecuting = false;
+    renderAllSlots();
+    showVictoryModal();
+}
+
+async function stepProgram() {
+    if (isExecuting) return;
+    if (programs.main.length === 0) {
+        sfxError();
+        setBanner("⚠️ Agrega comandos en MAIN para usar Paso a Paso.", "#e67e22");
+        return;
+    }
+    const days = levelDays(curLevel());
+    if (!stepState) {
+        stepState = { ...buildCallQueue(programs), cursor: 0, day: 0 };
+        resetRobotState(0);
+        if (stepState.q.length === 0) {
+            setBanner(endMessage(stepState, 0, days.length), "#e67e22");
+            stepState = null;
+            return;
+        }
+    }
+    const st = stepState;
+    isExecuting = true;
+    stopRequested = false;
+    setBanner(`🔎 ${days.length > 1 ? `Día ${st.day + 1} · ` : ''}Paso ${st.cursor + 1} de ${st.q.length}`, "#2980b9");
+    const res = await executeSingleStep(st.q[st.cursor]);
+    st.cursor++;
+    isExecuting = false;
+
+    if (res === false) { stepState = null; return; }
+    if (res === 'DONE' && days.length === 1) { stepState = null; showVictoryModal(); return; }
+    if (st.cursor >= st.q.length) {
+        if (!worldDone(world)) {
+            setBanner(endMessage(st, st.day, days.length) + ' Presiona ↺ para reiniciar.', "#e67e22");
+            stepState = null;
+            return;
+        }
+        if (st.day < days.length - 1) {
+            st.day++;
+            st.cursor = 0;
+            resetRobotState(st.day);
+            setBanner(`✅ Día ${st.day} completo. Presiona PASO para empezar el día ${st.day + 1}.`, "#2ecc71");
+            return;
+        }
+        stepState = null;
+        showVictoryModal();
+    }
+}
+
+function showVictoryModal() {
+    sfxWin();
+    isExecuting = false;
+    renderAllSlots();
+
+    const lvl = curLevel();
+    const used = getTotalUsedBlocks();
+    const par = lvl.par;
+    let stars = 1;
+    if (used <= par) stars = 3;
+    else if (used <= par + 3) stars = 2;
+
+    levelStars[currentLevelIdx] = Math.max(levelStars[currentLevelIdx], stars);
+    saveProgress();
+    updateDropdownStars();
+
+    const levelPts = STAR_POINTS[stars] || 100;
+    const totalScore = calculateCurrentScore();
+
+    document.getElementById('modalTitle').innerText = `¡Nivel ${currentLevelIdx + 1} Superado!`;
+    document.getElementById('modalStars').innerText = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
+
+    let advice = "¡Algoritmo optimizado (+500 pts)!";
+    if (stars === 2) advice = `¡Buen trabajo (+250 pts)! Resuélvelo en ${par} bloques o menos para ganar 500 pts (3 ⭐).`;
+    else if (stars === 1) advice = `Nivel completado (+100 pts). ¡Usa rutinas para bajar a ${par} bloques y ganar 500 pts!`;
+    if (used < par) advice = `🏅 ¡Superaste la meta! Lo lograste con ${used} bloques (meta: ${par}).`;
+    if (lvl.best && used > lvl.bestCount) advice += `<br>🔍 Reto extra: existe una solución de solo ${lvl.bestCount} bloques en la que una rutina se llama a sí misma. ¿La encuentras?`;
+
+    document.getElementById('modalStats').innerHTML =
+        `Bloques usados: <strong>${used}</strong> &nbsp;|&nbsp; Meta ideal: <strong>${par}</strong><br>` +
+        `Premio del Nivel: <strong>+${levelPts} pts</strong> &nbsp;|&nbsp; Puntaje Total: <strong>🏆 ${totalScore} pts</strong><br>` +
+        `<span style="font-size:12px;color:#27ae60;">${advice}</span>`;
+    document.getElementById('victoryModal').style.display = 'flex';
+}
+
+function replayLevel() {
+    document.getElementById('victoryModal').style.display = 'none';
+    resetRobotOnly();
+}
+
+function advanceNextLevel() {
+    document.getElementById('victoryModal').style.display = 'none';
+    if (currentLevelIdx < LEVELS.length - 1) {
+        initLevel(currentLevelIdx + 1);
+    } else {
+        // Al completar todos los niveles, congelar récord en Top 10 y mostrar diálogo de finalización
+        syncActiveSessionToLeaderboard(true);
+        openEndSessionModal('completed_all');
+    }
+}
+
+function updateDiplomaSummary() {
+    const completed = levelStars.filter(s => s > 0).length;
+    const totalStars = levelStars.reduce((a, b) => a + b, 0);
+    const maxStars = LEVELS.length * 3;
+    const gradeScore = Math.max(1.0, (1.0 + (totalStars / maxStars) * 4.0)).toFixed(1);
+    const finalScore = calculateCurrentScore();
+    const hinted = (sessionData.hintedLevels || []).length;
+
+    document.getElementById('diplomaSummary').innerHTML = `
+        Estudiante: <strong>${escapeHtml(studentInfo.name || 'Sin registrar')}</strong> (${escapeHtml(studentInfo.grade || 'Curso')})<br>
+        Niveles Completados: <strong>${completed} de ${LEVELS.length}</strong> &nbsp;|&nbsp; Estrellas: <strong>${totalStars} / ${maxStars} ⭐</strong><br>
+        Puntaje Acumulado: <strong style="color:#d35400;">🏆 ${finalScore} pts</strong><br>
+        <span style="font-size:11.5px;color:#555;">Niveles en que consultó pistas: ${hinted} (dato informativo para el docente, no resta puntos)</span>
+        <div style="margin-top:6px;font-size:16px;color:#27ae60;">Nota Sugerida: <strong>${gradeScore} / 5.0</strong></div>
+    `;
+}
+
+function openTutorialModal() {
+    document.getElementById('tutorialModal').style.display = 'flex';
+}
+
+// Cerrar el manual ya no obliga a registrarse: el nombre es opcional.
+function closeTutorialModal() {
+    document.getElementById('tutorialModal').style.display = 'none';
+    try { localStorage.setItem('codicamp_tutorial_seen', '1'); } catch (e) {}
+    if (!studentInfo.name || !studentInfo.name.trim()) {
+        setBanner('🌱 ¡A jugar! Si quieres aparecer en el Top 10, toca «👤 Guardar mi nombre» (es opcional).', isPhase2() ? '#00f2fe' : '#2ecc71');
+    }
+}
+
+function openRegisterPlayerModal(clearFields = false) {
+    const nameInput = document.getElementById('regPlayerNameInput');
+    const gradeInput = document.getElementById('regPlayerGradeInput');
+    const errEl = document.getElementById('regErrorMsg');
+    if (errEl) errEl.innerText = '';
+    if (clearFields) {
+        nameInput.value = '';
+        gradeInput.value = '';
+    } else {
+        nameInput.value = studentInfo.name || '';
+        gradeInput.value = studentInfo.grade || '';
+    }
+    document.getElementById('registerPlayerModal').style.display = 'flex';
+    setTimeout(() => nameInput.focus(), 80);
+}
+
+function skipPlayerRegistration() {
+    document.getElementById('registerPlayerModal').style.display = 'none';
+    setBanner('▶️ Jugando sin nombre. Tu progreso se guarda igual en este dispositivo.', isPhase2() ? '#00f2fe' : '#2ecc71');
+}
+
+function confirmPlayerRegistration() {
+    const nameInput = document.getElementById('regPlayerNameInput');
+    const gradeInput = document.getElementById('regPlayerGradeInput');
+    const errEl = document.getElementById('regErrorMsg');
+    const enteredName = (nameInput.value || '').trim();
+    const enteredGrade = (gradeInput.value || '').trim();
+
+    if (enteredName.length < 2) {
+        sfxError();
+        if (errEl) errEl.innerText = 'Escribe al menos 2 letras, o pulsa «Jugar sin nombre».';
+        nameInput.style.borderColor = '#e74c3c';
+        nameInput.focus();
+        return;
+    }
+
+    nameInput.style.borderColor = '#bdc3c7';
+    if (errEl) errEl.innerText = '';
+
+    // Si el nombre cambió respecto al perfil anterior y había progreso, congelar el anterior y crear nueva sesión limpia
+    const prevName = (studentInfo.name || '').trim();
+    if (prevName && prevName.toLowerCase() !== enteredName.toLowerCase()) {
+        syncActiveSessionToLeaderboard(true);
+        levelStars = new Array(LEVELS.length).fill(0);
+        sessionData = {
+            sessionId: 'sess_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+            hintsUsed: 0,
+            hintedLevels: [],
+            finalized: false
+        };
+    } else {
+        sessionData.finalized = false;
+    }
+
+    studentInfo.name = enteredName;
+    studentInfo.grade = enteredGrade;
+    document.getElementById('studentNameInput').value = studentInfo.name;
+    document.getElementById('studentGradeInput').value = studentInfo.grade;
+    try { localStorage.setItem('codicamp_student', JSON.stringify(studentInfo)); } catch (e) {}
+
+    saveProgress();
+    updateDropdownStars();
+    document.getElementById('registerPlayerModal').style.display = 'none';
+    playTone(523.25, 'triangle', 0.14, 783.99, 0.14);
+    setBanner(`👋 ¡Hola, ${studentInfo.name}! Tus puntos ya cuentan para el Top 10 de este dispositivo.`, isPhase2() ? '#00f2fe' : '#2ecc71');
+}
+
+function renderLeaderboardTable() {
+    syncActiveSessionToLeaderboard(false);
+    const tbody = document.getElementById('leaderboardBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (top10Records.length === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 5;
+        td.style.textAlign = 'center';
+        td.style.padding = '18px 8px';
+        td.innerText = 'Aún no hay récords en este dispositivo. Guarda tu nombre y supera un nivel para ser el primero.';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+    }
+
+    const medals = ['🥇 1', '🥈 2', '🥉 3'];
+    top10Records.slice(0, 10).forEach((rec, idx) => {
+        const tr = document.createElement('tr');
+        const isCurrent = (rec.sessionId === sessionData.sessionId && !rec.finalized);
+        if (isCurrent) tr.className = 'current-player-row';
+
+        const rankLabel = idx < 3 ? medals[idx] : `#${idx + 1}`;
+        const statusBadge = rec.finalized
+            ? '<span class="badge-status badge-frozen">🔒 Finalizado</span>'
+            : '<span class="badge-status badge-active">🟢 Activo</span>';
+
+        const tdRank = document.createElement('td');
+        tdRank.innerText = rankLabel;
+
+        const tdName = document.createElement('td');
+        const strongName = document.createElement('strong');
+        strongName.innerText = rec.name || 'Jugador';
+        tdName.appendChild(strongName);
+        if (rec.grade) {
+            const subGrade = document.createElement('div');
+            subGrade.style.fontSize = '10px';
+            subGrade.style.color = '#64748b';
+            subGrade.innerText = rec.grade;
+            tdName.appendChild(subGrade);
+        }
+
+        const tdStars = document.createElement('td');
+        tdStars.innerText = `${rec.stars || 0} ⭐ (${rec.completed || 0}/${LEVELS.length})`;
+
+        const tdStatus = document.createElement('td');
+        tdStatus.innerHTML = statusBadge;
+
+        const tdScore = document.createElement('td');
+        tdScore.style.textAlign = 'right';
+        tdScore.style.fontWeight = '900';
+        tdScore.innerText = `${rec.score || 0} pts`;
+
+        tr.appendChild(tdRank);
+        tr.appendChild(tdName);
+        tr.appendChild(tdStars);
+        tr.appendChild(tdStatus);
+        tr.appendChild(tdScore);
+        tbody.appendChild(tr);
+    });
+
+    const summaryEl = document.getElementById('currentPlayerRecordSummary');
+    if (summaryEl) {
+        const myScore = calculateCurrentScore();
+        const myStars = levelStars.reduce((a, b) => a + b, 0);
+        const hasName = studentInfo.name && studentInfo.name.trim();
+        let statusMsg;
+        if (!hasName) statusMsg = 'Juegas sin nombre: tus puntos no aparecen en la tabla. Puedes guardar tu nombre cuando quieras.';
+        else if (top10Records.some(r => r.sessionId === sessionData.sessionId)) statusMsg = '🎉 ¡Tu puntaje está en el Top 10 de este dispositivo!';
+        else statusMsg = `⚡ Necesitas superar ${top10Records.length >= 10 ? top10Records[9].score : 0} pts para entrar al Top 10.`;
+        summaryEl.innerHTML = `
+            Jugador: <strong>${escapeHtml(hasName ? studentInfo.name : 'Sin nombre')}</strong> &nbsp;|&nbsp;
+            Puntaje: <strong>🏆 ${myScore} pts</strong> (${myStars} ⭐)<br>
+            <span style="color:#27ae60;font-size:11.5px;">${statusMsg}</span>
+        `;
+    }
+}
+
+function openLeaderboardModal() {
+    renderLeaderboardTable();
+    document.getElementById('leaderboardModal').style.display = 'flex';
+}
+
+function closeLeaderboardModal() {
+    document.getElementById('leaderboardModal').style.display = 'none';
+}
+
+function openEndSessionModal(reason = 'manual') {
+    const titleEl = document.getElementById('sessionEndTitle');
+    const subEl = document.getElementById('sessionEndSubtitle');
+    const sumEl = document.getElementById('sessionEndSummary');
+    const sameBtnLbl = document.getElementById('sameNameBtnLabel');
+
+    const pName = (studentInfo.name && studentInfo.name.trim()) ? studentInfo.name.trim() : 'Jugador';
+    if (sameBtnLbl) sameBtnLbl.innerText = pName;
+
+    const completed = levelStars.filter(s => s > 0).length;
+    const totalStars = levelStars.reduce((a, b) => a + b, 0);
+    const finalScore = calculateCurrentScore();
+
+    if (reason === 'completed_all') {
+        titleEl.innerText = `🏆 ¡Juego Completado! (${LEVELS.length}/${LEVELS.length} Niveles)`;
+        subEl.innerText = '¡Felicitaciones! ¿Cómo deseas continuar?';
+    } else {
+        titleEl.innerText = '🏁 Reiniciar o Finalizar Partida';
+        subEl.innerText = '¿Deseas ingresar un nombre nuevo (congelando el récord actual en el Top 10) o continuar con el mismo nombre?';
+    }
+
+    sumEl.innerHTML = `
+        👤 <strong>Jugador Actual:</strong> ${escapeHtml(pName)} ${studentInfo.grade ? '(' + escapeHtml(studentInfo.grade) + ')' : ''}<br>
+        ⭐ <strong>Progreso:</strong> ${completed}/${LEVELS.length} niveles completados (${totalStars}/${LEVELS.length * 3} estrellas)<br>
+        🏆 <strong>Puntaje Total:</strong> <span style="color:#d35400;font-size:15px;">${finalScore} pts</span>
+    `;
+
+    document.getElementById('sessionEndModal').style.display = 'flex';
+}
+
+function closeEndSessionModal() {
+    document.getElementById('sessionEndModal').style.display = 'none';
+}
+
+function handleSessionChoice(choice) {
+    document.getElementById('sessionEndModal').style.display = 'none';
+
+    if (choice === 'new_player') {
+        // Congela el récord actual en la tabla histórica para que no se sobrescriba
+        syncActiveSessionToLeaderboard(true);
+
+        // Reinicia el estado para el nuevo jugador
+        levelStars = new Array(LEVELS.length).fill(0);
+        studentInfo = { name: '', grade: '' };
+        hintStage = {};
+        sessionData = {
+            sessionId: 'sess_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+            hintsUsed: 0,
+            hintedLevels: [],
+            finalized: false
+        };
+        document.getElementById('studentNameInput').value = '';
+        document.getElementById('studentGradeInput').value = '';
+        try {
+            localStorage.setItem('codicamp_stars_v2', JSON.stringify(levelStars));
+            localStorage.setItem('codicamp_student', JSON.stringify(studentInfo));
+            localStorage.setItem('codicamp_session_v1', JSON.stringify(sessionData));
+        } catch (e) {}
+
+        initLevel(0);
+        openRegisterPlayerModal(true);
+    } else if (choice === 'same_continue') {
+        sessionData.finalized = false;
+        saveProgress();
+        setBanner(`▶️ Continuando partida como ${pNameOrPlayer()}. ¡Sigue sumando puntos!`, isPhase2() ? '#00f2fe' : '#2ecc71');
+    } else if (choice === 'same_reset') {
+        levelStars = new Array(LEVELS.length).fill(0);
+        hintStage = {};
+        sessionData.hintsUsed = 0;
+        sessionData.hintedLevels = [];
+        sessionData.finalized = false;
+        saveProgress();
+        initLevel(0);
+        setBanner(`🔄 Partida reiniciada desde el Nivel 1 para ${pNameOrPlayer()}.`, isPhase2() ? '#00f2fe' : '#2ecc71');
+    }
+}
+function pNameOrPlayer() { return (studentInfo.name && studentInfo.name.trim()) || 'Jugador'; }
+
+function openDiplomaModal() {
+    updateDiplomaSummary();
+    document.getElementById('diplomaModal').style.display = 'flex';
+}
+
+function closeDiplomaModal() {
+    document.getElementById('diplomaModal').style.display = 'none';
+}
+
+function downloadSelf() {
+    const htmlContent = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+    const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "CodiCamp_AgroTech.html";
+    a.click();
+}
+
+loadSavedProgress();
+initLevel(0);
+requestAnimationFrame(renderLoop);
+</script>
+</body>
+</html>

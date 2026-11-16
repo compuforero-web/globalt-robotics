@@ -7,6 +7,7 @@
 import { CONFIG } from '../config.js';
 import { getSupabase } from './supabase.js';
 import { SEED } from '../data/seed.js';
+import { migrateLocalGames } from '../data/game-catalog-migration.js';
 
 export const TABLES = ['games', 'courses', 'tutorials', 'workshops'];
 const SETTINGS_KEY = 'site';
@@ -22,11 +23,15 @@ export const newId = () =>
 function localRead(table) {
   try {
     const raw = localStorage.getItem(storageKey(table));
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const items = JSON.parse(raw);
+      return table === 'games' ? migrateLocalGames(items) : items;
+    }
   } catch (err) {
     console.warn('[GLOBALT] localStorage no disponible:', err);
   }
-  return clone(SEED[table] ?? []);
+  const defaults = clone(SEED[table] ?? []);
+  return table === 'games' ? migrateLocalGames(defaults) : defaults;
 }
 
 function localWrite(table, data) {
