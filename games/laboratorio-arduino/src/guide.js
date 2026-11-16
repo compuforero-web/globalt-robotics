@@ -36,7 +36,7 @@ export const preparedHelp = {
         return { mood: 'idea', text: `Pista ${level + 1} de ${HINTS.length}: ${HINTS[level]}` };
       }
       case 'service-pending':
-        return { mood: 'alert', text: 'El servicio de compilación todavía no está instalado en este servidor, así que no puedo compilar ni ejecutar tu código. Puedes leer la lección y editar; tu código se guarda en este navegador.' };
+        return { mood: 'alert', text: 'Compilar y ejecutar estará disponible próximamente. Mientras tanto puedes leer la lección y editar el código; se guarda en este navegador.' };
       case 'compile-error': {
         const first = ctx.diagnostics.find((d) => d.tipo === 'error') || ctx.diagnostics[0];
         if (!first) return { mood: 'alert', text: 'El compilador no aceptó el programa. Revisa el mensaje original en el panel de resultados.' };

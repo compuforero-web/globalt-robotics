@@ -30,7 +30,10 @@ async function init() {
   renderGames($('#games-grid'), games);
   renderCourses($('#prog-grid'), courses.filter((c) => c.track !== 'ia'));
   renderCourses($('#ia-grid'), courses.filter((c) => c.track === 'ia'));
-  renderVideos($('#videos-grid'), $('#player'), tutorials);
+  // Sección y enlace de menú ocultos hasta que exista al menos un video publicado.
+  const hasVideos = renderVideos($('#videos-grid'), $('#player'), tutorials);
+  $('#videos').hidden = !hasVideos;
+  $$('[data-section-link="videos"]').forEach((el) => { el.hidden = !hasVideos; });
   renderWorkshops($('#workshops-grid'), workshops);
 
   $$('[data-filter-grid]').forEach((grid) => {

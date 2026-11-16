@@ -21,6 +21,7 @@ const stored = progress.getLesson(LESSON.id);
 let savedCode = typeof stored.code === 'string' ? stored.code : EXAMPLE_CODE;
 let compiled = null;   // { code, result }
 let busy = false;
+let servicePending = false; // sin servicio de compilación en este sitio: se desactivan solo sus acciones
 
 const editor = createEditor($('#editor'), { value: savedCode, onChange: updateDirty, onSave: save });
 
@@ -68,16 +69,23 @@ function setStatus(text, kind = '') {
   el.dataset.kind = kind;
 }
 function updateButtons() {
-  $('#btn-compile').disabled = busy;
-  $('#btn-run').disabled = busy;
-  $('#btn-check').disabled = busy;
+  $('#btn-compile').disabled = busy || servicePending;
+  $('#btn-run').disabled = busy || servicePending;
+  $('#btn-check').disabled = busy || servicePending;
   $('#btn-stop').disabled = !simulation.running;
   $('#btn-reset').disabled = busy || !simulation.hex;
 }
-function setService(ready, info = '') {
+function setService(ready, info = '', pending = false) {
   const el = $('#service');
-  el.textContent = ready ? `Compilador listo · ${info}` : 'Servicio de compilación pendiente';
+  el.textContent = ready ? `Compilador listo · ${info}` : (pending ? 'Compilación próximamente' : 'Compilador sin respuesta');
   el.dataset.kind = ready ? 'ok' : 'warn';
+  servicePending = !ready && pending;
+  updateButtons();
+}
+function serviceUnavailable(error) {
+  setService(false, '', Boolean(error?.pending));
+  setStatus(error?.message || 'No se pudo contactar con el compilador.', 'warn');
+  guide.notify('service-pending');
 }
 
 // ---------- Compilación ----------
@@ -124,11 +132,8 @@ async function ensureCompiled() {
     return result.hex;
   } catch (error) {
     compiled = null;
-    if (error instanceof CompilerUnavailable) {
-      setService(false);
-      setStatus(error.message, 'warn');
-      guide.notify('service-pending');
-    } else setStatus(error.message, 'error');
+    if (error instanceof CompilerUnavailable) serviceUnavailable(error);
+    else setStatus(error.message, 'error');
     return null;
   }
 }
@@ -236,4 +241,7 @@ updateButtons();
 guide.notify('welcome', { completed: Boolean(stored.completedAt) });
 checkCompiler()
   .then((info) => setService(Boolean(info.ok), info.version?.compilador || 'avr-gcc'))
-  .catch(() => setService(false));
+  .catch((error) => {
+    if (error instanceof CompilerUnavailable && error.pending) serviceUnavailable(error);
+    else setService(false);
+  });
