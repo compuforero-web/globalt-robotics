@@ -9,6 +9,11 @@ const RULES = [
   [/expected primary-expression before/, 'Hay algo incompleto en la expresión: puede faltar un valor, sobrar una coma o un signo.'],
   [/missing terminating " character|missing terminating ' character/, 'Un texto entre comillas no se cerró. Los textos van entre comillas dobles: "Hola".'],
   [/stray ['‘’]\\\d+['‘’] in program|stray ['‘’].['‘’] in program/, 'Hay un carácter extraño, a menudo comillas tipográficas “ ” copiadas de un documento. Escríbelas de nuevo desde el teclado.'],
+  [/['‘’](?:class )?(\w+)['‘’] has no member named ['‘’](\w+)['‘’]/, (m) => `«${m[2]}» no existe dentro de «${m[1] === 'HardwareSerial' ? 'Serial' : m[1]}». Revisa la ortografía y las mayúsculas: por ejemplo Serial.println (con «ln» al final) o Serial.begin.`],
+  [/a function-definition is not allowed here/, 'Una función empieza dentro de otra. Casi siempre falta cerrar con «}» la función anterior (por ejemplo setup()).'],
+  [/expected initializer before/, 'Algo está incompleto justo antes de este punto: revisa que la línea anterior termine en «;» y que el tipo esté bien escrito.'],
+  [/expected unqualified-id before/, 'Hay un símbolo o una palabra donde el compilador esperaba un nombre. Revisa llaves sobrantes o instrucciones escritas fuera de setup() y loop().'],
+  [/conflicting declaration/, 'Se declaró dos veces el mismo nombre. Deja una sola declaración.'],
   [/does not name a type/, 'Hay una instrucción fuera de una función o un tipo mal escrito. Las órdenes como digitalWrite van dentro de setup() o loop().'],
   [/too few arguments to function/, 'Faltan datos al llamar a la función. Por ejemplo, digitalWrite necesita el pin y el estado: digitalWrite(13, HIGH).'],
   [/too many arguments to function/, 'Sobran datos al llamar a la función. Revisa cuántos valores recibe.'],
@@ -34,4 +39,4 @@ export function explainDiagnostic(message) {
   return null;
 }
 
-export const GENERIC_HELP = 'Lee el mensaje original: indica la línea, la columna y qué esperaba encontrar el compilador. Revisa también la línea anterior.';
+export const GENERIC_HELP = 'No tengo una explicación preparada para este mensaje. Lee el texto original: indica la línea, la columna y qué esperaba encontrar el compilador. Revisa también la línea anterior.';

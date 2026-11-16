@@ -58,6 +58,8 @@
         </div>
         <div id="editor"></div>
         <p id="editor-help" class="editor-help">sketch.ino · <span id="save-state">Ejemplo original</span> · Tab indenta, Mayús+Tab quita sangría, Esc y luego Tab sale del editor, Ctrl+S guarda.</p>
+        <p class="recover" id="recover" hidden><span id="recover-text"></span>
+          <button id="btn-recover" type="button" class="btn btn--outline btn--sm">Recuperar mi código</button></p>
         <p id="status" class="status" role="status" aria-live="polite"></p>
         <ul id="diagnostics" class="diagnostics" aria-label="Mensajes del compilador"></ul>
         <details id="raw-output" class="raw-output" hidden><summary>Salida completa del compilador</summary><pre></pre></details>
@@ -87,6 +89,17 @@
       </div>
     </section>
   </main>
+
+  <dialog id="example-dialog" class="example-dialog" aria-labelledby="example-dialog-title" aria-describedby="example-dialog-desc">
+    <form method="dialog">
+      <h2 id="example-dialog-title">Probar el ejemplo en el editor</h2>
+      <p id="example-dialog-desc">El ejemplo reemplazará el código que ves en el editor. Tu código actual no se borra: queda como copia de respaldo en este navegador y puedes recuperarlo con «Recuperar mi código» o con Ctrl+Z. Nada se guarda hasta que pulses Guardar.</p>
+      <div class="example-dialog__actions">
+        <button value="cancel" class="btn btn--ghost btn--sm" autofocus>Cancelar</button>
+        <button value="replace" class="btn btn--primary btn--sm">Reemplazar y probar</button>
+      </div>
+    </form>
+  </dialog>
 
   <footer class="lab-foot">
     <p>Compilación: avr-gcc + ArduinoCore-avr (LGPL-2.1) en el servicio de GLOBALT · Emulación: <a href="https://github.com/wokwi/avr8js" target="_blank" rel="noopener">avr8js</a> (MIT) en tu navegador · <a href="vendor/LICENSE-avr8js.txt">Licencia avr8js</a></p>

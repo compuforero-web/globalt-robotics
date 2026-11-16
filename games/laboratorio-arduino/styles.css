@@ -20,8 +20,6 @@
 .lesson-block { margin-top: 18px; }
 .lesson-block h2 { font-size: 1.05rem; color: var(--cyan); margin-bottom: .4em; }
 .lesson-block p, .lesson-block li { font-size: .95rem; }
-.lesson-block--challenge { border: 1px solid rgba(249, 115, 22, .4); border-radius: var(--radius-sm); padding: 12px 14px; background: rgba(249, 115, 22, .06); }
-.lesson-block--challenge h2 { color: var(--orange); }
 .criteria { padding-left: 1.2em; margin: 0 0 .6em; }
 .scope summary { cursor: pointer; font-weight: 600; color: var(--text-strong); }
 .scope ul { padding-left: 1.2em; }
@@ -30,6 +28,45 @@
 .conn-table th { color: var(--muted); font-weight: 600; }
 .lesson-code { background: #050912; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; overflow-x: auto; font-size: .8rem; line-height: 1.5; }
 .lesson-code code { color: var(--text); }
+
+/* Lección por pasos */
+.lesson-goal { font-size: .92rem; margin: .4em 0 0; }
+.steps ol { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.steps__btn { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 10px 4px 4px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: 500 .8rem var(--font); cursor: pointer; }
+.steps__btn:hover { border-color: var(--cyan); }
+.steps__n { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--surface-3); color: var(--text-strong); font-weight: 700; }
+.steps__btn[aria-current="step"] { border-color: var(--cyan); color: var(--text-strong); background: rgba(56, 189, 248, .12); }
+.steps__btn[aria-current="step"] .steps__n { background: var(--cyan); color: #03111c; }
+.steps__seen { color: #86efac; font-weight: 700; }
+.step { margin-top: 14px; }
+.step__count { margin: 0; font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.step__title { font-size: 1.1rem; color: var(--cyan); margin: .2em 0 .5em; }
+.step__title:focus { outline: none; }
+.step__title:focus-visible { outline: 2px solid var(--cyan); }
+.step p, .step li { font-size: .95rem; }
+.step ul, .step ol { padding-left: 1.2em; }
+.step__go { margin-top: 10px; }
+.step-nav { display: flex; justify-content: space-between; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.tag { display: inline-block; font: 700 .7rem var(--font); text-transform: uppercase; letter-spacing: .06em; padding: 2px 8px; border-radius: 999px; vertical-align: middle; }
+.tag--example { background: rgba(56, 189, 248, .16); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, .4); }
+.tag--think { background: rgba(168, 85, 247, .16); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, .4); }
+.tag--challenge { background: rgba(249, 115, 22, .18); color: #fdba74; border: 1px solid rgba(249, 115, 22, .5); }
+.example { margin: 12px 0; padding: 10px 12px; border: 1px solid rgba(56, 189, 248, .3); border-radius: var(--radius-sm); background: rgba(56, 189, 248, .04); }
+.example figcaption { font-size: .88rem; color: var(--text-strong); margin-bottom: 8px; }
+.example .lesson-code { margin: 0; }
+.example__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.think { margin: 12px 0; border: 1px solid rgba(168, 85, 247, .3); border-radius: var(--radius-sm); padding: 8px 12px; background: rgba(168, 85, 247, .05); }
+.think summary { cursor: pointer; font-size: .92rem; color: var(--text-strong); }
+.think p { margin: 8px 0 0; }
+.mini-errors code { color: #fecdd3; }
+.challenge-box { border: 1px solid rgba(249, 115, 22, .45); border-radius: var(--radius-sm); padding: 12px 14px; background: rgba(249, 115, 22, .07); }
+.challenge-box__head { font: 700 1rem var(--font-display); color: var(--orange); margin: 0 0 .4em; }
+.recover { margin: 8px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: .85rem; color: var(--muted); }
+.example-dialog { max-width: min(480px, calc(100vw - 32px)); background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 18px; }
+.example-dialog::backdrop { background: rgba(2, 6, 23, .7); }
+.example-dialog h2 { font-size: 1.1rem; margin: 0 0 .5em; }
+.example-dialog p { font-size: .92rem; }
+.example-dialog__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 
 .lab__work { display: grid; gap: 16px; min-width: 0; align-content: start; }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; min-width: 0; }
@@ -160,7 +197,46 @@
   .lab__lesson { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
 }
 @media (min-width: 1440px) {
-  .lab__work { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); grid-template-areas: "guide guide" "editor sim" "editor eval"; }
+  /* Lección por pasos */
+.lesson-goal { font-size: .92rem; margin: .4em 0 0; }
+.steps ol { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.steps__btn { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 10px 4px 4px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: 500 .8rem var(--font); cursor: pointer; }
+.steps__btn:hover { border-color: var(--cyan); }
+.steps__n { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--surface-3); color: var(--text-strong); font-weight: 700; }
+.steps__btn[aria-current="step"] { border-color: var(--cyan); color: var(--text-strong); background: rgba(56, 189, 248, .12); }
+.steps__btn[aria-current="step"] .steps__n { background: var(--cyan); color: #03111c; }
+.steps__seen { color: #86efac; font-weight: 700; }
+.step { margin-top: 14px; }
+.step__count { margin: 0; font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.step__title { font-size: 1.1rem; color: var(--cyan); margin: .2em 0 .5em; }
+.step__title:focus { outline: none; }
+.step__title:focus-visible { outline: 2px solid var(--cyan); }
+.step p, .step li { font-size: .95rem; }
+.step ul, .step ol { padding-left: 1.2em; }
+.step__go { margin-top: 10px; }
+.step-nav { display: flex; justify-content: space-between; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.tag { display: inline-block; font: 700 .7rem var(--font); text-transform: uppercase; letter-spacing: .06em; padding: 2px 8px; border-radius: 999px; vertical-align: middle; }
+.tag--example { background: rgba(56, 189, 248, .16); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, .4); }
+.tag--think { background: rgba(168, 85, 247, .16); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, .4); }
+.tag--challenge { background: rgba(249, 115, 22, .18); color: #fdba74; border: 1px solid rgba(249, 115, 22, .5); }
+.example { margin: 12px 0; padding: 10px 12px; border: 1px solid rgba(56, 189, 248, .3); border-radius: var(--radius-sm); background: rgba(56, 189, 248, .04); }
+.example figcaption { font-size: .88rem; color: var(--text-strong); margin-bottom: 8px; }
+.example .lesson-code { margin: 0; }
+.example__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.think { margin: 12px 0; border: 1px solid rgba(168, 85, 247, .3); border-radius: var(--radius-sm); padding: 8px 12px; background: rgba(168, 85, 247, .05); }
+.think summary { cursor: pointer; font-size: .92rem; color: var(--text-strong); }
+.think p { margin: 8px 0 0; }
+.mini-errors code { color: #fecdd3; }
+.challenge-box { border: 1px solid rgba(249, 115, 22, .45); border-radius: var(--radius-sm); padding: 12px 14px; background: rgba(249, 115, 22, .07); }
+.challenge-box__head { font: 700 1rem var(--font-display); color: var(--orange); margin: 0 0 .4em; }
+.recover { margin: 8px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: .85rem; color: var(--muted); }
+.example-dialog { max-width: min(480px, calc(100vw - 32px)); background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 18px; }
+.example-dialog::backdrop { background: rgba(2, 6, 23, .7); }
+.example-dialog h2 { font-size: 1.1rem; margin: 0 0 .5em; }
+.example-dialog p { font-size: .92rem; }
+.example-dialog__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+.lab__work { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); grid-template-areas: "guide guide" "editor sim" "editor eval"; }
   .guide { grid-area: guide; }
   .panel--editor { grid-area: editor; }
   .panel--sim { grid-area: sim; }

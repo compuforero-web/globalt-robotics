@@ -1,5 +1,5 @@
 // Laboratorio de programación Arduino de GLOBALT: lección, editor, compilación, simulación, reto y guía.
-import { LESSON, EXAMPLE_CODE, lessonHtml } from './lesson.js';
+import { LESSON, EXAMPLE_CODE, EXAMPLES, STEPS, lessonHtml } from './lesson.js';
 import { createEditor } from './editor.js';
 import { checkCompiler, compileSketch, CompilerUnavailable, usarAula, enAula } from './compiler.js';
 import { explainDiagnostic, GENERIC_HELP } from './compiler-help.js';
@@ -15,13 +15,16 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const MAX_MONITOR_CHARS = 20000;
 
 $('#lesson').innerHTML = lessonHtml();
-const guide = createGuide($('#guide'));
+const guide = createGuide($('#guide'), { getContext: () => guideContext() });
 const circuit = createCircuit($('#circuit'));
 
 const stored = progress.getLesson(LESSON.id);
 let savedCode = typeof stored.code === 'string' ? stored.code : EXAMPLE_CODE;
 let compiled = null;   // { code, result }
 let busy = false;
+let lastCompileError = null; // { code, errorLine, errorHelp } del último intento fallido
+let lastEval = null;         // { code, checks } de la última evaluación
+let evalRepeat = { id: null, count: 0 };
 let servicePending = false; // sin servicio de compilación en este sitio: se desactivan solo sus acciones
 
 const editor = createEditor($('#editor'), { value: savedCode, onChange: updateDirty, onSave: save });
@@ -79,6 +82,7 @@ function useAccountVersion(remote) {
   account.version = remote.version;
   updateDirty();
   showDiagnostics(null);
+  renderRecover();
 }
 
 function offerChoice(remote) {
@@ -104,6 +108,7 @@ $('#btn-usar-local').addEventListener('click', () => {
   account.version = remote.version;   // se guardará encima, a sabiendas
   progress.saveBackup(LESSON.id, remote.codigo);
   closeChoice();
+  renderRecover();
   save();                              // guarda aquí y sube a la cuenta
 });
 
@@ -232,10 +237,13 @@ async function ensureCompiled() {
     compiled = { code, result };
     showDiagnostics(result);
     if (!result.ok) {
+      const first = (result.diagnosticos || []).find((d) => d.tipo === 'error');
+      lastCompileError = { code, errorLine: first?.linea || null, errorHelp: (first && explainDiagnostic(first.mensaje)) || GENERIC_HELP };
       setStatus('El compilador encontró errores.', 'error');
       guide.notify('compile-error', { diagnostics: result.diagnosticos || [] });
       return null;
     }
+    lastCompileError = null;
     const mem = result.memoria;
     setStatus(`Compilado: ${mem.flash} de ${mem.flashMax} bytes de flash, ${mem.ram} de ${mem.ramMax} bytes de RAM.`, 'ok');
     guide.notify('compile-ok', { flash: mem.flash });
@@ -328,6 +336,7 @@ $('#btn-check').addEventListener('click', () => withBusy(async () => {
   try {
     const result = evaluateChallenge(await recordTrace(hex, EVAL_DURATION_MS));
     progress.recordAttempt(LESSON.id);
+    lastEval = { code, checks: result.checks };
     renderChecks(result);
     if (result.passed) {
       progress.markCompleted(LESSON.id, code);
@@ -336,13 +345,138 @@ $('#btn-check').addEventListener('click', () => withBusy(async () => {
       guide.notify('eval-pass');
     } else {
       setStatus('El reto aún no se cumple.', 'warn');
-      guide.notify('eval-fail', { checks: result.checks });
+      const failedId = result.checks.find((c) => !c.ok)?.id;
+      evalRepeat = { id: failedId, count: evalRepeat.id === failedId ? evalRepeat.count + 1 : 0 };
+      guide.notify('eval-fail', { checks: result.checks, repeat: evalRepeat.count });
     }
     renderProgress();
   } catch (error) {
     setStatus(error.message, 'error');
   }
 }));
+
+// ---------- Lección por pasos (solo orientación: recorrerla nunca aprueba el reto) ----------
+const lessonRoot = $('#lesson');
+let step = Math.min(Math.max(Number(stored.step) || 0, 0), STEPS.length - 1);
+const seen = new Set(Array.isArray(stored.seen) ? stored.seen : []);
+
+function showStep(index, { focus = false } = {}) {
+  step = Math.min(Math.max(index, 0), STEPS.length - 1);
+  seen.add(step);
+  lessonRoot.querySelectorAll('.step').forEach((el, i) => { el.hidden = i !== step; });
+  lessonRoot.querySelectorAll('.steps__btn').forEach((btn, i) => {
+    if (i === step) btn.setAttribute('aria-current', 'step'); else btn.removeAttribute('aria-current');
+    btn.querySelector('.steps__seen').hidden = !seen.has(i) || i === step;
+  });
+  lessonRoot.querySelector('[data-nav="prev"]').disabled = step === 0;
+  const next = lessonRoot.querySelector('[data-nav="next"]');
+  next.textContent = step === STEPS.length - 1 ? 'Repasar desde el paso 1' : 'Siguiente →';
+  progress.saveSteps(LESSON.id, step, [...seen]);
+  if (focus) lessonRoot.querySelector(`#step-${STEPS[step].id}-t`).focus();
+}
+
+const FOCUS_TARGET = { '#editor-zone': '.code-editor__input', '#sim-panel': '#sim-panel', '#btn-compile': '#btn-compile', '#btn-check': '#btn-check' };
+function goTo(selector) {
+  const target = $(FOCUS_TARGET[selector] || selector);
+  if (!target) return;
+  if (target.id === 'sim-panel') target.tabIndex = -1;
+  target.focus({ preventScroll: true });
+  target.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+}
+
+// Copia de respaldo: el código que había antes de probar un ejemplo (o de elegir la versión de la cuenta).
+function renderRecover() {
+  const lesson = progress.getLesson(LESSON.id);
+  const has = typeof lesson.backupCode === 'string' && lesson.backupCode !== editor.value;
+  $('#recover').hidden = !has;
+  if (has) {
+    const date = lesson.backupAt ? new Date(lesson.backupAt).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+    $('#recover-text').textContent = `Hay una copia de respaldo de tu código${date ? ` (${date})` : ''} en este navegador.`;
+  }
+}
+$('#btn-recover').addEventListener('click', () => {
+  const backup = progress.getLesson(LESSON.id).backupCode;
+  if (typeof backup !== 'string') return;
+  progress.saveBackup(LESSON.id, editor.value);   // intercambia: lo que se ve ahora queda como respaldo
+  editor.replaceAll(backup);
+  showDiagnostics(null);
+  renderRecover();
+  setStatus('Tu código anterior volvió al editor. Pulsa Guardar para conservarlo.', 'ok');
+});
+
+function askReplace() {
+  const dialog = $('#example-dialog');
+  if (typeof dialog.showModal !== 'function') {
+    return Promise.resolve(confirm('El ejemplo reemplazará el código del editor. Tu código actual quedará como copia de respaldo. ¿Continuar?'));
+  }
+  return new Promise((resolve) => {
+    dialog.returnValue = '';
+    // El evento «close» llega en una tarea posterior: se ignora uno atrasado si el diálogo ya volvió a abrirse.
+    const onClose = () => {
+      if (dialog.open) return;
+      dialog.removeEventListener('close', onClose);
+      resolve(dialog.returnValue === 'replace');
+    };
+    dialog.addEventListener('close', onClose);
+    dialog.showModal();
+  });
+}
+
+async function tryExample(id, trigger) {
+  const { code, title } = EXAMPLES[id];
+  if (editor.value === code) { setStatus('Ese ejemplo ya está en el editor.'); return; }
+  if (!(await askReplace())) { trigger.focus(); setStatus('No se cambió nada en el editor.'); return; }
+  if (!progress.saveBackup(LESSON.id, editor.value)) {
+    setStatus('Este navegador no permite guardar una copia de respaldo; no se cambió el editor. Copia el ejemplo en su lugar.', 'warn');
+    trigger.focus();
+    return;
+  }
+  editor.replaceAll(code);
+  showDiagnostics(null);
+  renderRecover();
+  setStatus(`Ejemplo «${title}» en el editor, sin guardar. Pulsa Ejecutar para observarlo.`, 'ok');
+}
+
+async function copyExample(id) {
+  try {
+    await navigator.clipboard.writeText(EXAMPLES[id].code);
+    setStatus('Ejemplo copiado al portapapeles.', 'ok');
+  } catch {
+    setStatus('No se pudo copiar automáticamente: selecciona el texto del ejemplo y cópialo.', 'warn');
+  }
+}
+
+lessonRoot.addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  if (btn.dataset.step) showStep(Number(btn.dataset.step), { focus: true });
+  else if (btn.dataset.nav === 'prev') showStep(step - 1, { focus: true });
+  else if (btn.dataset.nav === 'next') showStep(step === STEPS.length - 1 ? 0 : step + 1, { focus: true });
+  else if (btn.dataset.goto) goTo(btn.dataset.goto);
+  else if (btn.dataset.example && btn.dataset.act === 'try') tryExample(btn.dataset.example, btn);
+  else if (btn.dataset.example && btn.dataset.act === 'copy') copyExample(btn.dataset.example);
+});
+// Flechas izquierda/derecha entre los botones de pasos.
+lessonRoot.querySelector('.steps').addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+  const buttons = [...lessonRoot.querySelectorAll('.steps__btn')];
+  const i = buttons.indexOf(document.activeElement);
+  if (i < 0) return;
+  e.preventDefault();
+  buttons[(i + (e.key === 'ArrowRight' ? 1 : buttons.length - 1)) % buttons.length].focus();
+});
+
+function guideContext() {
+  const code = editor.value;
+  return {
+    code,
+    untouched: code === EXAMPLE_CODE,
+    step,
+    compileError: lastCompileError?.code === code ? lastCompileError : null,
+    lastChecks: lastEval?.code === code ? lastEval.checks : null,
+    completed: Boolean(progress.getLesson(LESSON.id).completedAt),
+  };
+}
 
 // ---------- Inicio ----------
 // En el aula privada se compila a través de su API (sesión + inscripción); en el resto, como siempre.
@@ -352,6 +486,8 @@ const accountReady = connectAccount().catch(() => {}).then(() => {
 updateDirty();
 renderProgress();
 updateButtons();
+showStep(step);
+renderRecover();
 guide.notify('welcome', { completed: Boolean(stored.completedAt) });
 accountReady.then(checkCompiler)
   .then((info) => setService(Boolean(info.ok), info.version?.compilador || 'avr-gcc'))

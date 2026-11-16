@@ -104,6 +104,15 @@ export function createEditor(root, { value = '', onChange = () => {}, onSave = (
   return {
     get value() { return input.value; },
     setValue(text) { input.value = text; marks = new Map(); render(); },
+    /** Reemplaza todo el texto como una edición del usuario: Ctrl+Z la deshace. */
+    replaceAll(text) {
+      input.focus();
+      input.setSelectionRange(0, input.value.length);
+      insert(text);
+      input.setSelectionRange(0, 0);
+      input.scrollTop = 0;
+      syncScroll();
+    },
     /** Marca líneas con 'error' o 'warning' en la numeración. */
     setMarks(list) { marks = new Map(list.map(({ line, kind }) => [line, kind])); render(); },
     goTo(line) {

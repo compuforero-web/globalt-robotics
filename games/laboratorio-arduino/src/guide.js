@@ -5,20 +5,150 @@
 // `preparedHelp` sin cambiar el laboratorio: createGuide(root, { providers: [proveedorIA, preparedHelp] }).
 import { explainDiagnostic, GENERIC_HELP } from './compiler-help.js';
 
-const HINTS = [
-  'Empieza ejecutando el ejemplo tal como está para ver cómo se comporta el LED y qué aparece en el monitor serie.',
-  'El ritmo lo deciden los dos delay() dentro de loop(): el primero es el tiempo encendido y el segundo el tiempo apagado.',
-  'Encendido 200 ms y apagado 800 ms suman 1000 ms: un latido por segundo.',
-  'Para contar latidos necesitas una variable que no se reinicie en cada vuelta: declárala fuera de las funciones, por ejemplo arriba del todo, empezando en 0.',
-  'En cada vuelta de loop() súmale 1 a tu contador y escríbelo: Serial.print("Latido "); deja el texto en la misma línea y Serial.println(…) termina la línea con el número.',
-];
+
+// Pistas progresivas por tema: cada tema avanza de una idea general a una más concreta, sin entregar el código
+// completo del reto. El tema se elige con reglas locales sobre el código, el último resultado y el paso actual.
+const TOPICS = {
+  'paso-0': { label: 'el circuito', hints: [
+    'Mira el circuito en la simulación: sigue el camino de la corriente desde D13, por la resistencia y el LED, hasta GND.',
+    'La pata larga del LED (ánodo) va hacia D13 a través de la resistencia; la corta (cátodo), a GND.',
+  ] },
+  'paso-1': { label: 'setup() y loop()', hints: [
+    'Lo que pones en setup() ocurre una sola vez; lo que pones en loop() se repite sin parar.',
+    'Ejecuta el ejemplo y cuenta: «Hola, soy tu Arduino Nano» aparece una vez porque está en setup(); «LED encendido» se repite porque está en loop().',
+  ] },
+  'paso-2': { label: 'modificar el código', hints: [
+    'Empieza por un cambio pequeño: modifica un solo delay() y ejecuta para ver la diferencia.',
+    'El primer delay() de loop() es el tiempo encendido y el segundo, el tiempo apagado.',
+  ] },
+  'paso-3': { label: 'compilar', hints: [
+    'Pulsa Compilar. Si aparece un error, lee primero el de la línea más alta.',
+    'Pulsa el enlace «Línea N» de un mensaje para ir directamente a esa línea del editor.',
+  ] },
+  'paso-4': { label: 'la simulación', hints: [
+    'Pulsa Ejecutar y observa a la vez el LED, el indicador D13 y el monitor serie.',
+    'Detener congela el tiempo simulado; Reiniciar vuelve a ejecutar setup() desde el principio.',
+  ] },
+  compilar: { label: 'el error del compilador', hints: [
+    (c) => `Revisa la línea ${c.errorLine || 'indicada'} y también la anterior: ${c.errorHelp}`,
+    'Busca parejas: cada «(» necesita su «)», cada «{» su «}», y cada texto entre comillas dobles se cierra.',
+    'Si no encuentras el problema, compara esa parte con el ejemplo de la lección: misma ortografía, mismas mayúsculas y «;» al final.',
+  ] },
+  pinmode: { label: 'el pin del LED', hints: [
+    'El LED no se encenderá si D13 no está preparado como salida.',
+    'En setup() debe haber un pinMode(…) para el pin 13 con el modo OUTPUT.',
+  ] },
+  baud: { label: 'el monitor serie', hints: [
+    'El monitor serie necesita que el programa lo abra a la velocidad correcta.',
+    'Dentro de setup() debe estar Serial.begin(…) con 9600, la velocidad que pide el reto.',
+  ] },
+  ritmo: { label: 'el ritmo', hints: [
+    (c) => `Ahora mismo veo estos tiempos en tus delay(): ${c.delays.join(', ') || 'ninguno'} ms. ¿Cuál es el tiempo encendido y cuál el apagado?`,
+    'El reto pide 200 ms encendido y 800 ms apagado: un latido por segundo.',
+    'El delay() que va justo después de poner el pin en HIGH mide el encendido; el que va después de LOW mide el apagado.',
+  ] },
+  texto: { label: 'el mensaje', hints: [
+    'El reto pide que cada latido escriba una línea que empiece por «Latido».',
+    'Puedes escribir el texto y el número en dos partes: Serial.print(…) deja el texto en la misma línea y Serial.println(…) termina la línea.',
+    'Fíjate en el espacio: «Latido 1» lleva un espacio entre la palabra y el número.',
+  ] },
+  contador: { label: 'el contador', hints: [
+    'Para numerar los latidos necesitas un número que aumente en cada vuelta de loop().',
+    'Usa una variable entera que empiece en 0 y súmale 1 en cada latido (por ejemplo con ++).',
+    'Escribe esa variable con Serial.println(…) justo después del texto.',
+  ] },
+  alcance: { label: 'dónde vive el contador', hints: [
+    'Tu contador parece declararse dentro de loop(): así se vuelve a crear en cada vuelta.',
+    'Mueve la declaración del contador fuera de las funciones (arriba del todo) para que conserve su valor entre vueltas.',
+  ] },
+  momento: { label: 'el momento del mensaje', hints: [
+    'Cada línea «Latido N» debe salir cuando el LED se enciende, no al inicio ni durante el apagado.',
+    'Coloca la escritura cerca de digitalWrite(…, HIGH), antes del delay() del encendido.',
+  ] },
+  comprobar: { label: 'comprobar', hints: [
+    'Tu código parece tener todas las piezas. Pulsa Comprobar reto: solo la medición de la simulación decide si está bien.',
+    'Si la comprobación falla, revisa el primer punto marcado con ✗: muestra lo que se midió realmente.',
+  ] },
+  superado: { label: 'ir más allá', hints: [
+    'Ya superaste el reto. Prueba a cambiar el ritmo a dos latidos rápidos y una pausa, como un corazón real.',
+    'Otra idea: escribe también cuántos milisegundos lleva encendida la placa con millis().',
+  ] },
+};
+
+const CHECK_TOPIC = { blink: 'pinmode', on: 'ritmo', off: 'ritmo', baud: 'baud' };
+
+/** Quita comentarios y textos para analizar la estructura sin falsos positivos. */
+function strip(code) {
+  return String(code).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+}
+
+/** Cuerpo de la función `name` (entre sus llaves), o ''. */
+function body(src, name) {
+  const m = new RegExp(`void\\s+${name}\\s*\\(\\s*\\)\\s*\\{`).exec(src);
+  if (!m) return '';
+  let depth = 1;
+  for (let i = m.index + m[0].length; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}' && --depth === 0) return src.slice(m.index + m[0].length, i);
+  }
+  return src.slice(m.index + m[0].length);
+}
+
+/**
+ * Reglas locales sobre el código para orientar la pista. No evalúa el reto (eso lo hace la simulación) y
+ * devuelve null cuando no detecta nada concreto.
+ */
+export function analyzeCode(code) {
+  const src = strip(code);
+  const loop = body(src, 'loop');
+  const delays = [...loop.matchAll(/delay\s*\(\s*(\d+)\s*\)/g)].map((m) => Number(m[1]));
+  const usesVarDelay = /delay\s*\(\s*[A-Za-z_]/.test(loop);
+  const facts = { delays };
+  if (!/pinMode\s*\([^,]+,\s*OUTPUT\s*\)/.test(src)) return { topic: 'pinmode', facts };
+  if (!/Serial\s*\.\s*begin\s*\(\s*9600\s*\)/.test(src)) return { topic: 'baud', facts };
+  const total = delays.reduce((a, b) => a + b, 0);
+  if (!usesVarDelay && !(delays.includes(200) && total === 1000)) return { topic: 'ritmo', facts };
+  if (!/"Latido/.test(String(code))) return { topic: 'texto', facts };
+  const counter = /(\w+)\s*\+\+|\+\+\s*(\w+)|(\w+)\s*\+=\s*1\b|(\w+)\s*=\s*\4\s*\+\s*1\b/.exec(src);
+  if (!counter) return { topic: 'contador', facts };
+  const name = counter.slice(1).find(Boolean);
+  if (new RegExp(`\\b(int|long|byte|unsigned\\s+int)\\s+${name}\\s*=`).test(loop)
+    && !new RegExp(`static\\s+\\w+\\s+${name}\\b`).test(loop)) return { topic: 'alcance', facts };
+  if (/"Latido/.test(body(String(code), 'setup'))) return { topic: 'momento', facts };
+  return { topic: 'comprobar', facts };
+}
+
+/** Elige el tema de la pista según el contexto: error de compilación, última evaluación, paso y código. */
+export function chooseTopic(ctx = {}) {
+  if (ctx.compileError) return { topic: 'compilar', facts: ctx.compileError };
+  const analysis = analyzeCode(ctx.code || '');
+  if (ctx.untouched && Number.isInteger(ctx.step) && ctx.step < 5) return { topic: `paso-${ctx.step}`, facts: analysis.facts };
+  const failed = ctx.lastChecks?.find((c) => !c.ok);
+  if (failed && CHECK_TOPIC[failed.id] && analysis.topic === 'comprobar') return { topic: CHECK_TOPIC[failed.id], facts: analysis.facts };
+  if (failed?.id === 'serial' && analysis.topic === 'comprobar') return { topic: 'momento', facts: analysis.facts };
+  if (ctx.completed && analysis.topic === 'comprobar') return { topic: 'superado', facts: {} };
+  return analysis;
+}
+
+/** Texto de la pista `level` (0…) del tema. */
+export function hintText(topic, level, facts = {}) {
+  const t = TOPICS[topic] || TOPICS.comprobar;
+  const i = Math.min(level, t.hints.length - 1);
+  const h = t.hints[i];
+  return { text: `Pista ${i + 1} de ${t.hints.length} sobre ${t.label}: ${typeof h === 'function' ? h(facts) : h}`, last: i === t.hints.length - 1 };
+}
 
 const CHECK_HINTS = {
-  blink: 'Comprueba que D13 esté configurado con pinMode(…, OUTPUT) en setup() y que loop() lo cambie entre HIGH y LOW.',
-  on: 'Mide el tiempo encendido: es el delay() que va justo después de digitalWrite(…, HIGH).',
-  off: 'Mide el tiempo apagado: es el delay() que va después de digitalWrite(…, LOW). Si escribes algo por serie, tarda unos milisegundos, pero cabe en la tolerancia.',
-  baud: 'La velocidad del monitor serie se fija con Serial.begin(…) dentro de setup(). El reto pide 9600.',
-  serial: 'Cada línea debe verse exactamente como «Latido 1», «Latido 2»… y salir en el mismo momento en que se enciende el LED: una sola línea por latido, contando desde 1.',
+  blink: ['Comprueba que D13 esté configurado con pinMode(…, OUTPUT) en setup() y que loop() lo cambie entre HIGH y LOW.',
+    'Si usas una constante para el pin, comprueba que valga 13: el LED del circuito está en D13.'],
+  on: ['Mide el tiempo encendido: es el delay() que va justo después de digitalWrite(…, HIGH).',
+    'Mira el detalle de la comprobación: muestra los encendidos medidos en milisegundos. Ajusta ese delay() hasta acercarte a 200.'],
+  off: ['Mide el tiempo apagado: es el delay() que va después de digitalWrite(…, LOW). Si escribes algo por serie, tarda unos milisegundos, pero cabe en la tolerancia.',
+    'Si hay más de un delay() mientras el LED está apagado, súmalos: el total debe rondar 800 ms.'],
+  baud: ['La velocidad del monitor serie se fija con Serial.begin(…) dentro de setup(). El reto pide 9600.',
+    'Revisa que solo haya un Serial.begin(…) y que use 9600.'],
+  serial: ['Cada línea debe verse exactamente como «Latido 1», «Latido 2»… y salir en el mismo momento en que se enciende el LED: una sola línea por latido, contando desde 1.',
+    'Mira el monitor serie al ejecutar: ¿empieza en 1? ¿aparece una línea por cada encendido, cerca del HIGH?'],
 };
 
 /** Ayuda preparada: reglas fijas, sin red y sin IA. */
@@ -30,18 +160,18 @@ export const preparedHelp = {
       case 'welcome':
         return { mood: 'idle', text: ctx.completed
           ? 'Ya superaste este reto en este navegador. Puedes seguir experimentando con el código.'
-          : 'Hola, soy Chispa. Hoy harás que un LED lata a un ritmo exacto y que el Arduino lo cuente por el monitor serie. Lee la lección y pulsa Ejecutar para ver el ejemplo.' };
-      case 'hint': {
-        const level = Math.min(ctx.level, HINTS.length - 1);
-        return { mood: 'idea', text: `Pista ${level + 1} de ${HINTS.length}: ${HINTS[level]}` };
-      }
+          : 'Hola, soy Chispa. Hoy harás que un LED lata a un ritmo exacto y que el Arduino lo cuente por el monitor serie. Recorre los pasos de la lección a tu ritmo y pulsa Ejecutar para ver el ejemplo. Si te atascas, pídeme una pista: se adapta a tu código.' };
+      case 'hint':
+        return { mood: 'idea', text: hintText(ctx.topic, ctx.level, ctx.facts).text };
       case 'service-pending':
         return { mood: 'alert', text: 'Compilar y ejecutar estará disponible próximamente. Mientras tanto puedes leer la lección y editar el código; se guarda en este navegador.' };
       case 'compile-error': {
-        const first = ctx.diagnostics.find((d) => d.tipo === 'error') || ctx.diagnostics[0];
-        if (!first) return { mood: 'alert', text: 'El compilador no aceptó el programa. Revisa el mensaje original en el panel de resultados.' };
+        const errors = ctx.diagnostics.filter((d) => d.tipo === 'error');
+        const first = errors[0] || ctx.diagnostics[0];
+        if (!first) return { mood: 'alert', text: 'El compilador no aceptó el programa. Revisa el mensaje original bajo el editor.' };
         const where = first.linea ? `Mira la línea ${first.linea}. ` : '';
-        return { mood: 'alert', text: where + (explainDiagnostic(first.mensaje) || GENERIC_HELP) };
+        const more = errors.length > 1 ? ` Hay ${errors.length} errores: corrige primero este y vuelve a compilar.` : '';
+        return { mood: 'alert', text: where + (explainDiagnostic(first.mensaje) || GENERIC_HELP) + more };
       }
       case 'compile-ok':
         return { mood: 'happy', text: `Compilado sin errores (${ctx.flash} bytes de flash). Que compile no significa que cumpla el reto: ejecútalo y compruébalo.` };
@@ -51,7 +181,9 @@ export const preparedHelp = {
           : null;
       case 'eval-fail': {
         const failed = ctx.checks.filter((c) => !c.ok);
-        return { mood: 'idea', text: `Casi: ${failed.length} de ${ctx.checks.length} comprobaciones no se cumplen. ${CHECK_HINTS[failed[0].id]}` };
+        const tips = CHECK_HINTS[failed[0].id] || ['Revisa el primer punto marcado con ✗ en el panel del reto.'];
+        const tip = tips[Math.min(ctx.repeat || 0, tips.length - 1)];
+        return { mood: 'idea', text: `Casi: ${failed.length} de ${ctx.checks.length} comprobaciones no se cumplen. ${tip}` };
       }
       case 'eval-pass':
         return { mood: 'party', text: '¡Reto superado! Medí un latido de 200 ms encendido y 800 ms apagado, con su conteo en el monitor serie. Tu avance quedó guardado en este navegador.' };
@@ -76,9 +208,13 @@ const ROBOT_SVG = `<svg viewBox="0 0 64 64" class="guide__robot" aria-hidden="tr
   <rect x="8" y="22" width="4" height="10" rx="2" class="g-ear"/><rect x="52" y="22" width="4" height="10" rx="2" class="g-ear"/>
 </svg>`;
 
-export function createGuide(root, { providers = [preparedHelp] } = {}) {
+/**
+ * getContext() devuelve { code, untouched, step, compileError?, lastChecks?, completed } para elegir la pista.
+ * Cada tema recuerda su nivel; al llegar a la última pista vuelve a empezar para poder repasarlas.
+ */
+export function createGuide(root, { providers = [preparedHelp], getContext = () => ({}) } = {}) {
   const state = { ...{ minimized: false, muted: false }, ...prefs() };
-  let hintLevel = 0;
+  const levels = new Map();
   root.innerHTML = `
     <div class="guide__panel">
       <div class="guide__avatar" data-mood="idle">${ROBOT_SVG}</div>
@@ -126,7 +262,13 @@ export function createGuide(root, { providers = [preparedHelp] } = {}) {
 
   root.addEventListener('click', (e) => {
     const act = e.target.closest('[data-act]')?.dataset.act;
-    if (act === 'hint') { notify('hint', { level: hintLevel }, { direct: true }); hintLevel = Math.min(hintLevel + 1, HINTS.length - 1); }
+    if (act === 'hint') {
+      const { topic, facts } = chooseTopic(getContext());
+      const level = levels.get(topic) || 0;
+      const { last } = hintText(topic, level, facts);
+      levels.set(topic, last ? 0 : level + 1);
+      notify('hint', { topic, level, facts }, { direct: true });
+    }
     if (act === 'mute') { state.muted = !state.muted; apply(); }
     if (act === 'min') { state.minimized = true; apply(); root.querySelector('[data-act="max"]').focus(); }
     if (act === 'max') { state.minimized = false; apply(); root.querySelector('[data-act="hint"]').focus(); }

@@ -41,6 +41,11 @@ export function markCompleted(id, code) {
   return update(id, { completedAt: getLesson(id).completedAt || now, passedCode: String(code).slice(0, 32 * 1024), lastPassAt: now });
 }
 
+/** Paso actual de la lección y pasos ya vistos (solo orientación: no aprueba el reto). */
+export function saveSteps(id, step, seen) {
+  return update(id, { step: Number(step) || 0, seen: [...new Set(seen)].filter(Number.isInteger).sort() });
+}
+
 export function recordAttempt(id) { return update(id, { attempts: (Number(getLesson(id).attempts) || 0) + 1 }); }
 
 /** Borra el código guardado (restaurar ejemplo). Conserva el registro de reto superado. */
