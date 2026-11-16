@@ -12,6 +12,10 @@ npm start
 
 Abrir `http://localhost:8080` y `http://localhost:8080/admin`.
 
+## Laboratorio Arduino
+
+Lección piloto con editor, compilación real (avr-gcc), emulación ATmega328P en el navegador y reto evaluado: `games/laboratorio-arduino/`. Ver [docs/LABORATORIO_ARDUINO.md](docs/LABORATORIO_ARDUINO.md). La compilación necesita el servicio aislado de [services/compilador-arduino](services/compilador-arduino/README.md), aún no instalado en Linux; sin él la página indica «Servicio de compilación pendiente».
+
 ## GitHub y Linux
 
 El código oficial vive en https://github.com/compuforero-web/globalt-robotics, rama `main`.
