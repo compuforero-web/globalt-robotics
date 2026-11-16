@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" font-family="sans-serif">
+  <rect width="1200" height="630" fill="#070b14"/>
+  <circle cx="950" cy="200" r="320" fill="#38bdf8" fill-opacity=".08"/>
+  <text x="80" y="260" fill="#f8fafc" font-size="84" font-weight="700">GLOBALT <tspan fill="#38bdf8">ROBOTICS</tspan></text>
+  <text x="80" y="340" fill="#94a3b8" font-size="36">Robótica, Programación e IA paso a paso</text>
+  <rect x="80" y="400" width="320" height="8" rx="4" fill="#f97316"/><rect x="410" y="400" width="120" height="8" rx="4" fill="#22c55e"/>
+</svg>

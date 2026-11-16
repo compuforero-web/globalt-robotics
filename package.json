@@ -1,0 +1,10 @@
+{
+  "name": "globalt-robotics",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Plataforma educativa de robótica, programación e IA — sitio estático con ES Modules.",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs"
+  }
+}

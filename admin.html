@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- base="/" permite que /admin y /admin/ carguen los recursos desde la raíz del sitio -->
+  <base href="/">
+  <title>Administración · GLOBALT ROBOTICS</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#070b14">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/admin.css">
+  <script type="module" src="src/admin/admin.js"></script>
+</head>
+<body class="admin">
+  <!-- LOGIN -->
+  <section id="login" class="login" hidden>
+    <form id="login-form" class="login__card" autocomplete="on">
+      <img src="assets/img/logo.svg" alt="" width="56" height="56">
+      <h1>GLOBALT <span>ROBOTICS</span></h1>
+      <p class="muted">Panel de administración</p>
+      <span id="mode-badge" class="tag">Verificando…</span>
+      <div id="email-field" class="field" hidden>
+        <label for="login-email">Correo</label>
+        <input id="login-email" type="email" autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="login-password">Contraseña</label>
+        <input id="login-password" type="password" autocomplete="current-password" required>
+      </div>
+      <p id="login-error" class="login__error" role="alert"></p>
+      <button class="btn btn--primary btn--block" type="submit">Entrar</button>
+      <p id="mode-help" class="field__help">Pruebas locales: usa la contraseña maestra definida en <code>src/config.js</code>.</p>
+      <a class="field__help" href="/">← Volver al sitio</a>
+    </form>
+  </section>
+
+  <!-- APP -->
+  <div id="app" class="app" hidden>
+    <aside class="side">
+      <a class="side__brand" href="/"><img src="assets/img/logo.svg" alt="" width="32" height="32"><span>GLOBALT <b>Admin</b></span></a>
+      <nav class="side__nav" aria-label="Secciones del panel">
+        <button class="side__link" data-view="dashboard">Resumen</button>
+        <p class="side__group">Contenido</p>
+        <button class="side__link" data-view="games">Juegos</button>
+        <button class="side__link" data-view="courses">Cursos (Programación e IA)</button>
+        <button class="side__link" data-view="tutorials">Videotutoriales</button>
+        <button class="side__link" data-view="workshops">Talleres</button>
+        <p class="side__group">Configuración</p>
+        <button class="side__link" data-view="settings">Banner y ajustes</button>
+        <button class="side__link" data-view="backup">Respaldo JSON</button>
+      </nav>
+      <div class="side__foot">
+        <small id="user-label" class="muted"></small>
+        <button id="logout" class="btn btn--ghost btn--sm btn--block">Cerrar sesión</button>
+      </div>
+    </aside>
+    <div class="main">
+      <header class="topbar">
+        <button id="menu-toggle" class="icon-btn" aria-label="Abrir menú">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <strong>GLOBALT Admin</strong>
+      </header>
+      <main id="panel" class="panel" tabindex="-1"></main>
+    </div>
+  </div>
+
+  <!-- EDITOR -->
+  <dialog id="editor" class="editor" aria-labelledby="editor-title">
+    <form method="dialog">
+      <header class="editor__head">
+        <h2 id="editor-title" class="editor__title">Editar</h2>
+        <button type="button" class="icon-btn" data-cancel aria-label="Cerrar">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </header>
+      <div class="editor__fields"></div>
+      <footer class="editor__foot">
+        <button type="button" class="btn btn--ghost" data-cancel>Cancelar</button>
+        <button type="submit" class="btn btn--primary" value="save">Guardar y publicar</button>
+      </footer>
+    </form>
+  </dialog>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 460" fill="none" font-family="monospace">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e2a47"/><stop offset="1" stop-color="#0f172a"/></linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#22c55e"/></linearGradient>
+    <radialGradient id="halo"><stop offset="0" stop-color="#38bdf8" stop-opacity=".35"/><stop offset="1" stop-color="#38bdf8" stop-opacity="0"/></radialGradient>
+  </defs>
+  <circle cx="260" cy="210" r="200" fill="url(#halo)"/>
+  <circle cx="260" cy="210" r="170" stroke="#38bdf8" stroke-opacity=".2" stroke-dasharray="4 10"/>
+  <!-- placa Arduino -->
+  <g transform="translate(24 300) rotate(-8)">
+    <rect width="170" height="110" rx="10" fill="#0e4f6e" stroke="#38bdf8" stroke-width="2"/>
+    <rect x="14" y="14" width="56" height="32" rx="4" fill="#0b1220" stroke="#38bdf8" stroke-opacity=".6"/>
+    <rect x="90" y="40" width="60" height="40" rx="3" fill="#0b1220"/>
+    <g fill="#facc15"><rect x="16" y="90" width="6" height="10"/><rect x="30" y="90" width="6" height="10"/><rect x="44" y="90" width="6" height="10"/><rect x="58" y="90" width="6" height="10"/><rect x="72" y="90" width="6" height="10"/><rect x="86" y="90" width="6" height="10"/><rect x="100" y="90" width="6" height="10"/><rect x="114" y="90" width="6" height="10"/></g>
+    <circle cx="150" cy="20" r="5" fill="#22c55e"><animate attributeName="opacity" values="1;.2;1" dur="1.2s" repeatCount="indefinite"/></circle>
+    <text x="96" y="64" fill="#38bdf8" font-size="11">NANO</text>
+  </g>
+  <!-- cables -->
+  <path d="M150 320 C 190 280, 200 260, 222 252" stroke="#f97316" stroke-width="4" stroke-linecap="round"/>
+  <path d="M170 330 C 220 300, 240 300, 250 300" stroke="#22c55e" stroke-width="4" stroke-linecap="round"/>
+  <!-- robot -->
+  <g>
+    <line x1="300" y1="70" x2="300" y2="104" stroke="#f97316" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="300" cy="62" r="11" fill="#f97316"><animate attributeName="r" values="11;13;11" dur="2s" repeatCount="indefinite"/></circle>
+    <rect x="220" y="104" width="160" height="120" rx="32" fill="url(#body)" stroke="url(#glow)" stroke-width="4"/>
+    <rect x="240" y="128" width="120" height="64" rx="20" fill="#05080f"/>
+    <circle cx="275" cy="160" r="14" fill="#38bdf8"/><circle cx="325" cy="160" r="14" fill="#38bdf8"/>
+    <circle cx="279" cy="156" r="4" fill="#e0f2fe"/><circle cx="329" cy="156" r="4" fill="#e0f2fe"/>
+    <path d="M285 204 q15 10 30 0" stroke="#22c55e" stroke-width="4" stroke-linecap="round"/>
+    <rect x="206" y="148" width="14" height="36" rx="7" fill="#1e2a47" stroke="#38bdf8" stroke-width="2"/>
+    <rect x="380" y="148" width="14" height="36" rx="7" fill="#1e2a47" stroke="#38bdf8" stroke-width="2"/>
+    <rect x="236" y="236" width="128" height="104" rx="22" fill="url(#body)" stroke="#38bdf8" stroke-width="3"/>
+    <rect x="262" y="258" width="76" height="40" rx="8" fill="#05080f" stroke="#22c55e" stroke-opacity=".6"/>
+    <path d="M270 278 h12 l6 -10 l8 20 l6 -10 h28" stroke="#22c55e" stroke-width="3" fill="none" stroke-linejoin="round"/>
+    <circle cx="276" cy="318" r="6" fill="#f97316"/><circle cx="300" cy="318" r="6" fill="#38bdf8"/><circle cx="324" cy="318" r="6" fill="#22c55e"/>
+    <path d="M236 270 C 200 270, 190 230, 170 210" stroke="#38bdf8" stroke-width="10" stroke-linecap="round"/>
+    <path d="M364 270 C 410 270, 420 300, 440 320" stroke="#38bdf8" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="166" cy="204" r="12" fill="#0f172a" stroke="#f97316" stroke-width="4"/>
+    <circle cx="444" cy="326" r="12" fill="#0f172a" stroke="#f97316" stroke-width="4"/>
+    <rect x="246" y="340" width="40" height="40" rx="10" fill="#0f172a" stroke="#38bdf8" stroke-width="3"/>
+    <rect x="314" y="340" width="40" height="40" rx="10" fill="#0f172a" stroke="#38bdf8" stroke-width="3"/>
+    <rect x="226" y="380" width="148" height="22" rx="11" fill="#1e2a47" stroke="#38bdf8" stroke-width="2"/>
+  </g>
+  <!-- código flotante -->
+  <g transform="translate(372 60)">
+    <rect width="132" height="84" rx="12" fill="#0b1220" stroke="#38bdf8" stroke-opacity=".5"/>
+    <circle cx="16" cy="14" r="4" fill="#f43f5e"/><circle cx="30" cy="14" r="4" fill="#f97316"/><circle cx="44" cy="14" r="4" fill="#22c55e"/>
+    <text x="12" y="40" fill="#f97316" font-size="11">void loop() {</text>
+    <text x="22" y="56" fill="#38bdf8" font-size="11">avanzar();</text>
+    <text x="12" y="72" fill="#f97316" font-size="11">}</text>
+  </g>
+  <g transform="translate(30 70)">
+    <rect width="118" height="58" rx="12" fill="#0b1220" stroke="#22c55e" stroke-opacity=".5"/>
+    <text x="14" y="26" fill="#22c55e" font-size="11">IA: objeto</text>
+    <text x="14" y="44" fill="#94a3b8" font-size="11">detectado 97%</text>
+  </g>
+</svg>

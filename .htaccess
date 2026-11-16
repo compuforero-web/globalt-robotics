@@ -1,0 +1,21 @@
+# Apache / cPanel — GLOBALT ROBOTICS
+DirectoryIndex index.html
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # /admin y /admin/ cargan el panel de administración
+  RewriteRule ^admin/?$ admin.html [L]
+  RewriteRule ^admin/(.*)$ admin.html [L]
+</IfModule>
+
+# Tipos MIME para módulos JavaScript y SVG
+AddType application/javascript .js .mjs
+AddType image/svg+xml .svg
+
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  <FilesMatch "admin\.html$">
+    Header set X-Robots-Tag "noindex, nofollow"
+  </FilesMatch>
+</IfModule>

@@ -1,0 +1,3 @@
+# Netlify: /admin carga el panel de administración
+/admin     /admin.html   200
+/admin/*   /admin.html   200

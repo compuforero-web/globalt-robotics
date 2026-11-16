@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GLOBALT ROBOTICS · Robótica, Programación e IA paso a paso</title>
+  <meta name="description" content="Plataforma educativa de robótica, programación e inteligencia artificial para colegios, estudiantes y entusiastas. Juegos interactivos, cursos, videotutoriales y talleres en La Mesa, Cundinamarca.">
+  <meta name="theme-color" content="#070b14">
+  <meta property="og:title" content="GLOBALT ROBOTICS">
+  <meta property="og:description" content="De la simulación en pantalla al robot real: Robótica, Programación e IA paso a paso.">
+  <meta property="og:image" content="assets/img/og-image.svg">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/layout.css">
+  <link rel="stylesheet" href="styles/components.css">
+  <script type="module" src="src/public/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#juegos">Saltar al contenido</a>
+  <div id="announce" class="announce" hidden></div>
+
+  <header class="site-header">
+    <nav class="container nav" aria-label="Principal">
+      <a class="brand" href="#inicio" aria-label="GLOBALT ROBOTICS, inicio">
+        <img src="assets/img/logo.svg" alt="" width="36" height="36">
+        <span>GLOBALT <b>ROBOTICS</b></span>
+      </a>
+      <div class="nav__search">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        <input id="site-search" type="search" placeholder="Buscar juegos, cursos, videos…" aria-label="Buscar en el sitio" autocomplete="off">
+      </div>
+      <button class="nav__toggle" aria-controls="nav-menu" aria-expanded="false" aria-label="Abrir menú">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <ul id="nav-menu" class="nav__menu">
+        <li><a href="#juegos">Juegos</a></li>
+        <li><a href="#programacion">Programación</a></li>
+        <li><a href="#ia">IA</a></li>
+        <li><a href="#videos">Videos</a></li>
+        <li><a href="#talleres">Talleres</a></li>
+      </ul>
+    </nav>
+    <p id="search-status" class="search-status" role="status" hidden></p>
+  </header>
+
+  <main>
+    <section id="inicio" class="hero">
+      <div class="container hero__grid">
+        <div class="hero__copy">
+          <p class="eyebrow"><span class="dot"></span> Colegios · Estudiantes · Entusiastas</p>
+          <h1>De la simulación en pantalla <span class="grad">al robot real</span></h1>
+          <p class="hero__lead">Robótica, Programación e Inteligencia Artificial paso a paso. Aprende jugando con simuladores interactivos y lleva tus ideas a robots físicos con Arduino.</p>
+          <div class="hero__cta">
+            <a class="btn btn--primary btn--lg" href="#juegos">Jugar y aprender</a>
+            <a class="btn btn--outline btn--lg" href="#talleres">Ver talleres</a>
+          </div>
+          <dl class="hero__stats">
+            <div><dt id="stat-games">1</dt><dd>Simuladores</dd></div>
+            <div><dt id="stat-courses">8</dt><dd>Cursos en ruta</dd></div>
+            <div><dt>1°–11°</dt><dd>Clubes escolares</dd></div>
+          </dl>
+        </div>
+        <div class="hero__art">
+          <img src="assets/img/hero-robot.svg" alt="Ilustración de un robot educativo conectado a una placa Arduino y a un circuito" width="520" height="460">
+        </div>
+      </div>
+    </section>
+
+    <section id="juegos" class="section">
+      <div class="container">
+        <header class="section__head">
+          <p class="eyebrow eyebrow--cyan">Juegos y Simuladores Interactivos</p>
+          <h2>Aprende jugando, programa sin miedo a quemar nada</h2>
+          <p>Simuladores en el navegador que enseñan lógica, electrónica y control de robots antes de tocar el hardware.</p>
+        </header>
+        <div class="chips" data-chips-for="games-grid" role="group" aria-label="Filtrar juegos por nivel"></div>
+        <div id="games-grid" class="grid grid--3" data-filter-grid></div>
+      </div>
+    </section>
+
+    <section id="programacion" class="section section--alt">
+      <div class="container">
+        <header class="section__head">
+          <p class="eyebrow eyebrow--orange">Aprende a Programar</p>
+          <h2>Una ruta estructurada, de los bloques al código real</h2>
+          <p>Módulos progresivos con temario, duración y material práctico. Avanza a tu ritmo o con acompañamiento.</p>
+        </header>
+        <div class="chips" data-chips-for="prog-grid" role="group" aria-label="Filtrar cursos de programación"></div>
+        <div id="prog-grid" class="grid grid--4 route" data-filter-grid></div>
+      </div>
+    </section>
+
+    <section id="ia" class="section section--ai">
+      <div class="container">
+        <header class="section__head">
+          <p class="eyebrow eyebrow--green">Inteligencia Artificial Práctica</p>
+          <h2>IA para crear, enseñar y automatizar</h2>
+          <p>Fundamentos claros, uso responsable y proyectos reales: desde un buen prompt hasta robots con visión artificial.</p>
+        </header>
+        <div id="ia-grid" class="grid grid--4 route" data-filter-grid></div>
+        <div class="cta-band">
+          <p><strong>¿Docente o institución?</strong> Diseñamos capacitaciones de IA a la medida de tu equipo.</p>
+          <a class="btn btn--wa" data-wa="ai" href="#">Hablar por WhatsApp</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="videos" class="section">
+      <div class="container">
+        <header class="section__head">
+          <p class="eyebrow eyebrow--cyan">Videotutoriales</p>
+          <h2>Mira, pausa y construye a tu ritmo</h2>
+        </header>
+        <div id="player" class="player" aria-live="polite"></div>
+        <div class="chips" data-chips-for="videos-grid" role="group" aria-label="Filtrar videos por categoría"></div>
+        <div id="videos-grid" class="grid grid--4" data-filter-grid></div>
+      </div>
+    </section>
+
+    <section id="talleres" class="section section--alt">
+      <div class="container">
+        <header class="section__head">
+          <p class="eyebrow eyebrow--orange">Talleres y Capacitaciones</p>
+          <h2>Presenciales y virtuales, para colegios y familias</h2>
+          <p>Talleres vacacionales, clubes de robótica escolar de 1° a 11° grado y asesorías técnicas.</p>
+        </header>
+        <div id="workshops-grid" class="grid grid--4" data-filter-grid></div>
+        <div class="cta-band cta-band--orange">
+          <p><strong>¿Quieres robótica en tu colegio?</strong> Cotiza un club o taller para tu institución.</p>
+          <a class="btn btn--wa" data-wa="workshops" href="#">Solicitar cotización</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer__grid">
+      <div>
+        <a class="brand" href="#inicio"><img src="assets/img/logo.svg" alt="" width="32" height="32"><span>GLOBALT <b>ROBOTICS</b></span></a>
+        <p class="muted">Plataforma educativa creada por el Ing. Edwin Hernando Gómez Forero.</p>
+        <p class="muted" id="footer-location">La Mesa, Cundinamarca, Colombia</p>
+      </div>
+      <nav aria-label="Secciones">
+        <h3>Explora</h3>
+        <ul><li><a href="#juegos">Juegos</a></li><li><a href="#programacion">Programación</a></li><li><a href="#ia">Inteligencia Artificial</a></li><li><a href="#talleres">Talleres</a></li></ul>
+      </nav>
+      <div>
+        <h3>Contacto</h3>
+        <a class="btn btn--wa" data-wa="general" href="#">WhatsApp +57 314 486 4187</a>
+      </div>
+    </div>
+    <p class="container footer__copy">© <span id="year">2026</span> GLOBALT ROBOTICS · Todos los derechos reservados</p>
+  </footer>
+
+  <a id="wa-float" class="wa-float" href="https://wa.me/573144864187" target="_blank" rel="noopener" aria-label="Escríbenos por WhatsApp">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.4.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.2 2.2 2.2 0 0 0 .1-1.3c0-.1-.2-.2-.4-.3z"/></svg>
+  </a>
+
+  <dialog id="game-modal" class="modal" aria-labelledby="game-modal-title">
+    <div class="modal__bar">
+      <h2 id="game-modal-title" class="modal__title">Juego</h2>
+      <div class="modal__tools">
+        <button class="btn btn--ghost btn--sm" data-fullscreen>Pantalla completa</button>
+        <a class="btn btn--ghost btn--sm" data-newtab href="#" target="_blank" rel="noopener">Nueva pestaña</a>
+        <button class="icon-btn" data-close aria-label="Cerrar juego">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="modal__frame"><iframe title="Juego interactivo" src="about:blank" allow="fullscreen; autoplay"></iframe></div>
+  </dialog>
+</body>
+</html>

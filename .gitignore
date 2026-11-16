@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.sqlite*
+*.db
+backups/
+.DS_Store
+Thumbs.db
+__pycache__/

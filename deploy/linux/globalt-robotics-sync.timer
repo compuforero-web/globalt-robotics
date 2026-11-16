@@ -1,0 +1,11 @@
+[Unit]
+Description=Consultar cambios de GLOBALT Robotics cada minuto
+
+[Timer]
+OnBootSec=90s
+OnUnitInactiveSec=60s
+AccuracySec=5s
+Unit=globalt-robotics-sync.service
+
+[Install]
+WantedBy=timers.target
