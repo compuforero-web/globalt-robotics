@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#070b14">
+  <meta name="description" content="Laboratorio de programación de GLOBALT Robotics: estudia, escribe C++ para Arduino Nano, compílalo y simúlalo en el navegador.">
+  <title>Laboratorio Arduino · GLOBALT ROBOTICS</title>
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../styles/base.css">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="src/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#editor">Ir al editor</a>
+  <header class="lab-top">
+    <a class="lab-top__home" href="../../index.html#programacion"><img src="../../assets/img/logo.svg" alt="" width="28" height="28"> GLOBALT ROBOTICS</a>
+    <div class="lab-top__title">
+      <span class="lab-top__course">Electrónica y C++ con Arduino · Lección 1</span>
+      <h1>Laboratorio Arduino</h1>
+    </div>
+    <span id="service" class="pill" data-kind="">Comprobando compilador…</span>
+  </header>
+
+  <main class="lab">
+    <aside class="lab__lesson" aria-label="Lección">
+      <p class="lab__kicker">Lección piloto</p>
+      <a class="btn btn--outline btn--sm lab__jump" href="#editor-zone">Ir al editor</a>
+      <h2 class="lab__lesson-title">Tu primer LED intermitente y mensajes al monitor serie</h2>
+      <div id="lesson"></div>
+    </aside>
+
+    <section class="lab__work" aria-label="Área de trabajo">
+      <div id="guide" class="guide"></div>
+
+      <div class="panel panel--editor" id="editor-zone">
+        <div class="toolbar" role="toolbar" aria-label="Acciones del programa">
+          <button id="btn-compile" type="button" class="btn btn--outline btn--sm">Compilar</button>
+          <button id="btn-run" type="button" class="btn btn--primary btn--sm">Ejecutar</button>
+          <button id="btn-stop" type="button" class="btn btn--danger btn--sm" disabled>Detener</button>
+          <button id="btn-reset" type="button" class="btn btn--ghost btn--sm" disabled title="Reinicia el microcontrolador con el mismo programa">Reiniciar</button>
+          <span class="toolbar__gap"></span>
+          <button id="btn-save" type="button" class="btn btn--ghost btn--sm">Guardar</button>
+          <button id="btn-restore" type="button" class="btn btn--ghost btn--sm">Restaurar ejemplo</button>
+        </div>
+        <div id="editor"></div>
+        <p id="editor-help" class="editor-help">sketch.ino · <span id="save-state">Ejemplo original</span> · Tab indenta, Mayús+Tab quita sangría, Esc y luego Tab sale del editor, Ctrl+S guarda.</p>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+        <ul id="diagnostics" class="diagnostics" aria-label="Mensajes del compilador"></ul>
+        <details id="raw-output" class="raw-output" hidden><summary>Salida completa del compilador</summary><pre></pre></details>
+      </div>
+
+      <div id="sim-panel" class="panel panel--sim">
+        <div class="panel__head">
+          <h2>Simulación</h2>
+          <span class="sim-meta"><span id="sim-state">Detenida</span> · <span id="sim-time">t = 0.0 s</span></span>
+        </div>
+        <div id="circuit"></div>
+        <div class="monitor-head">
+          <h3>Monitor serie <small class="muted">9600 baudios</small></h3>
+          <button id="btn-clear" type="button" class="btn btn--ghost btn--sm">Limpiar</button>
+        </div>
+        <p id="baud-warning" class="baud-warning" hidden></p>
+        <pre id="monitor" class="monitor" tabindex="0" aria-label="Salida del monitor serie" aria-live="off"></pre>
+      </div>
+
+      <div class="panel panel--eval">
+        <div class="panel__head">
+          <h2>Reto</h2>
+          <button id="btn-check" type="button" class="btn btn--orange btn--sm">Comprobar reto</button>
+        </div>
+        <div id="eval-result" aria-live="polite"><p class="muted">La comprobación ejecuta tu programa 5 segundos simulados y mide el LED y el monitor serie.</p></div>
+        <p class="progress-note"><span id="progress-state"></span><br><small class="muted">Progreso de demostración guardado solo en este navegador: no es una cuenta ni una inscripción.</small></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="lab-foot">
+    <p>Compilación: avr-gcc + ArduinoCore-avr (LGPL-2.1) en el servicio de GLOBALT · Emulación: <a href="https://github.com/wokwi/avr8js" target="_blank" rel="noopener">avr8js</a> (MIT) en tu navegador · <a href="vendor/LICENSE-avr8js.txt">Licencia avr8js</a></p>
+  </footer>
+</body>
+</html>

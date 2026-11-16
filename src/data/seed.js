@@ -49,7 +49,7 @@ const courses = [
     title: 'Electrónica y C++ con Arduino', category: 'Arduino', level: 'Intermedio', duration: '16 horas',
     description: 'Del LED al robot móvil: Arduino Nano, servomotores, sensor ultrasónico y control de motores con puente H.',
     topics: ['Arduino Nano y protoboard', 'Entradas/salidas digitales y PWM', 'Servomotores (librería Servo)', 'Sensor ultrasónico HC-SR04', 'Puente H L298N y motores DC', 'Proyecto: robot evasor de obstáculos'],
-    link: 'https://wokwi.com/projects/new/arduino-nano',
+    link: 'games/laboratorio-arduino/index.html',
   },
   {
     id: 'course-web', sort_order: 3, track: 'programacion', icon: 'code',

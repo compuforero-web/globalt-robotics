@@ -1,0 +1,26 @@
+# Entorno aislado de desarrollo/prueba del compilador. No es la instalación de producción.
+# El contenedor no tiene red: atiende por un socket Unix en ./run/compilador.sock.
+services:
+  compilador:
+    build: .
+    image: globalt-compilador-arduino:dev
+    network_mode: none
+    read_only: true
+    user: "10001:${COMPILADOR_GID:-10001}"  # el grupo indicado puede usar el socket
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 768m
+    memswap_limit: 768m
+    cpus: 1.0
+    ulimits:
+      nofile: { soft: 256, hard: 256 }
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
+    environment:
+      COMPILADOR_SOCKET: /run/compilador/compilador.sock
+      COMPILADOR_SIMULTANEOS: "2"
+      COMPILADOR_TIEMPO: "20"
+    volumes:
+      - ./run:/run/compilador
+    restart: "no"

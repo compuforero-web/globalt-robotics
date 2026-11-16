@@ -8,6 +8,7 @@ import { CONFIG } from '../config.js';
 import { getSupabase } from './supabase.js';
 import { SEED } from '../data/seed.js';
 import { migrateLocalGames } from '../data/game-catalog-migration.js';
+import { migrateLocalCourses } from '../data/course-catalog-migration.js';
 
 export const TABLES = ['games', 'courses', 'tutorials', 'workshops'];
 const SETTINGS_KEY = 'site';
@@ -25,6 +26,7 @@ function localRead(table) {
     const raw = localStorage.getItem(storageKey(table));
     if (raw) {
       const items = JSON.parse(raw);
+      if (table === 'courses') return migrateLocalCourses(items);
       return table === 'games' ? migrateLocalGames(items) : items;
     }
   } catch (err) {
