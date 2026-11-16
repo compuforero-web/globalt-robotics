@@ -15,6 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles/base.css">
   <link rel="stylesheet" href="styles/layout.css">
+  <link rel="stylesheet" href="styles/robot-hero.css">
   <link rel="stylesheet" href="styles/components.css">
   <script type="module" src="src/public/main.js"></script>
 </head>
@@ -64,7 +65,24 @@
           </dl>
         </div>
         <div class="hero__art">
-          <img src="assets/img/hero-robot.svg" alt="Ilustración de un robot educativo conectado a una placa Arduino y a un circuito" width="520" height="460">
+          <div class="robot-lab" data-robot-lab>
+            <div class="robot-lab__header"><span class="robot-lab__id">MORPH / 01</span><span class="robot-lab__badge">ROBOT ↔ CUADRICÓPTERO</span></div>
+            <div class="robot-lab__coordinates" aria-hidden="true"><span>CHASSIS <b>AL-6061</b></span><span>4 × ROTOR / 8 × SERVO</span></div>
+            <span class="robot-lab__mode" data-robot-mode>ROBOT</span>
+            <canvas class="robot-lab__canvas" width="640" height="570" role="img" aria-label="Robot articulado de aluminio y grafito que repliega sus extremidades para convertirse en un dron de cuatro hélices, mostrando su placa y cableado internos."></canvas>
+            <span class="robot-lab__callout robot-lab__callout--left" aria-hidden="true">bus.sync()<br>→ CONTROL PCB</span>
+            <span class="robot-lab__callout robot-lab__callout--right" aria-hidden="true">servo.fold()<br>↳ RECONFIGURAR</span>
+            <p class="robot-lab__fallback">Robot humanoide ↔ dron: cuatro motores y articulaciones reconfigurables.</p>
+            <div class="robot-lab__terminal" aria-label="Secuencia ilustrativa de código durante la transformación">
+              <div class="robot-lab__terminal-head"><span>SECUENCIA DE CONTROL</span><span data-robot-step>01 / EN ESPERA</span></div>
+              <code class="robot-lab__code" data-robot-code>servo.lock("humanoid");</code>
+              <div class="robot-lab__track" aria-hidden="true"><span data-robot-meter></span></div>
+            </div>
+            <div class="robot-lab__footer">
+              <p class="robot-lab__hint" data-robot-hint>Articulaciones bloqueadas · óptica activa</p>
+              <div class="robot-lab__controls"><button class="robot-lab__button" data-robot-pause type="button" aria-pressed="false">Pausar</button><button class="robot-lab__button robot-lab__button--primary" data-robot-transform type="button">Transformar</button></div>
+            </div>
+          </div>
         </div>
       </div>
     </section>

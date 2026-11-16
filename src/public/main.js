@@ -1,3 +1,4 @@
+import { setupRobotHero } from './robot-hero/index.js';
 // Punto de entrada de la web pública.
 import * as db from '../services/db.js';
 import { $, $$ } from '../utils/dom.js';
@@ -11,6 +12,7 @@ import { setupGameModal } from './modal.js';
 import { setupNav, setupStaticWaLinks, setupWhatsAppFloat } from './nav.js';
 
 async function init() {
+  try { setupRobotHero(); } catch (error) { console.warn('[GLOBALT] Animación no disponible:', error); }
   setupNav();
   setupGameModal($('#game-modal'));
   setupSearch($('#site-search'), $('#search-status'));
