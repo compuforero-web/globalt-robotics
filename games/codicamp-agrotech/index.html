@@ -1803,6 +1803,7 @@ window.addEventListener('resize', positionBanner);
 
 function setBanner(text, borderColor = '#2ecc71') {
     const b = document.getElementById('statusBanner');
+    b.style.display = '';
     b.innerText = text;
     b.style.borderColor = borderColor;
 }
@@ -3000,7 +3001,7 @@ function openRegisterPlayerModal(clearFields = false) {
 
 function skipPlayerRegistration() {
     document.getElementById('registerPlayerModal').style.display = 'none';
-    setBanner('▶️ Jugando sin nombre. Tu progreso se guarda igual en este dispositivo.', isPhase2() ? '#00f2fe' : '#2ecc71');
+    document.getElementById('statusBanner').style.display = 'none';
 }
 
 function confirmPlayerRegistration() {
