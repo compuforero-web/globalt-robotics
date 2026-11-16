@@ -90,3 +90,7 @@ GitHub y las versiones Linux respaldan el código y el catálogo incluido. Las e
 - https://www.freedesktop.org/software/systemd/man/255/systemd.timer.html
 - https://hub.docker.com/_/nginx
 - https://docs.docker.com/engine/storage/bind-mounts/
+
+## Registro de instalación — 16 de noviembre de 2026
+
+La salida aportada desde `globalt-server` confirma que el instalador completó la publicación inicial del commit `a84a862d463cda6993da848a0fbb5782fc7921a9`, creó el contenedor Nginx y habilitó el temporizador en el puerto 8094. El puerto 8093 permanece asignado a Origen Inmobiliaria. La recepción de este cambio de documentación sirve para comprobar la siguiente actualización automática; aún requiere verificar `revision.txt` y los registros en Linux. El acceso desde otro equipo por NetBird también debe comprobarse en el navegador.
