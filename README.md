@@ -14,7 +14,7 @@ Abrir `http://localhost:8080` y `http://localhost:8080/admin`.
 
 ## Laboratorio Arduino
 
-Lección piloto con editor, compilación real (avr-gcc), emulación ATmega328P en el navegador y reto evaluado: `games/laboratorio-arduino/`. Ver [docs/LABORATORIO_ARDUINO.md](docs/LABORATORIO_ARDUINO.md). La compilación necesita el servicio aislado de [services/compilador-arduino](services/compilador-arduino/README.md), aún no instalado en Linux; sin él la página indica «Servicio de compilación pendiente».
+Lección piloto con editor, compilación real (avr-gcc), emulación ATmega328P en el navegador y reto evaluado: `games/laboratorio-arduino/`. Ver [docs/LABORATORIO_ARDUINO.md](docs/LABORATORIO_ARDUINO.md). La compilación necesita el servicio aislado de [services/compilador-arduino](services/compilador-arduino/README.md), disponible en los laboratorios privados y bloqueado en el dominio público. Si `/api/arduino/` no responde (404, HTML o error de red), la página muestra a los estudiantes «Compilación próximamente» y desactiva solo Compilar, Ejecutar y Comprobar reto; editar, guardar y restaurar siguen activos. Los errores reales de compilación del estudiante se muestran siempre.
 
 ## Aula (cuentas e inscripción, en desarrollo)
 
@@ -28,6 +28,8 @@ Ver [README_LINUX.md](README_LINUX.md) para instalar la copia en Linux, activar 
 Los cambios se hacen en una copia de desarrollo y se guardan en GitHub. Linux consulta `main` aproximadamente cada minuto, valida los archivos necesarios y los JSON, publica los archivos del sitio y comprueba por HTTP la portada, el panel y RoboLab. No ejecuta scripts descargados del repositorio. Una comprobación fallida conserva o restaura la versión anterior. No se trata de una auditoría funcional completa ni de una garantía sobre cualquier cambio de JavaScript; conviene usar ramas y PR para revisar mejoras antes de llevarlas a `main`.
 
 ## Estado de los datos y el panel
+
+Videotutoriales: la sección «Videos» de la portada y su enlace en el menú permanecen ocultos mientras ningún video tenga enlace de YouTube. Basta con pegar enlaces en `/admin → Videotutoriales` para que aparezcan; los registros sin enlace se conservan.
 
 La entrega original no tiene Supabase configurado. El catálogo inicial forma parte del código; las ediciones en el panel se guardan **solo en localStorage de ese navegador y dirección web**. Los cambios del panel no generan commits ni se replican entre equipos. Exporta el JSON desde el panel para conservarlos. Abrir la plataforma por otra IP, puerto o dominio crea un almacenamiento local distinto.
 

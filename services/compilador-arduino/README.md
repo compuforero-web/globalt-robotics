@@ -2,7 +2,7 @@
 
 Compila C++ de Arduino para **Arduino Nano (ATmega328P, 16 MHz)** y devuelve un HEX. **Solo compila**: nunca ejecuta el programa del estudiante. La ejecución es una emulación en el navegador (`games/laboratorio-arduino`, avr8js).
 
-No está desplegado. Este directorio no se publica en la web (`deploy/linux/update.py` solo copia `assets`, `styles`, `src`, `games`, `data`). Mientras no exista, el laboratorio muestra «Servicio de compilación pendiente».
+No está desplegado. Este directorio no se publica en la web (`deploy/linux/update.py` solo copia `assets`, `styles`, `src`, `games`, `data`). Mientras no exista, el laboratorio muestra a los estudiantes «Compilación próximamente» y desactiva solo Compilar, Ejecutar y Comprobar reto.
 
 ## Componentes y licencias
 

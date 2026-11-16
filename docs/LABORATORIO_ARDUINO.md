@@ -13,7 +13,7 @@ Ruta: `games/laboratorio-arduino/index.html` (enlazada desde el curso «Electró
 
 Criterios del reto: al menos 4 encendidos en 5 s; encendidos de 200 ms y apagados de 800 ms (±10 %); 9600 baudios (±3 %); y cada línea «Latido N» debe **empezar a transmitirse entre 100 ms antes y 250 ms después del N-ésimo encendido** (200 ms encendido + 50 ms de margen; con periodo de 1000 ms las ventanas no se solapan). Emitir todas las líneas al inicio o fuera del encendido no aprueba. Los encendidos de los últimos 250 ms pueden quedar sin línea.
 
-Sin el servicio, la página muestra «Servicio de compilación pendiente» y no simula ni aprueba nada. No hay salidas pregrabadas ni análisis de palabras del código: el evaluador solo mira el comportamiento medido.
+Sin el servicio, la página muestra «Compilación próximamente», desactiva solo Compilar, Ejecutar y Comprobar reto, y no simula ni aprueba nada. No hay salidas pregrabadas ni análisis de palabras del código: el evaluador solo mira el comportamiento medido.
 
 Funciones soportadas en la emulación: GPIO digital, temporizadores 0–2 (`delay`, `millis`, `micros`), USART0 (`Serial.begin/print/println/write`). No soportado aún: entradas externas, ADC (`analogRead`), servos, librerías adicionales, entrada desde el monitor serie. Circuito fijo: LED + 220 Ω en D13.
 
