@@ -56,6 +56,17 @@
       "level": "Proyecto Final",
       "url": "games/sumo-bot-challenge/index.html",
       "preview": "games/sumo-bot-challenge/preview.svg"
+    },
+    {
+      "id": "game-solarlab",
+      "sort_order": 5,
+      "featured": false,
+      "title": "SolarLab: Ingeniería Fotovoltaica",
+      "description": "Explora energía solar en 5 retos: inclinación del panel, conexiones serie/paralelo, baterías y MPPT, seguidor con LDR y diseño de una microrred. Incluye gráficas y código Arduino para el seguidor.",
+      "category": "Energías limpias",
+      "level": "Intermedio",
+      "url": "games/solar-lab/index.html",
+      "preview": "games/solar-lab/preview.svg"
     }
   ],
   "courses": [
@@ -96,7 +107,7 @@
         "Puente H L298N y motores DC",
         "Proyecto: robot evasor de obstáculos"
       ],
-      "link": "https://wokwi.com/projects/new/arduino-nano"
+      "link": "games/laboratorio-arduino/index.html"
     },
     {
       "id": "course-web",

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="SolarLab: simulador interactivo de ingeniería fotovoltaica. Nivel intermedio · Energías limpias.">
+  <meta name="theme-color" content="#0b1120">
+  <title>SolarLab: Ingeniería Fotovoltaica</title>
+  <link rel="icon" href="preview.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true">
+        <circle cx="20" cy="20" r="8" fill="#f59e0b"/>
+        <g stroke="#f97316" stroke-width="3" stroke-linecap="round">
+          <path d="M20 3v5M20 32v5M3 20h5M32 20h5M8 8l3.5 3.5M28.5 28.5L32 32M8 32l3.5-3.5M28.5 11.5L32 8"/>
+        </g>
+      </svg>
+      <div>
+        <h1>SolarLab <span>Ingeniería Fotovoltaica</span></h1>
+        <small>Nivel Intermedio · Energías Limpias</small>
+      </div>
+    </div>
+    <div class="tools">
+      <label class="sel"><span>Nivel</span><select id="level" aria-label="Seleccionar nivel"></select></label>
+      <div class="prog" title="Progreso guardado"><div class="bar"><div id="progBar"></div></div><span id="progTxt">0/5</span></div>
+      <button id="reset" class="ghost" title="Reiniciar progreso" aria-label="Reiniciar progreso">⟲</button>
+      <button id="snd" class="ghost" title="Sonido on/off" aria-label="Sonido" aria-pressed="true">🔊</button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card stage">
+      <div class="head"><h2 id="ltitle">Cargando…</h2><span id="badge" class="badge">Diseño</span></div>
+      <canvas id="scene" width="960" height="560" aria-label="Simulación fotovoltaica"></canvas>
+      <div class="playbar">
+        <button id="play" class="btn">▶ Simular</button>
+        <input id="scrub" type="range" min="0" max="100" value="0" aria-label="Línea de tiempo">
+        <span id="clock">--:--</span>
+      </div>
+      <p id="brief" class="brief"></p>
+    </section>
+
+    <aside class="side">
+      <div class="card">
+        <h3>Panel de control</h3>
+        <div id="controls"></div>
+        <div id="msg" class="msg"></div>
+        <button id="next" class="btn alt" hidden>Siguiente nivel →</button>
+      </div>
+      <div class="card">
+        <h3>Datos en vivo</h3>
+        <dl id="live"></dl>
+        <canvas id="chart" width="520" height="220" aria-label="Gráfica en vivo"></canvas>
+      </div>
+      <div class="card">
+        <div class="head"><h3 id="specT">Ficha técnica</h3><button id="copy" class="ghost sm">Copiar</button></div>
+        <pre id="spec"></pre>
+      </div>
+    </aside>
+  </main>
+  <script type="module" src="main.js"></script>
+</body>
+</html>

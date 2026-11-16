@@ -1,0 +1,181 @@
+/* Laboratorio Arduino de GLOBALT — usa los tokens de styles/base.css */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.small { font-size: .85rem; }
+.ok { color: var(--green); }
+
+.lab-top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg-2); }
+.lab-top__home { display: inline-flex; align-items: center; gap: 8px; font: 700 .95rem var(--font-display); color: var(--text-strong); white-space: nowrap; }
+.lab-top__title { flex: 1; min-width: 200px; }
+.lab-top__title h1 { font-size: 1.35rem; margin: 0; }
+.lab-top__course { font-size: .8rem; color: var(--cyan); letter-spacing: .03em; }
+.pill { font-size: .8rem; padding: .35em .8em; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--muted); }
+.pill[data-kind="ok"] { color: #86efac; border-color: rgba(34, 197, 94, .45); }
+.pill[data-kind="warn"] { color: #fdba74; border-color: rgba(249, 115, 22, .5); }
+
+.lab { display: grid; gap: 16px; padding: 16px; max-width: 1680px; margin-inline: auto; }
+.lab__lesson { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; min-width: 0; }
+.lab__kicker { margin: 0; color: var(--orange); font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.lab__jump { margin-top: 8px; }
+.lab__lesson-title { font-size: 1.3rem; margin-top: .3em; }
+.lesson-block { margin-top: 18px; }
+.lesson-block h2 { font-size: 1.05rem; color: var(--cyan); margin-bottom: .4em; }
+.lesson-block p, .lesson-block li { font-size: .95rem; }
+.lesson-block--challenge { border: 1px solid rgba(249, 115, 22, .4); border-radius: var(--radius-sm); padding: 12px 14px; background: rgba(249, 115, 22, .06); }
+.lesson-block--challenge h2 { color: var(--orange); }
+.criteria { padding-left: 1.2em; margin: 0 0 .6em; }
+.scope summary { cursor: pointer; font-weight: 600; color: var(--text-strong); }
+.scope ul { padding-left: 1.2em; }
+.conn-table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-bottom: .6em; }
+.conn-table th, .conn-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.conn-table th { color: var(--muted); font-weight: 600; }
+.lesson-code { background: #050912; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; overflow-x: auto; font-size: .8rem; line-height: 1.5; }
+.lesson-code code { color: var(--text); }
+
+.lab__work { display: grid; gap: 16px; min-width: 0; align-content: start; }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; min-width: 0; }
+.panel__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.panel__head h2 { font-size: 1.1rem; margin: 0; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.toolbar__gap { flex: 1; }
+
+/* Editor */
+.code-editor { --code-font: 14px; display: grid; grid-template-columns: auto 1fr; height: 440px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #050912; overflow: hidden; font: 400 var(--code-font)/1.6 ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace; }
+.code-editor:focus-within { border-color: var(--cyan); }
+.code-editor__gutter { overflow: hidden; padding: 10px 0; background: #0a1020; color: #475569; text-align: right; user-select: none; min-width: 3.2em; }
+.code-editor__gutter span { display: block; padding: 0 10px 0 8px; }
+.code-editor__gutter .is-error { background: rgba(244, 63, 94, .25); color: #fecdd3; }
+.code-editor__gutter .is-warning { background: rgba(249, 115, 22, .2); color: #fed7aa; }
+.code-editor__body { position: relative; min-width: 0; }
+.code-editor__hl, .code-editor__input { position: absolute; inset: 0; margin: 0; padding: 10px 12px; border: 0; font: inherit; line-height: inherit; tab-size: 2; white-space: pre; overflow: auto; letter-spacing: 0; }
+.code-editor__hl { pointer-events: none; overflow: hidden; color: var(--text); }
+.code-editor__hl code { font: inherit; color: inherit; }
+.code-editor__input { background: transparent; color: transparent; caret-color: var(--cyan); resize: none; outline: none; -webkit-text-fill-color: transparent; }
+.code-editor__input::selection { background: rgba(56, 189, 248, .3); -webkit-text-fill-color: transparent; }
+.tok-com { color: #64748b; font-style: italic; }
+.tok-str { color: #fbbf24; }
+.tok-pre { color: #c084fc; }
+.tok-num { color: #f472b6; }
+.tok-kw { color: #38bdf8; }
+.tok-fn { color: #4ade80; }
+.editor-help { font-size: .78rem; color: var(--muted); margin: 6px 0 0; }
+#save-state.is-dirty { color: #fdba74; font-weight: 600; }
+
+.status { min-height: 1.5em; margin: 8px 0 0; font-size: .9rem; }
+.status[data-kind="ok"] { color: #86efac; }
+.status[data-kind="error"] { color: #fda4af; }
+.status[data-kind="warn"] { color: #fdba74; }
+.status[data-kind="busy"] { color: var(--cyan); }
+.diagnostics { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
+.diag { border-left: 3px solid var(--red); background: rgba(244, 63, 94, .07); border-radius: 6px; padding: 8px 10px; }
+.diag--warning { border-color: var(--orange); background: rgba(249, 115, 22, .07); }
+.diag--note { border-color: var(--muted); background: var(--surface-2); }
+.diag__where { background: none; border: 0; padding: 0; color: var(--text-strong); font-weight: 600; font-size: .85rem; cursor: pointer; text-decoration: underline dotted; }
+.diag__where:disabled { cursor: default; text-decoration: none; }
+.diag__msg { display: block; margin-top: 4px; color: #fecdd3; white-space: pre-wrap; word-break: break-word; }
+.diag--warning .diag__msg { color: #fed7aa; }
+.diag--note .diag__msg { color: var(--text); }
+.diag__help { margin: 6px 0 0; font-size: .88rem; }
+.raw-output { margin-top: 8px; font-size: .85rem; }
+.raw-output pre { background: #050912; padding: 10px; border-radius: 8px; overflow: auto; max-height: 220px; font-size: .78rem; }
+
+/* Simulación */
+.sim-meta { font-size: .85rem; color: var(--muted); }
+.is-running .sim-meta { color: #86efac; }
+.circuit { width: 100%; max-height: 260px; }
+.c-pcb { fill: #0e3b5c; stroke: #38bdf8; stroke-opacity: .4; }
+.c-usb { fill: #94a3b8; }
+.c-chip { fill: #111827; }
+.c-chip-txt, .c-tiny { fill: #cbd5e1; font: 600 7px var(--font); }
+.c-label { fill: #e2e8f0; font: 700 11px var(--font-display); letter-spacing: .1em; }
+.c-small { fill: #cbd5e1; font: 600 10px var(--font); }
+.c-pin-name { fill: var(--cyan); font: 700 10px var(--font); }
+.c-hole { fill: #d4a017; stroke: #0b1220; }
+.c-hole.is-used { fill: #fde68a; }
+.c-wire { fill: none; stroke-width: 3; stroke-linejoin: round; }
+.c-wire--sig { stroke: #f97316; }
+.c-wire--gnd { stroke: #64748b; }
+.c-res { fill: #d6b98c; }
+.c-band1 { fill: #ef4444; } .c-band2 { fill: #7c2d12; } .c-band3 { fill: #d4a017; }
+.c-led-body { fill: #7f1d1d; stroke: #fca5a5; stroke-opacity: .4; }
+.c-led-rim { fill: #991b1b; }
+.c-leg { stroke: #cbd5e1; stroke-width: 2; }
+.c-glow { fill: #ef4444; opacity: 0; filter: blur(6px); }
+.c-led.is-on .c-led-body { fill: #ff4d4d; }
+.c-led.is-on .c-glow { opacity: .55; }
+.c-l { fill: #422006; }
+.c-onboard.is-on .c-l { fill: #fbbf24; }
+.pin-strip { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 10px; }
+.pin-dot { font-size: .68rem; padding: 2px 5px; border-radius: 5px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+.pin-dot.is-high { background: rgba(34, 197, 94, .2); color: #bbf7d0; border-color: rgba(34, 197, 94, .5); }
+.monitor-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.monitor-head h3 { font-size: .95rem; margin: 0; }
+.monitor { background: #020617; color: #a7f3d0; border: 1px solid var(--border); border-radius: 8px; padding: 10px; height: 170px; overflow: auto; margin: 8px 0 0; font-size: .82rem; white-space: pre-wrap; word-break: break-all; }
+.baud-warning { color: #fdba74; font-size: .85rem; margin: 6px 0 0; }
+
+/* Evaluación */
+.eval__title { font-weight: 700; margin: 0 0 6px; color: #fdba74; }
+.eval__title.ok { color: #86efac; }
+.eval__list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: .9rem; }
+.eval__list li { display: flex; gap: 8px; align-items: flex-start; }
+.eval__list li > span:first-child { font-weight: 700; width: 1em; }
+.eval__list .ok > span:first-child { color: var(--green); }
+.eval__list .fail > span:first-child { color: var(--red); }
+.eval__list small { color: var(--muted); }
+.progress-note { margin: 12px 0 0; font-size: .88rem; }
+
+/* Guía Chispa: forma parte del flujo, nunca flota sobre el editor ni el circuito */
+.guide__panel { display: flex; gap: 12px; align-items: flex-start; background: linear-gradient(135deg, rgba(56, 189, 248, .1), rgba(249, 115, 22, .06)); border: 1px solid rgba(56, 189, 248, .3); border-radius: var(--radius); padding: 12px; }
+.guide__avatar { flex: none; width: 56px; }
+.guide__robot { width: 56px; height: 56px; }
+.g-head { fill: #1e293b; stroke: var(--cyan); stroke-width: 2; }
+.g-face { fill: #020617; }
+.g-eye { fill: var(--cyan); }
+.g-stroke { stroke: var(--cyan); stroke-width: 2; fill: none; stroke-linecap: round; }
+.g-spark { fill: var(--orange); }
+.g-body { fill: #1e293b; stroke: var(--orange); stroke-width: 2; }
+.g-led { fill: var(--orange); }
+.g-ear { fill: var(--orange); }
+.guide__avatar[data-mood="alert"] .g-eye { fill: #fdba74; }
+.guide__avatar[data-mood="happy"] .g-led, .guide__avatar[data-mood="party"] .g-led { fill: var(--green); }
+.guide__avatar[data-mood="party"] .guide__robot { animation: chispa-bounce .6s ease 3; }
+.guide__avatar .g-eye { animation: chispa-blink 5s infinite; transform-origin: center; transform-box: fill-box; }
+.guide__bubble { flex: 1; min-width: 0; }
+.guide__name { margin: 0; font: 700 .95rem var(--font-display); color: var(--text-strong); }
+.guide__badge { font: 500 .7rem var(--font); color: var(--muted); border: 1px solid var(--border-strong); border-radius: 999px; padding: 1px 7px; margin-left: 6px; vertical-align: middle; }
+.guide__text { margin: 4px 0 8px; font-size: .92rem; }
+.guide__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.guide__chip { display: none; align-items: center; gap: 8px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); border-radius: 999px; padding: 4px 12px 4px 4px; cursor: pointer; font-size: .85rem; }
+.guide__chip .guide__robot { width: 28px; height: 28px; }
+.guide__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); }
+.guide.is-min .guide__panel { display: none; }
+.guide.is-min .guide__chip { display: inline-flex; }
+@keyframes chispa-blink { 0%, 94%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.15); } }
+@keyframes chispa-bounce { 50% { transform: translateY(-5px); } }
+
+.lab-foot { padding: 12px 16px 24px; text-align: center; font-size: .8rem; color: var(--muted); }
+
+@media (min-width: 1100px) {
+  .lab__jump { display: none; }
+  .lab { grid-template-columns: minmax(320px, 400px) 1fr; align-items: start; }
+  .lab__lesson { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
+}
+@media (min-width: 1440px) {
+  .lab__work { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); grid-template-areas: "guide guide" "editor sim" "editor eval"; }
+  .guide { grid-area: guide; }
+  .panel--editor { grid-area: editor; }
+  .panel--sim { grid-area: sim; }
+  .panel--eval { grid-area: eval; }
+  .code-editor { height: 560px; }
+}
+@media (max-width: 640px) {
+  .lab { padding: 10px; gap: 12px; }
+  .lab-top { padding: 10px; }
+  .code-editor { --code-font: 16px; height: 360px; } /* 16 px evita el zoom automático en iOS */
+  .toolbar .btn { flex: 1 1 calc(33% - 8px); }
+  .toolbar__gap { display: none; }
+  .guide__avatar, .guide__robot { width: 40px; height: 40px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .guide__avatar .g-eye, .guide__avatar[data-mood="party"] .guide__robot { animation: none; }
+  .btn { transition: none; }
+}

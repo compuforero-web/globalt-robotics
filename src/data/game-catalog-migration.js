@@ -58,7 +58,7 @@ function migrateRadarGames(items) {
 
 
 // Activa Sumo una vez sin reinsertar juegos eliminados en migraciones previas.
-export function migrateLocalGames(items) {
+function migrateSumoGames(items) {
   const initial = migrateRadarGames(items);
   const marker = `${CONFIG.STORAGE_PREFIX}games_sumo_20261116`;
   const result = initial.map((item) => ({ ...item }));
@@ -77,5 +77,22 @@ export function migrateLocalGames(items) {
     localStorage.setItem(`${CONFIG.STORAGE_PREFIX}games`, JSON.stringify(result));
     localStorage.setItem(marker, '1');
   } catch { /* El catálogo se mantiene en memoria si el navegador no permite guardarlo. */ }
+  return result;
+}
+
+
+// SolarLab se agrega una sola vez, manteniendo los juegos y preferencias existentes.
+export function migrateLocalGames(items) {
+  const initial = migrateSumoGames(items);
+  const marker = `${CONFIG.STORAGE_PREFIX}games_solar_20261116`;
+  const result = initial.map((item) => ({ ...item }));
+  try {
+    if (localStorage.getItem(marker)) return initial;
+    if (!result.some((game) => game.id === 'game-solarlab')) {
+      result.push(structuredClone(SEED.games.find((game) => game.id === 'game-solarlab')));
+    }
+    localStorage.setItem(`${CONFIG.STORAGE_PREFIX}games`, JSON.stringify(result));
+    localStorage.setItem(marker, '1');
+  } catch { /* La incorporación también funciona en memoria si no se permite guardar. */ }
   return result;
 }
