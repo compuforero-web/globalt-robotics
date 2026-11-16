@@ -1,0 +1,10 @@
+[Unit]
+Description=Respaldo comprobado de la base del aula GLOBALT
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/globalt-robotics/aula-respaldo.sh
+TimeoutStartSec=900
+Nice=10

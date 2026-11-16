@@ -19,6 +19,7 @@ class Config:
     max_registros_ip: int
     ventana_min: int
     # Compilación a través del servicio existente (socket Unix montado en solo lectura).
+    registro_abierto: bool = False     # registro público de estudiantes: cerrado salvo decisión explícita
     compilador_socket: str = ''
     compilar_simultaneos: int = 1      # compilaciones del aula a la vez (deja hueco a los laboratorios)
     compilar_max_espera: int = 4       # peticiones esperando turno; el resto recibe «ocupado»
@@ -42,6 +43,7 @@ def cargar():
         max_fallos_ip=int(os.environ.get('AULA_MAX_FALLOS_IP', '30')),
         max_registros_ip=int(os.environ.get('AULA_MAX_REGISTROS_IP', '10')),
         ventana_min=int(os.environ.get('AULA_VENTANA_INTENTOS_MIN', '15')),
+        registro_abierto=_bool('AULA_REGISTRO_ABIERTO', False),
         compilador_socket=os.environ.get('AULA_COMPILADOR_SOCKET', ''),
         compilar_simultaneos=int(os.environ.get('AULA_COMPILAR_SIMULTANEOS', '1')),
         compilar_max_espera=int(os.environ.get('AULA_COMPILAR_MAX_ESPERA', '4')),

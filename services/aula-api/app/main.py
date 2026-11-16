@@ -131,8 +131,14 @@ def crear_app(config=None):
         conexion.execute('SELECT 1')
         return {'ok': True}
 
+    @app.get('/api/aula/config')
+    def configuracion_publica():
+        return {'registro_abierto': config.registro_abierto}
+
     @app.post('/api/aula/registro', status_code=201)
     def registro(datos: Registro, request: Request, respuesta: Response, conexion=Depends(bd)):
+        if not config.registro_abierto:
+            raise HTTPException(403, 'El registro de cuentas no está abierto. Pide tu cuenta a GLOBALT ROBOTICS.')
         if contar(conexion, 'registro_ip', ip(request)) >= config.max_registros_ip:
             raise HTTPException(429, 'Demasiados registros desde esta conexión. Intenta más tarde.')
         anotar(conexion, 'registro_ip', ip(request))

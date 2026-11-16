@@ -22,7 +22,8 @@ CLAVE = 'clave-de-prueba-123'
 
 def config(**cambios):
     base = dict(database_url=URL, origenes=frozenset({ORIGEN}), cookie_segura=False, inactividad_min=120,
-                duracion_max_horas=168, max_fallos_correo=5, max_fallos_ip=30, max_registros_ip=50, ventana_min=15)
+                duracion_max_horas=168, max_fallos_correo=5, max_fallos_ip=30, max_registros_ip=50, ventana_min=15,
+                registro_abierto=True)
     base.update(cambios)
     return Config(**base)
 
@@ -446,3 +447,24 @@ def test_compilador_detenido_errores_y_recuperacion(socket_falso):
         time.sleep(1.2)
         assert c.post(RUTA_C, json=PROG, headers=h).status_code == 200      # recuperación
         assert c.get('/api/aula/compilador/salud').status_code == 200
+
+
+def test_registro_cerrado_por_defecto_y_cuentas_por_consola():
+    assert Config(database_url=URL, origenes=frozenset({ORIGEN}), cookie_segura=True, inactividad_min=1,
+                  duracion_max_horas=1, max_fallos_correo=1, max_fallos_ip=1, max_registros_ip=1,
+                  ventana_min=1).registro_abierto is False
+    with cliente(registro_abierto=False) as c:
+        assert c.get('/api/aula/config').json() == {'registro_abierto': False}
+        r = registrar(c, 'cerrado@example.com')
+        assert r.status_code == 403 and 'no está abierto' in r.json()['detail']
+    assert not sql("SELECT 1 FROM usuarios WHERE correo = 'cerrado@example.com'")
+    from app import cuentas
+    assert cuentas.crear(URL, 'Consola.Prueba@Example.com', '  Estudiante   Consola ', CLAVE) == 'consola.prueba@example.com'
+    with pytest.raises(ValueError):
+        cuentas.crear(URL, 'consola.prueba@example.com', 'Otra', CLAVE)      # duplicada
+    with pytest.raises(ValueError):
+        cuentas.crear(URL, 'corta@example.com', 'Corta', 'corta')            # contraseña inválida
+    with cliente(registro_abierto=False) as c:
+        r = c.post('/api/aula/sesion', json={'correo': 'consola.prueba@example.com', 'clave': CLAVE})
+        assert r.status_code == 200 and r.json()['usuario'] == {'nombre': 'Estudiante Consola',
+                                                                 'correo': 'consola.prueba@example.com', 'rol': 'estudiante'}

@@ -1,0 +1,10 @@
+[Unit]
+Description=Respaldo diario de la base del aula GLOBALT
+
+[Timer]
+OnCalendar=*-*-* 03:17:00
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

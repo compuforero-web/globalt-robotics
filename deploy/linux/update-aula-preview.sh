@@ -123,8 +123,9 @@ conocidas = {'read_only', 'tmpfs', 'cap_drop', 'security_opt', 'init', 'restart'
              'image', 'container_name', 'env_file', 'mem_limit', 'cpus', 'pids_limit', 'depends_on'}
 compilador = {'volumes': [f'{sdir}:{sapi}:ro'], 'group_add': [sgid],
               'environment': {'AULA_COMPILADOR_SOCKET': f'{sapi}/compilador.sock'}}
+registro = {**compilador, 'environment': {**compilador['environment'], 'AULA_REGISTRO_ABIERTO': 'true'}}
 extra = {k: v for k, v in s['api'].items() if k not in conocidas}
-assert extra in ({}, compilador), f'opciones inesperadas en la API: {sorted(extra)}'
+assert extra in ({}, compilador, registro), f'opciones inesperadas en la API: {sorted(extra)}'
 assert s['api']['read_only'] is True and s['api']['cap_drop'] == ['ALL'], 'aislamiento de la API'
 print('compose.json: OK' + (' (compilador ya integrado)' if extra else ''))
 PY
@@ -349,7 +350,8 @@ api['image'] = 'globalt-aula-api:' + rev
 # Compilador existente: solo la carpeta del socket, en solo lectura, con el grupo que ya tiene el socket.
 api['volumes'] = [f'{sdir}:{sapi}:ro']
 api['group_add'] = [sgid]
-api['environment'] = {'AULA_COMPILADOR_SOCKET': f'{sapi}/compilador.sock'}
+# El piloto privado conserva el registro abierto (solo datos ficticios); en producción está cerrado por defecto.
+api['environment'] = {'AULA_COMPILADOR_SOCKET': f'{sapi}/compilador.sock', 'AULA_REGISTRO_ABIERTO': 'true'}
 tmp = p.with_name('.compose.json.nuevo'); tmp.write_text(json.dumps(c, indent=2)); tmp.chmod(0o600); tmp.replace(p)
 PY
 "${DC[@]}" config --quiet

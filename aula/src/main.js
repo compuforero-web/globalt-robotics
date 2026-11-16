@@ -120,6 +120,14 @@ $('#catalogo').addEventListener('click', async (e) => {
 });
 
 (async () => {
+  // Registro público: solo si el servidor lo permite explícitamente.
+  try {
+    const { registro_abierto: abierto } = await api.configuracion();
+    $('#tab-registro').hidden = !abierto;
+    $('#registro-cerrado').hidden = abierto;
+  } catch {
+    $('#tab-registro').hidden = true;
+  }
   try {
     const { usuario } = await api.sesion();
     await cargarCursos(usuario);

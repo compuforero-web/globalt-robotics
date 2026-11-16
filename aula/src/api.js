@@ -33,6 +33,7 @@ export const entrar = (correo, clave) => llamar('/sesion', { metodo: 'POST', dat
 export const registrar = (nombre, correo, clave) => llamar('/registro', { metodo: 'POST', datos: { nombre, correo, clave } });
 export async function salir() { await llamar('/sesion', { metodo: 'DELETE' }); csrf = ''; }
 export const catalogo = () => llamar('/cursos');
+export const configuracion = () => llamar('/config');
 export const misCursos = () => llamar('/mis-cursos');
 export const inscribir = (cursoId) => llamar('/inscripciones', { metodo: 'POST', datos: { curso_id: cursoId } });
 export function olvidarCsrf() { csrf = ''; }
