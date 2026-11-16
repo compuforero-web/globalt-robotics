@@ -31,7 +31,7 @@ def config(**cambios):
 def base_limpia():
     with psycopg.connect(URL, autocommit=True) as c:
         c.execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
-    assert migraciones.aplicar(URL) == ['0001_inicial.sql']
+    assert migraciones.aplicar(URL) == ['0001_inicial.sql', '0002_borradores.sql']
     assert migraciones.aplicar(URL) == []          # reproducible e idempotente
 
 
@@ -228,3 +228,80 @@ def test_catalogo_publico_y_cabeceras():
         assert c.get('/docs').status_code == 404 and c.get('/openapi.json').status_code == 404
         r = c.post('/api/aula/sesion', content=b'{"correo":"' + b'a' * 20000 + b'"}', headers={'Content-Type': 'application/json'})
         assert r.status_code == 413
+
+
+# ---------- Borradores de código del Laboratorio Arduino ----------
+RUTA_B = '/api/aula/borradores/arduino-led-serie'
+
+
+def inscrito(c, correo, nombre='Estudiante Ficticio'):
+    csrf = registrar(c, correo, nombre).json()['csrf']
+    c.post('/api/aula/inscripciones', json={'curso_id': 'course-arduino'}, headers={'X-CSRF-Token': csrf})
+    return {'X-CSRF-Token': csrf}
+
+
+def entrar(c, correo):
+    return {'X-CSRF-Token': c.post('/api/aula/sesion', json={'correo': correo, 'clave': CLAVE}).json()['csrf']}
+
+
+def test_borrador_aislado_entre_estudiantes():
+    with cliente() as a, cliente() as b:
+        ha, hb = inscrito(a, 'borr.a@example.com'), inscrito(b, 'borr.b@example.com')
+        r = a.put(RUTA_B, json={'codigo': 'void loop() { /* A */ }'}, headers=ha)
+        assert r.status_code == 200 and r.json()['borrador']['version'] == 1
+        assert b.get(RUTA_B).json() == {'borrador': None}
+        # B no puede elegir el usuario ni escribir sobre el borrador de A.
+        id_a = sql("SELECT id FROM usuarios WHERE correo = 'borr.a@example.com'")[0][0]
+        assert b.put(RUTA_B, json={'codigo': 'x', 'usuario_id': id_a}, headers=hb).status_code == 422
+        assert b.get(RUTA_B + '?usuario_id=%d' % id_a).json() == {'borrador': None}
+        assert b.put(RUTA_B, json={'codigo': '// B'}, headers=hb).json()['borrador']['version'] == 1
+        assert b.put(RUTA_B, json={'codigo': '// B2', 'version_base': 1}, headers=hb).status_code == 200
+        assert a.get(RUTA_B).json()['borrador']['codigo'] == 'void loop() { /* A */ }'
+        # El CSRF de A no sirve con la sesión de B.
+        assert b.put(RUTA_B, json={'codigo': '// B3', 'version_base': 2}, headers=ha).status_code == 403
+    assert sql("SELECT count(*) FROM borradores")[0][0] == 2
+
+
+def test_borrador_requiere_sesion_csrf_origen_e_inscripcion():
+    with cliente() as c:
+        assert c.get(RUTA_B).status_code == 401
+        h = {'X-CSRF-Token': registrar(c, 'borr.sin@example.com').json()['csrf']}
+        assert c.get(RUTA_B).status_code == 403                       # sin inscripción
+        assert c.put(RUTA_B, json={'codigo': 'x'}, headers=h).status_code == 403
+        c.post('/api/aula/inscripciones', json={'curso_id': 'course-arduino'}, headers=h)
+        assert c.put(RUTA_B, json={'codigo': 'x'}).status_code == 403  # sin CSRF
+        assert c.put(RUTA_B, json={'codigo': 'x'}, headers={**h, 'Origin': 'https://atacante.example'}).status_code == 403
+        assert c.get('/api/aula/borradores/otra-leccion').status_code == 404
+        assert c.put('/api/aula/borradores/otra-leccion', json={'codigo': 'x'}, headers=h).status_code == 404
+        assert c.put(RUTA_B, json={'codigo': 'a' * 12001}, headers=h).status_code == 422
+        assert c.put(RUTA_B, json={'codigo': 'a\x00b'}, headers=h).status_code == 422
+        assert c.put(RUTA_B, json={'codigo': 'ñ' * 12000}, headers=h).status_code == 413   # cuerpo > 16 KB
+        assert c.put(RUTA_B, json={'codigo': 'x', 'version_base': 0}, headers=h).status_code == 422
+        assert c.get(RUTA_B).json() == {'borrador': None}
+        assert c.put(RUTA_B, json={'codigo': 'a' * 12000}, headers=h).status_code == 200
+
+
+def test_borrador_se_recupera_tras_cerrar_sesion_en_otro_navegador():
+    codigo = 'void setup() {\n  Serial.begin(9600); // ñ «»\n}\n'
+    with cliente() as c:
+        h = inscrito(c, 'borr.vuelve@example.com')
+        assert c.put(RUTA_B, json={'codigo': codigo}, headers=h).status_code == 200
+        assert c.delete('/api/aula/sesion', headers=h).status_code == 204
+        assert c.get(RUTA_B).status_code == 401
+    with cliente() as otro:                                            # otro navegador, nueva instancia
+        entrar(otro, 'borr.vuelve@example.com')
+        b = otro.get(RUTA_B).json()['borrador']
+        assert b['codigo'] == codigo and b['version'] == 1
+
+
+def test_borrador_no_sobrescribe_version_mas_reciente():
+    with cliente() as uno, cliente() as dos:
+        h1 = inscrito(uno, 'borr.dos@example.com')
+        h2 = entrar(dos, 'borr.dos@example.com')
+        assert uno.put(RUTA_B, json={'codigo': 'v1'}, headers=h1).status_code == 200
+        r = dos.put(RUTA_B, json={'codigo': 'otro'}, headers=h2)           # creía que no había copia
+        assert r.status_code == 409 and r.json()['borrador']['codigo'] == 'v1'
+        assert dos.put(RUTA_B, json={'codigo': 'v2', 'version_base': 1}, headers=h2).json()['borrador']['version'] == 2
+        r = uno.put(RUTA_B, json={'codigo': 'v1-bis', 'version_base': 1}, headers=h1)
+        assert r.status_code == 409 and r.json()['borrador'] == {**r.json()['borrador'], 'codigo': 'v2', 'version': 2}
+        assert uno.get(RUTA_B).json()['borrador']['codigo'] == 'v2'

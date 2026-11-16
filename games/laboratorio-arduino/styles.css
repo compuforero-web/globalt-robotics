@@ -179,3 +179,13 @@
   .guide__avatar .g-eye, .guide__avatar[data-mood="party"] .guide__robot { animation: none; }
   .btn { transition: none; }
 }
+
+/* Copia en la cuenta del aula */
+.cuenta { margin: 0 0 8px; font-size: .85rem; }
+.cuenta__estado { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted, #94a3b8); }
+#cuenta-estado[data-kind="ok"] { color: #4ade80; }
+#cuenta-estado[data-kind="warn"] { color: #fbbf24; }
+#cuenta-estado[data-kind="error"] { color: #f87171; }
+.cuenta__eleccion { margin-top: 8px; padding: 10px 12px; border: 1px solid #fbbf24; border-radius: 10px; }
+.cuenta__eleccion p { margin: 0 0 8px; }
+.cuenta__eleccion .btn { margin: 0 6px 4px 0; }

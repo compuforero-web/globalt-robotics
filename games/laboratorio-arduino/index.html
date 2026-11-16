@@ -46,6 +46,16 @@
           <button id="btn-save" type="button" class="btn btn--ghost btn--sm">Guardar</button>
           <button id="btn-restore" type="button" class="btn btn--ghost btn--sm">Restaurar ejemplo</button>
         </div>
+        <div id="cuenta" class="cuenta" hidden>
+          <p class="cuenta__estado"><span id="cuenta-estado" role="status" aria-live="polite"></span>
+            <button id="btn-cuenta-reintentar" type="button" class="btn btn--ghost btn--sm" hidden>Reintentar</button></p>
+          <div id="cuenta-eleccion" class="cuenta__eleccion" role="group" aria-labelledby="cuenta-eleccion-titulo" hidden>
+            <p><strong id="cuenta-eleccion-titulo">Tu cuenta y este navegador tienen versiones distintas del código.</strong>
+              <span id="cuenta-eleccion-detalle"></span></p>
+            <button id="btn-usar-cuenta" type="button" class="btn btn--primary btn--sm">Usar la de mi cuenta</button>
+            <button id="btn-usar-local" type="button" class="btn btn--outline btn--sm">Usar la de este navegador</button>
+          </div>
+        </div>
         <div id="editor"></div>
         <p id="editor-help" class="editor-help">sketch.ino · <span id="save-state">Ejemplo original</span> · Tab indenta, Mayús+Tab quita sangría, Esc y luego Tab sale del editor, Ctrl+S guarda.</p>
         <p id="status" class="status" role="status" aria-live="polite"></p>

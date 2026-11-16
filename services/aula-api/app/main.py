@@ -19,6 +19,9 @@ COOKIE = 'aula_sesion'
 RUTA_COOKIE = '/api/aula'
 MAX_CUERPO = 16 * 1024
 METODOS_SEGUROS = {'GET', 'HEAD', 'OPTIONS'}
+MAX_CODIGO = 12000   # caracteres; el cuerpo completo sigue limitado a MAX_CUERPO
+# Lecciones con borrador en la cuenta y el curso en el que hay que estar inscrito.
+LECCIONES = {'arduino-led-serie': 'course-arduino'}
 
 
 def crear_app(config=None):
@@ -200,6 +203,49 @@ def crear_app(config=None):
         respuesta.status_code = 201 if nueva else 200
         return {'curso_id': datos.curso_id, 'nueva': bool(nueva)}
 
+    # ---------- Borradores de código (identidad siempre desde la sesión) ----------
+    def leccion_permitida(leccion_id, sesion, conexion):
+        curso = LECCIONES.get(leccion_id)
+        if not curso:
+            raise HTTPException(404, 'Lección no disponible.')
+        if not conexion.execute('SELECT 1 FROM inscripciones WHERE usuario_id = %s AND curso_id = %s',
+                                (sesion['usuario_id'], curso)).fetchone():
+            raise HTTPException(403, 'Inscríbete en el curso desde el aula para guardar tu código.')
+
+    def borrador_publico(fila):
+        return {'codigo': fila[0], 'version': fila[1], 'actualizado_en': fila[2].isoformat()} if fila else None
+
+    def leer_borrador(conexion, usuario_id, leccion_id):
+        return conexion.execute('SELECT codigo, version, actualizado_en FROM borradores '
+                                'WHERE usuario_id = %s AND leccion_id = %s', (usuario_id, leccion_id)).fetchone()
+
+    @app.get('/api/aula/borradores/{leccion_id}')
+    def ver_borrador(leccion_id: str, sesion=Depends(sesion_actual), conexion=Depends(bd)):
+        leccion_permitida(leccion_id, sesion, conexion)
+        return {'borrador': borrador_publico(leer_borrador(conexion, sesion['usuario_id'], leccion_id))}
+
+    @app.put('/api/aula/borradores/{leccion_id}')
+    def guardar_borrador(leccion_id: str, datos: Borrador, sesion=Depends(con_csrf), conexion=Depends(bd)):
+        leccion_permitida(leccion_id, sesion, conexion)
+        usuario = sesion['usuario_id']
+        if datos.version_base is None:   # primera copia en la cuenta
+            fila = conexion.execute(
+                'INSERT INTO borradores (usuario_id, leccion_id, codigo) VALUES (%s, %s, %s) '
+                'ON CONFLICT DO NOTHING RETURNING codigo, version, actualizado_en',
+                (usuario, leccion_id, datos.codigo)).fetchone()
+        else:                            # solo sobre la versión que el navegador conoce
+            fila = conexion.execute(
+                'UPDATE borradores SET codigo = %s, version = version + 1, actualizado_en = now() '
+                'WHERE usuario_id = %s AND leccion_id = %s AND version = %s '
+                'RETURNING codigo, version, actualizado_en',
+                (datos.codigo, usuario, leccion_id, datos.version_base)).fetchone()
+        if not fila:
+            # Otro navegador guardó antes: no se sobrescribe; se devuelve la versión de la cuenta.
+            return JSONResponse({'detail': 'Tu cuenta tiene una versión más reciente de este código.',
+                                 'borrador': borrador_publico(leer_borrador(conexion, usuario, leccion_id))},
+                                status_code=409)
+        return {'borrador': borrador_publico(fila)}
+
     return app
 
 
@@ -240,6 +286,19 @@ class Acceso(BaseModel):
     @classmethod
     def correo_minusculas(cls, valor):
         return str(valor).lower()
+
+
+class Borrador(BaseModel):
+    model_config = ConfigDict(extra='forbid')   # sin usuario_id: la identidad sale de la sesión
+    codigo: str = Field(max_length=MAX_CODIGO)
+    version_base: int | None = Field(default=None, ge=1, le=2_000_000_000)
+
+    @field_validator('codigo')
+    @classmethod
+    def sin_nulos(cls, valor):
+        if '\x00' in valor:
+            raise ValueError('carácter nulo')
+        return valor
 
 
 class Inscripcion(BaseModel):

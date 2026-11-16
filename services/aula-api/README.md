@@ -18,6 +18,10 @@ FastAPI + PostgreSQL. Registro de estudiantes, sesión de servidor revocable e i
 | `GET /cursos` | — | — | Catálogo activo |
 | `GET /mis-cursos` | sí | — | Cursos del estudiante de la sesión |
 | `POST /inscripciones` `{curso_id}` | sí | sí | 201 nueva · 200 ya existía · 404 curso inexistente |
+| `GET /borradores/{leccion}` | sí | — | `{borrador: {codigo, version, actualizado_en} \| null}` del estudiante de la sesión. 403 sin inscripción · 404 lección desconocida |
+| `PUT /borradores/{leccion}` `{codigo, version_base}` | sí | sí | Guarda el borrador (≤ 12 000 caracteres, cuerpo ≤ 16 KB). `version_base` = versión conocida (`null` si no había copia); si otro navegador guardó antes responde 409 con la versión actual y no sobrescribe |
+
+Borradores (migración `0002_borradores.sql`): un borrador por estudiante y lección (`arduino-led-serie`, curso `course-arduino`). La identidad sale siempre de la sesión; no hay parámetros de usuario. Guardar código no aprueba retos: el progreso del reto sigue siendo local del navegador y no es un certificado. En el laboratorio, el guardado local sigue siendo el respaldo: si la cuenta y el navegador tienen versiones distintas, el estudiante elige cuál usar y la otra queda en `backupCode` del almacenamiento local.
 
 - Cookie `aula_sesion`: aleatoria (256 bits), `HttpOnly`, `SameSite=Strict`, `Path=/api/aula`, `Secure` salvo `AULA_COOKIE_SEGURA=false` (solo desarrollo HTTP). En la base solo se guarda su SHA-256.
 - Caducidad: 120 min de inactividad y 168 h como máximo (configurable). El cierre revoca en el servidor.
@@ -45,4 +49,4 @@ docker run -d --name aula-test-db -e POSTGRES_DB=aula_test -e POSTGRES_USER=aula
 AULA_TEST_DATABASE_URL=postgresql://aula:solo-pruebas@127.0.0.1:55432/aula_test .venv/bin/python -m pytest -q
 ```
 
-¡La base de pruebas se vacía! Prueba de navegador (desde la raíz, con el Compose levantado): `AULA_REINICIO=1 node tests/e2e/aula.e2e.mjs`.
+¡La base de pruebas se vacía! Prueba de navegador (desde la raíz, con el Compose levantado): `AULA_REINICIO=1 node tests/e2e/aula.e2e.mjs`. Borrador en la cuenta: `AULA_SITIO=http://127.0.0.1:8180 node tests/e2e/aula-borrador.e2e.mjs` (registra 3 cuentas por ejecución; respeta `AULA_MAX_REGISTROS_IP`).
