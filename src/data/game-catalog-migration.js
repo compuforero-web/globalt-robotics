@@ -34,7 +34,7 @@ function migrateInitialGames(items) {
 
 
 // Migración independiente: no vuelve a agregar juegos borrados en entregas previas.
-export function migrateLocalGames(items) {
+function migrateRadarGames(items) {
   const initial = migrateInitialGames(items);
   const marker = `${CONFIG.STORAGE_PREFIX}games_radar_20261116`;
   const result = initial.map((item) => ({ ...item }));
@@ -53,5 +53,29 @@ export function migrateLocalGames(items) {
     localStorage.setItem(`${CONFIG.STORAGE_PREFIX}games`, JSON.stringify(result));
     localStorage.setItem(marker, '1');
   } catch { /* Si el navegador no puede guardar, se usa el catálogo actualizado en memoria. */ }
+  return result;
+}
+
+
+// Activa Sumo una vez sin reinsertar juegos eliminados en migraciones previas.
+export function migrateLocalGames(items) {
+  const initial = migrateRadarGames(items);
+  const marker = `${CONFIG.STORAGE_PREFIX}games_sumo_20261116`;
+  const result = initial.map((item) => ({ ...item }));
+  try {
+    if (localStorage.getItem(marker)) return initial;
+    const builtin = SEED.games.find((game) => game.id === 'game-sumo-bot');
+    const existing = result.find((game) => game.id === builtin.id);
+    if (!existing) result.push(structuredClone(builtin));
+    else if (!existing.url) {
+      existing.url = builtin.url;
+      if (!existing.preview) existing.preview = builtin.preview;
+      if (existing.description === 'Proyecto final: diseña la estrategia de un robot de sumo con puente H, sensores de línea y lógica de ataque. Próximamente.') {
+        existing.description = builtin.description;
+      }
+    }
+    localStorage.setItem(`${CONFIG.STORAGE_PREFIX}games`, JSON.stringify(result));
+    localStorage.setItem(marker, '1');
+  } catch { /* El catálogo se mantiene en memoria si el navegador no permite guardarlo. */ }
   return result;
 }

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sumo Bot Challenge</title>
+  <meta name="description" content="Simulador de robot sumo autónomo: Arduino Nano, L298N, TCRT5000 y HC-SR04.">
+  <link rel="icon" href="preview.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 40 40" width="36" height="36" aria-hidden="true">
+        <circle cx="20" cy="20" r="18" fill="#05070d" stroke="#f1f5f9" stroke-width="3"/>
+        <rect x="9" y="14" width="11" height="12" rx="2" fill="#38bdf8"/>
+        <rect x="22" y="14" width="10" height="12" rx="2" fill="#f97316"/>
+      </svg>
+      <div><h1>Sumo Bot Challenge</h1><small>Proyecto final · Combate autónomo</small></div>
+    </div>
+    <div class="tools">
+      <label class="sel"><span>Nivel</span><select id="level" aria-label="Seleccionar nivel"></select></label>
+      <div class="prog" title="Progreso guardado en este navegador">
+        <div class="bar"><i id="progBar"></i></div><span id="progTxt">0/5</span>
+      </div>
+      <button id="sound" class="icon" aria-pressed="true" title="Sonido on/off">🔊</button>
+      <button id="resetProgress" class="ghost">Reiniciar progreso</button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card stage">
+      <div class="mission">
+        <span class="tag" id="lvTag">Nivel 1</span>
+        <h2 id="lvTitle">—</h2>
+        <p id="lvBrief"></p>
+        <p class="goal"><b>Objetivo:</b> <span id="lvGoal"></span></p>
+      </div>
+      <div class="arena-wrap" id="wrap">
+        <canvas id="arena" role="img" aria-label="Dohyo circular visto desde arriba"></canvas>
+        <div class="result" id="result" hidden>
+          <h3 id="resTitle"></h3>
+          <p id="resMsg"></p>
+          <div class="row"><button id="retry">↺ Reintentar</button><button id="next" class="primary">Siguiente nivel →</button></div>
+        </div>
+      </div>
+      <div class="hud">
+        <div><span>Tiempo</span><b id="hTime">0.0 s</b></div>
+        <div><span>Estado</span><b id="hState">LISTO</b></div>
+        <div><span>TCRT5000 I · D</span><b id="hIR">HIGH · HIGH</b></div>
+        <div><span>HC-SR04</span><b id="hUS">— cm</b></div>
+      </div>
+      <div class="actions">
+        <button id="run" class="primary">▶ Combatir</button>
+        <button id="reset">↺ Reiniciar combate</button>
+        <label class="speed"><input type="checkbox" id="fast"> Velocidad ×2</label>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <section class="card">
+        <h3>Reglas del robot</h3>
+        <form id="rules" onsubmit="return false"></form>
+        <p class="tip" id="lvTip"></p>
+      </section>
+      <section class="card code">
+        <div class="code-head"><h3>Código Arduino Nano · C++</h3><button id="copy">Copiar</button></div>
+        <pre><code id="code"></code></pre>
+      </section>
+      <section class="card hw">
+        <h3>Conexiones</h3>
+        <ul>
+          <li><b>L298N</b> ENA→D5 · ENB→D6 (PWM) · IN1–IN4→D7–D10</li>
+          <li><b>TCRT5000 ×2</b> izquierdo→D2 · derecho→D4 (LOW = blanco)</li>
+          <li><b>HC-SR04</b> TRIG→D11 · ECHO→D12 · distancia = eco / 58</li>
+        </ul>
+      </section>
+    </aside>
+  </main>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

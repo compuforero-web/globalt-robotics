@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img" aria-label="Sumo Bot Challenge: Dohyo visto desde arriba con dos robots">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="70%" stop-color="#38bdf8" stop-opacity=".35"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity=".75"/>
+      <stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#38bdf8" stroke-opacity=".08"/>
+    </pattern>
+  </defs>
+  <rect width="640" height="400" fill="#0b1120"/>
+  <rect width="640" height="400" fill="url(#grid)"/>
+  <g transform="translate(400 205) scale(.88) translate(-320 -200)">
+  <circle cx="320" cy="200" r="190" fill="url(#glow)"/>
+  <circle cx="320" cy="200" r="160" fill="#f1f5f9"/>
+  <circle cx="320" cy="200" r="150" fill="#05070d"/>
+  <rect x="296" y="175" width="5" height="50" fill="#7c2d12"/>
+  <rect x="339" y="175" width="5" height="50" fill="#7c2d12"/>
+  <!-- haz ultrasónico HC-SR04 -->
+  <path d="M262 200 L392 168 A134 134 0 0 1 392 232 Z" fill="url(#beam)"/>
+  <line x1="262" y1="200" x2="384" y2="200" stroke="#38bdf8" stroke-width="2" stroke-dasharray="6 5"/>
+  <!-- robot jugador (cian) -->
+  <g transform="translate(222 200)">
+    <rect x="-26" y="-34" width="34" height="8" rx="2" fill="#111827"/>
+    <rect x="-26" y="26" width="34" height="8" rx="2" fill="#111827"/>
+    <rect x="-34" y="-28" width="62" height="56" rx="8" fill="#38bdf8"/>
+    <path d="M24 -32 H40 V32 H24 Z" fill="#cbd5e1"/>
+    <rect x="-22" y="-13" width="28" height="26" rx="3" fill="#0b1120"/>
+    <circle cx="16" cy="-8" r="5" fill="#0b1120" stroke="#e0f2fe" stroke-width="2"/>
+    <circle cx="16" cy="8" r="5" fill="#0b1120" stroke="#e0f2fe" stroke-width="2"/>
+    <circle cx="36" cy="-14" r="4" fill="#22c55e"/>
+    <circle cx="36" cy="14" r="4" fill="#22c55e"/>
+  </g>
+  <!-- robot rival (naranja) -->
+  <g transform="translate(424 200) rotate(180)">
+    <rect x="-26" y="-36" width="36" height="8" rx="2" fill="#111827"/>
+    <rect x="-26" y="28" width="36" height="8" rx="2" fill="#111827"/>
+    <rect x="-36" y="-30" width="66" height="60" rx="8" fill="#f97316"/>
+    <path d="M26 -34 H42 V34 H26 Z" fill="#cbd5e1"/>
+    <rect x="-24" y="-14" width="30" height="28" rx="3" fill="#0b1120"/>
+  </g>
+  <!-- chispas -->
+  <g stroke="#fbbf24" stroke-width="3" stroke-linecap="round">
+    <path d="M320 150 l-6 -14"/><path d="M332 154 l8 -12"/><path d="M314 246 l-8 12"/><path d="M328 244 l6 14"/>
+  </g>
+  </g>
+  <text x="24" y="44" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="28" font-weight="800">Sumo Bot <tspan fill="#38bdf8">Challenge</tspan></text>
+  <text x="24" y="68" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14">Arduino Nano · TCRT5000 · HC-SR04</text>
+  <rect x="440" y="350" width="180" height="32" rx="16" fill="#0f172a" stroke="#f97316" stroke-width="2"/>
+  <text x="530" y="371" text-anchor="middle" fill="#f97316" font-family="ui-monospace, monospace" font-size="14" font-weight="700">L298N · SUMO BOT</text>
+  <circle cx="40" cy="366" r="6" fill="#22c55e"/>
+  <text x="54" y="371" fill="#22c55e" font-family="ui-monospace, monospace" font-size="13">5 niveles · combate autónomo</text>
+</svg>

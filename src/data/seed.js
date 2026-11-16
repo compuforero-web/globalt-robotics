@@ -30,8 +30,9 @@ const games = [
   {
     id: 'game-sumo-bot', sort_order: 4, featured: false,
     title: 'Sumo Bot Challenge',
-    description: 'Proyecto final: diseña la estrategia de un robot de sumo con puente H, sensores de línea y lógica de ataque. Próximamente.',
-    category: 'Proyecto', level: 'Proyecto Final', url: '', preview: '',
+    description: 'Diseña la estrategia de un robot de sumo en 5 retos: borde con TCRT5000, detección con HC-SR04, velocidad PWM y duelos. Ajusta parámetros y observa el código Arduino Nano con L298N en vivo.',
+    category: 'Proyecto', level: 'Proyecto Final',
+    url: 'games/sumo-bot-challenge/index.html', preview: 'games/sumo-bot-challenge/preview.svg',
   },
 ];
 

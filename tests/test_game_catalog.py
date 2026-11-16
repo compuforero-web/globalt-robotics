@@ -44,8 +44,19 @@ assert.deepEqual(upgraded[0], customized);
 storage.delete(`${CONFIG.STORAGE_PREFIX}games_radar_20261116`);
 const external = { ...pending, url:'https://example.invalid/mi-radar' };
 assert.deepEqual(migrateLocalGames([external]), [external]);
-// A fresh browser also gets exactly the three playable games.
+// A previously updated browser receives Sumo without restoring deleted games.
+storage.delete(`${CONFIG.STORAGE_PREFIX}games_sumo_20261116`);
+storage.set('sumoBotChallenge.v1', '{"done":[1]}');
+const pendingSumo = {id:'game-sumo-bot',title:'Mi Sumo',url:'',preview:'',description:'Descripción propia'};
+const sumo = migrateLocalGames([customized,pendingSumo]);
+assert.equal(sumo.length,2);
+assert.equal(sumo[1].url,'games/sumo-bot-challenge/index.html');
+assert.equal(sumo[1].title,'Mi Sumo');
+assert.equal(sumo[1].description,'Descripción propia');
+assert.equal(storage.get('sumoBotChallenge.v1'),'{"done":[1]}');
+assert.deepEqual(migrateLocalGames([customized]),[customized]);
+// A fresh browser also gets exactly the four playable games.
 storage.clear();
 const fresh = migrateLocalGames(SEED.games);
-assert.equal(fresh.filter(x => x.url).length, 3);
+assert.equal(fresh.filter(x => x.url).length, 4);
 '''], cwd=ROOT, check=True)
