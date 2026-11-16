@@ -25,6 +25,18 @@ sudo docker compose -f /var/lib/globalt-robotics-aula-preview/compose.json logs 
 
 Si el primer instalador dejó los tres contenedores activos pero el puerto 8100 no aparece publicado, actualizar esta rama y ejecutar `sudo bash deploy/linux/fix-aula-preview-network.sh`. La reparación añade una red de entrada únicamente a nginx; API y PostgreSQL conservan la red interna. Guarda las configuraciones anteriores y recrea solo web y API para aplicar la red y la IP de proxy confiable. No recrea la base ni elimina su volumen. No volver a ejecutar el instalador inicial.
 
+## Actualizar el piloto ya instalado
+
+`deploy/linux/update-aula-preview.sh <commit>` actualiza la instalación existente a un commit concreto (40 caracteres) y debe ejecutarse desde una copia del repositorio en ese mismo commit. No sirve para instalar desde cero ni toca otros proyectos, puertos, volúmenes, el compilador (8094/8097) o el dominio público.
+
+1. **Verifica** commit, `compose.json`, contenedores, proyecto Compose, redes (web: aislada+entrada; API y PostgreSQL: solo aislada), puertos `127.0.0.1:8100` y `100.117.79.42:8100`, montajes, IP de proxy confiable, salud, espacio libre y que las migraciones ya aplicadas existan sin cambios en el commit. Ante cualquier diferencia se detiene sin modificar nada.
+2. **Respalda** en `respaldos/<fecha>-<anterior>-a-<nuevo>/`: `pg_dump` comprobado restaurándolo en una base temporal (se compara el número de usuarios, inscripciones, cursos y migraciones), `configuracion.tar` (incluye credenciales; solo root), sumas SHA-256 y `RECUPERACION.txt`. Si falla, aborta.
+3. **Exporta** el commit, construye `globalt-aula-api:<commit>` y solo entonces cambia: mueve `source/` anterior a `anteriores/`, sincroniza los archivos web dentro de `site/` (sin recrear nginx) y cambia únicamente la imagen de la API en `compose.json`. Recrea solo la API.
+4. La API aplica las **migraciones pendientes** al arrancar con el mecanismo existente (una vez, con suma de control). El script comprueba que queden exactamente las del commit.
+5. **Comprueba** página, revisión publicada, salud y borradores con una cuenta ficticia `verificacion-aula-…@example.com` creada en esa ejecución (guardar, conflicto, CSRF, cierre de sesión y recuperación), que después elimina. Comprueba que web y PostgreSQL no se recrearon y que los datos existentes no disminuyeron. Consume 1 de los 10 registros por IP cada 15 minutos.
+
+Si falla algo después del cambio, vuelve automáticamente a la imagen, `source/`, `site/` y `compose.json` anteriores. **La base nunca se restaura automáticamente**: las migraciones nuevas quedan aplicadas y la API anterior las ignora. Restaurar la base sustituye los datos posteriores al respaldo y requiere decisión expresa (ver `RECUPERACION.txt`). Se puede repetir con el mismo commit: no duplica migraciones ni recrea contenedores si nada cambió. Los respaldos y `anteriores/` se conservan; se pueden archivar manualmente cuando ya no hagan falta. Registro de cada ejecución: `registros/`.
+
 Detener el piloto conservando las cuentas:
 
 ```bash
