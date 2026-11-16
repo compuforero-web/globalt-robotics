@@ -34,6 +34,7 @@
   <link rel="stylesheet" href="styles/robot-hero.css">
   <link rel="stylesheet" href="styles/components.css">
   <link rel="stylesheet" href="styles/discovery.css">
+  <link rel="stylesheet" href="styles/getting-started.css">
   <script type="module" src="src/public/main.js"></script>
   <script type="application/ld+json">
 {
@@ -100,6 +101,7 @@
             <a class="btn btn--primary btn--lg" href="#juegos">Jugar y aprender</a>
             <a class="btn btn--outline btn--lg" href="#talleres">Ver talleres</a>
           </div>
+          <p class="start-guide__intro"><a href="#como-empezar">¿Primera vez? Descubre cómo empezar →</a></p>
           <dl class="hero__stats">
             <div><dt id="stat-games">5</dt><dd>Simuladores</dd></div>
             <div><dt id="stat-courses">8</dt><dd>Cursos en ruta</dd></div>
@@ -114,6 +116,50 @@
             <button class="robot-scene__pause" data-robot-pause type="button" aria-pressed="false">Pausar animación</button>
             <button class="robot-scene__static" data-robot-transform type="button" hidden>Ver dron</button>
             <p class="robot-scene__fallback">Robot transformable en dron con propulsión dorsal.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <section id="como-empezar" class="section section--alt start-guide" aria-labelledby="start-guide-title">
+      <div class="container">
+        <header class="section__head">
+          <p class="eyebrow eyebrow--cyan">Tu primera experiencia</p>
+          <h2 id="start-guide-title">De tu primera visita a tu primer programa</h2>
+          <p>Sigue estos cuatro pasos para comenzar el curso de Arduino. La primera lección se realiza en el navegador, sin comprar materiales.</p>
+        </header>
+        <ol class="start-guide__steps" role="list">
+          <li class="start-guide__step">
+            <span class="start-guide__number" aria-hidden="true">01</span>
+            <h3>Solicita tu cuenta</h3>
+            <p>El acceso al curso se habilita de forma individual. Solicítalo por WhatsApp; si ya tienes una cuenta, continúa con el siguiente paso.</p>
+          </li>
+          <li class="start-guide__step">
+            <span class="start-guide__number" aria-hidden="true">02</span>
+            <h3>Entra al Aula</h3>
+            <p>Inicia sesión con el correo y la contraseña de tu cuenta. Puedes entrar desde un celular o un computador.</p>
+          </li>
+          <li class="start-guide__step">
+            <span class="start-guide__number" aria-hidden="true">03</span>
+            <h3>Inscríbete en Arduino</h3>
+            <p>En el catálogo del Aula, busca <strong>Electrónica y C++ con Arduino</strong> y pulsa <strong>Inscribirme</strong>. Si ya estás inscrito, lo encontrarás en Mis cursos.</p>
+          </li>
+          <li class="start-guide__step">
+            <span class="start-guide__number" aria-hidden="true">04</span>
+            <h3>Abre tu primera lección</h3>
+            <p>En <strong>Mis cursos</strong>, pulsa <strong>Abrir laboratorio</strong>. Sigue la guía, escribe tu código, compílalo y observa la simulación.</p>
+          </li>
+        </ol>
+        <div class="start-guide__next">
+          <div>
+            <p><strong>Aprende a tu ritmo.</strong> Pulsa Guardar en el laboratorio para conservar tu código en la cuenta y retomarlo desde otro dispositivo.</p>
+            <p class="start-guide__note">¿Quieres explorar primero? Los juegos y simuladores del catálogo se pueden abrir sin una cuenta del Aula.</p>
+          </div>
+          <div class="start-guide__actions">
+            <a class="btn btn--wa" data-wa="access" href="https://wa.me/573144864187?text=Hola%2C%20quiero%20solicitar%20una%20cuenta%20para%20el%20curso%20de%20Arduino.">Solicitar mi cuenta</a>
+            <a class="btn btn--primary" data-aula-link hidden href="aula/">Entrar al Aula</a>
+            <a class="start-guide__games" href="#juegos">Explorar los juegos</a>
           </div>
         </div>
       </div>
@@ -205,7 +251,7 @@
       </div>
       <nav aria-label="Secciones">
         <h3>Explora</h3>
-        <ul><li><a href="#juegos">Juegos</a></li><li><a href="#programacion">Programación</a></li><li><a href="#ia">Inteligencia Artificial</a></li><li><a href="#talleres">Talleres</a></li></ul>
+        <ul><li><a href="#como-empezar">Cómo empezar</a></li><li><a href="#juegos">Juegos</a></li><li><a href="#programacion">Programación</a></li><li><a href="#ia">Inteligencia Artificial</a></li><li><a href="#talleres">Talleres</a></li></ul>
       </nav>
       <div>
         <h3>Contacto</h3>
