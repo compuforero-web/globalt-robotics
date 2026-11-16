@@ -60,8 +60,8 @@ compose={'name':'globalt-aula-piloto','services':{
            'ports':[f'127.0.0.1:{sys.argv[3]}:80',f'100.117.79.42:{sys.argv[3]}:80'],
            'volumes':['./nginx.conf:/etc/nginx/conf.d/default.conf:ro','./site:/srv/sitio:ro'],
            'read_only':True,'tmpfs':['/var/cache/nginx','/var/run','/tmp'],
-           'networks':['aislada'],'restart':'unless-stopped','mem_limit':'128m','cpus':0.5,'pids_limit':100}},
-    'networks':{'aislada':{'internal':True}},'volumes':{'datos':{}}}
+           'networks':['aislada','entrada'],'restart':'unless-stopped','mem_limit':'128m','cpus':0.5,'pids_limit':100}},
+    'networks':{'aislada':{'internal':True},'entrada':{}},'volumes':{'datos':{}}}
 (s/'compose.json').write_text(json.dumps(compose,indent=2))
 PY
 cat > "$STATE/nginx.conf" <<'NGINX'
@@ -91,7 +91,7 @@ DC=(docker compose -f compose.json)
 "${DC[@]}" build api
 "${DC[@]}" up -d db web
 # Confía únicamente en la IP de este proxy aislado. No acepta X-Forwarded-For del navegador.
-WEB_IP=$(docker inspect "$NAME-web" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+WEB_IP=$(docker inspect "$NAME-web" --format '{{(index .NetworkSettings.Networks "globalt-aula-piloto_aislada").IPAddress}}')
 [[ "$WEB_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
 sed -i '/^FORWARDED_ALLOW_IPS=/d' api.env
 printf 'FORWARDED_ALLOW_IPS=%s\n' "$WEB_IP" >> api.env

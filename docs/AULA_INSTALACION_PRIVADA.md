@@ -23,6 +23,8 @@ sudo docker compose -f /var/lib/globalt-robotics-aula-preview/compose.json ps
 sudo docker compose -f /var/lib/globalt-robotics-aula-preview/compose.json logs --tail 30
 ```
 
+Si el primer instalador dejó los tres contenedores activos pero el puerto 8100 no aparece publicado, actualizar esta rama y ejecutar `sudo bash deploy/linux/fix-aula-preview-network.sh`. La reparación añade una red de entrada únicamente a nginx; API y PostgreSQL conservan la red interna. Guarda las configuraciones anteriores y recrea solo web y API para aplicar la red y la IP de proxy confiable. No recrea la base ni elimina su volumen. No volver a ejecutar el instalador inicial.
+
 Detener el piloto conservando las cuentas:
 
 ```bash
