@@ -4,12 +4,22 @@ import { waLink, waMsg } from '../utils/whatsapp.js';
 
 const LEVEL_CLASS = { 'Básico': 'lvl-basic', 'Intermedio': 'lvl-mid', 'Avanzado': 'lvl-final' };
 
+// Mantener esta lista alineada con las lecciones publicadas y admitidas por la API.
+const ARDUINO_PUBLIC_LESSONS = [
+  'LED y monitor serie',
+  'Semáforo y protoboard',
+  'Brillo con PWM',
+  'Lectura de un pulsador',
+  'Pulsaciones y antirrebote',
+  'Potenciómetro y control de brillo',
+];
+
 export function courseCard(course, index) {
   const topics = Array.isArray(course.topics) ? course.topics : [];
   const isArduino = course.id === 'course-arduino';
   const link = safeUrl(course.link);
   const external = /^https?:/i.test(link);
-  const search = normalize(`${course.title} ${course.description} ${course.category} ${topics.join(' ')}`);
+  const search = normalize(`${course.title} ${course.description} ${course.category} ${topics.join(' ')}${isArduino ? ` ${ARDUINO_PUBLIC_LESSONS.join(' ')}` : ''}`);
   return `<article class="card course-card" data-cat="${esc(course.category)}" data-search="${esc(search)}">
     <div class="course-card__head">
       <span class="course-card__icon">${icon(course.icon || (course.track === 'ia' ? 'brain' : 'code'))}</span>
@@ -21,9 +31,13 @@ export function courseCard(course, index) {
       ${course.duration ? `<span class="tag tag--soft">${icon('clock')} ${esc(course.duration)}${isArduino ? ' previstas' : ''}</span>` : ''}
     </div>
     <p class="card__text">${esc(course.description)}</p>
-    ${isArduino ? '<p class="card__text"><strong>6 lecciones disponibles.</strong> El resto del curso se incorporará por etapas. Accede con una cuenta habilitada.</p>' : ''}
+    ${isArduino ? `<p class="card__text"><strong>${ARDUINO_PUBLIC_LESSONS.length} lecciones disponibles.</strong> El curso seguirá ampliándose por etapas. Accede con una cuenta habilitada.</p>
+    <details class="syllabus">
+      <summary>${icon('book')} Qué puedes practicar ahora</summary>
+      <ol>${ARDUINO_PUBLIC_LESSONS.map((title) => `<li>${esc(title)}</li>`).join('')}</ol>
+    </details>` : ''}
     ${topics.length ? `<details class="syllabus">
-      <summary>${icon('book')} ${isArduino ? 'Ruta del curso' : 'Temario'} (${topics.length} temas)</summary>
+      <summary>${icon('book')} ${isArduino ? 'Ruta completa prevista' : 'Temario'} (${topics.length} temas)</summary>
       <ol>${topics.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
     </details>` : ''}
     <div class="card__actions">
