@@ -2,8 +2,11 @@
 // Modos: 'realtime' (sigue el reloj real) y 'fast' (lo más rápido posible, para evaluar el reto).
 // Los pines se resumen en ventanas de 20 ms (pwm.js): así una salida PWM de ~1 kHz no satura la interfaz
 // ni la traza de evaluación. Todo sale de los flancos del HEX emulado.
+// Las lecciones con pulsador añaden su modelo (button.js): en tiempo real lo mueve el estudiante (mensajes
+// 'input') o un guion; en la evaluación, siempre el guion reproducible de la lección, con precisión de ciclo.
 import { NanoRunner, CLOCK_HZ } from './nano-runner.js';
 import { PwmMeter, WINDOW_MS } from './pwm.js';
+import { ButtonModel } from './button.js';
 
 const SLICE_MS = 16;            // trabajo máximo por porción antes de devolver el control
 const MAX_LAG_MS = 100;         // si el equipo es lento, el tiempo simulado avanza más despacio
@@ -16,6 +19,8 @@ let windows = [];
 let serial = [];
 let baud = 0;
 const lastSent = new Map();     // pin → última ventana enviada (no se repiten estados iguales)
+let button = null;
+let buttonSent = '';            // último estado del pulsador enviado a la interfaz
 
 function changed(w) {
   const prev = lastSent.get(w.pin);
@@ -25,6 +30,13 @@ function changed(w) {
 }
 
 function flush() {
+  if (button) {
+    // Un pin flotante cambia cada pocos ms: se informa como «flotante» (level null) en lugar de cada cambio.
+    const floating = button.mode === 'input' && !button.closed;
+    const state = { closed: button.closed, mode: button.mode, level: floating ? null : button.level };
+    const key = JSON.stringify(state);
+    if (key !== buttonSent) { buttonSent = key; postMessage({ type: 'button', ...state }); }
+  }
   if (windows.length) { postMessage({ type: 'windows', windows }); windows = []; }
   if (serial.length) { postMessage({ type: 'serial', bytes: serial, baud }); serial = []; }
 }
@@ -58,8 +70,24 @@ function realtime(limitMs) {
   step();
 }
 
-/** Traza para evaluar: flancos (limitados por pin), bytes serie y ventanas de medición. */
-export function recordFast(hex, durationMs, watch = []) {
+/**
+ * Pulsador de la lección. `config` = { pin, seed, bounce }; `script` = [{ t, closed }] (guion opcional).
+ * `record` recibe los cambios de contacto y de modo del pin para la traza.
+ */
+function attachButton(config, script, record = {}) {
+  if (!config) return null;
+  const model = new ButtonModel(runner, { pin: config.pin, seed: config.seed, bounce: Boolean(config.bounce),
+    onContact: record.onContact, onMode: record.onMode });
+  if (Array.isArray(script)) model.play(script);
+  return model;
+}
+
+/**
+ * Traza para evaluar: flancos (limitados por pin), bytes serie y ventanas de medición.
+ * `stimulus` = { button: { pin, seed }, script: [{ t, closed }] }: el guion de pulsaciones se aplica igual siempre.
+ * La traza añade `input` = { pin, contact: [{ t, closed }], modes: [{ t, mode }] } con lo que ocurrió en el pin.
+ */
+export function recordFast(hex, durationMs, watch = [], stimulus = null) {
   const trace = { pins: [], serial: [], windows: [], durationMs, truncatedPins: [] };
   const perPin = new Map();
   meter = new PwmMeter({ watch });
@@ -73,21 +101,33 @@ export function recordFast(hex, durationMs, watch = []) {
     },
     onSerial: (byte, t, b) => { if (trace.serial.length < MAX_TRACE) trace.serial.push({ byte, t, baud: b }); },
   });
+  if (stimulus?.button) {
+    const input = { pin: stimulus.button.pin, contact: [], modes: [] };
+    trace.input = input;
+    button = attachButton({ ...stimulus.button, bounce: false }, stimulus.script || [], {
+      onContact: (closed, t) => { if (input.contact.length < MAX_TRACE) input.contact.push({ t, closed }); },
+      onMode: (mode, t) => { if (input.modes.length < MAX_TRACE) input.modes.push({ t, mode }); },
+    });
+  }
   advance(durationMs, (ws) => { for (const w of ws) trace.windows.push(w); });
+  button = null;
   return trace;
 }
 
 if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
   self.onmessage = ({ data }) => {
     try {
+      if (data.type === 'input') { if (button && runner) { button.press(Boolean(data.closed)); } return; }
       if (data.type !== 'start') return;
       const watch = Array.isArray(data.watch) ? data.watch : [];
-      if (data.mode === 'fast') { postMessage({ type: 'trace', trace: recordFast(data.hex, data.durationMs, watch) }); return; }
+      if (data.mode === 'fast') { postMessage({ type: 'trace', trace: recordFast(data.hex, data.durationMs, watch, data.stimulus || null) }); return; }
       meter = new PwmMeter({ watch });
       runner = new NanoRunner(data.hex, {
         onPin: (pin, high, t) => meter.edge(pin, high, t),
         onSerial: (byte, _t, b) => { serial.push(byte); baud = b; },
       });
+      // Con guion, el pulsador sigue el guion del reto (el estudiante puede pulsar además).
+      button = attachButton(data.button || null, data.script || null);
       postMessage({ type: 'ready' });
       realtime(data.limitMs || Infinity);
     } catch (error) {

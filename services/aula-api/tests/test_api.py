@@ -309,7 +309,8 @@ def test_borrador_no_sobrescribe_version_mas_reciente():
 
 
 def test_borradores_aislados_por_leccion():
-    rutas = {l: '/api/aula/borradores/' + l for l in ('arduino-led-serie', 'arduino-protoboard-semaforo', 'arduino-pwm-brillo')}
+    rutas = {l: '/api/aula/borradores/' + l for l in ('arduino-led-serie', 'arduino-protoboard-semaforo', 'arduino-pwm-brillo',
+                                                      'arduino-boton-entrada', 'arduino-boton-flanco')}
     with cliente() as c, cliente() as otro:
         h = inscrito(c, 'borr.lecciones@example.com')
         ho = inscrito(otro, 'borr.lecciones.otro@example.com')
@@ -322,6 +323,12 @@ def test_borradores_aislados_por_leccion():
         assert (primera['codigo'], primera['version']) == ('// arduino-led-serie', 1)
         assert c.get(rutas['arduino-protoboard-semaforo']).json()['borrador']['codigo'] == '// arduino-protoboard-semaforo'
         assert c.get(rutas['arduino-pwm-brillo']).json()['borrador']['version'] == 2
+        # Lecciones de pulsador (2.2 y 2.3): cada una con su borrador y su versión.
+        assert c.put(rutas['arduino-boton-flanco'], json={'codigo': '// flanco v2', 'version_base': 1}, headers=h).status_code == 200
+        assert c.get(rutas['arduino-boton-entrada']).json()['borrador'] == {**c.get(rutas['arduino-boton-entrada']).json()['borrador'],
+                                                                            'codigo': '// arduino-boton-entrada', 'version': 1}
+        r = c.put(rutas['arduino-boton-entrada'], json={'codigo': 'otra', 'version_base': 2}, headers=h)
+        assert r.status_code == 409 and r.json()['borrador']['codigo'] == '// arduino-boton-entrada'
         # Conflicto por lección: una versión vieja de la lección 3 no sobrescribe.
         r = c.put(rutas['arduino-pwm-brillo'], json={'codigo': 'viejo', 'version_base': 1}, headers=h)
         assert r.status_code == 409 and r.json()['borrador']['codigo'] == '// pwm v2'
@@ -332,7 +339,8 @@ def test_borradores_aislados_por_leccion():
         assert c.get(rutas['arduino-protoboard-semaforo']).json()['borrador']['codigo'] == '// arduino-protoboard-semaforo'
         # Un identificador desconocido no crea filas.
         antes = sql("SELECT count(*) FROM borradores")[0][0]
-        for desconocida in ('arduino-servo-posiciones', 'ARDUINO-PWM-BRILLO', 'arduino-pwm-brillo-v2'):
+        for desconocida in ('arduino-servo-posiciones', 'ARDUINO-PWM-BRILLO', 'arduino-pwm-brillo-v2',
+                            'arduino-potenciometro-pwm', 'arduino-boton', 'arduino-boton-flanco-v2'):
             assert c.put('/api/aula/borradores/' + desconocida, json={'codigo': 'x'}, headers=h).status_code == 404
             assert c.get('/api/aula/borradores/' + desconocida).status_code == 404
         assert sql("SELECT count(*) FROM borradores")[0][0] == antes

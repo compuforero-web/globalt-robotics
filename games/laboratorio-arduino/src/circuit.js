@@ -172,3 +172,113 @@ export function createSemaforoCircuit(root) {
     },
   };
 }
+
+const BTN_MODE = {
+  pullup: (level) => `D2 = ${level ? 'HIGH' : 'LOW'} · entrada con pull-up`,
+  input: (level) => (level === null ? 'D2 flotante · entrada sin pull-up: lee ruido' : `D2 = ${level ? 'HIGH' : 'LOW'} · entrada sin pull-up`),
+  output: () => 'D2 configurado como salida: no lee el botón',
+};
+
+/**
+ * Pulsador entre D2 y GND (sin resistencia externa: se usa el pull-up interno) y LED con 220 Ω en D13.
+ * El pulsador se acciona con el ratón, el dedo o el teclado (Espacio/Intro mantenidos) mientras la simulación
+ * se ejecuta: `onButton(closed)` lo envía al modelo eléctrico del Worker, que devuelve el estado real (`input`).
+ * `onScript()` reproduce el guion de pulsaciones del reto. `bounce` solo cambia los textos (2.3 simula rebotes).
+ */
+export function createButtonCircuit(root, { onButton = () => false, onScript = null, bounce = false } = {}) {
+  const ledX = nanoX(13);
+  const btnX = nanoX(2);
+  root.innerHTML = `
+  <svg class="circuit circuit--boton" viewBox="0 36 360 190" role="img" aria-labelledby="circuit-title circuit-desc">
+    <title id="circuit-title">Pulsador en D2 y LED en D13</title>
+    <desc id="circuit-desc">Arduino Nano compatible. Un pulsador une D2 con GND cuando se pulsa; no hay resistencia externa, se usa la resistencia de pull-up interna. D13 va por una resistencia de 220 ohmios al LED y el cátodo a GND.</desc>
+    <rect x="8" y="96" width="150" height="72" rx="7" class="c-pcb"/>
+    <rect x="62" y="122" width="34" height="24" rx="3" class="c-chip"/>
+    <text x="79" y="137" class="c-chip-txt" text-anchor="middle">328P</text>
+    <text x="128" y="160" class="c-label" text-anchor="middle">NANO</text>
+    <g class="c-onboard"><rect x="36" y="131" width="10" height="6" rx="2" class="c-l"/><text x="32" y="137" class="c-tiny" text-anchor="end">L</text></g>
+    ${NANO_PINS.map((p) => `<circle cx="${nanoX(p)}" cy="106" r="2.8" class="c-hole ${[2, 13].includes(p) ? 'is-used' : ''}"/>
+      <text x="${nanoX(p)}" y="117" class="c-tiny" text-anchor="middle">${p}</text>`).join('')}
+    <circle cx="20" cy="158" r="2.8" class="c-hole is-used"/><text x="27" y="161" class="c-tiny">GND</text>
+    <text x="${btnX - 4}" y="90" class="c-pin-name" text-anchor="end">D2</text>
+    <path d="M${btnX} 106 V60 H232" class="c-wire c-wire--sig"/>
+    <g class="c-btn" transform="translate(262 60)">
+      <rect x="-22" y="-16" width="44" height="32" rx="4" class="c-btn-base"/>
+      <line x1="-30" y1="0" x2="-22" y2="0" class="c-leg"/><line x1="22" y1="0" x2="30" y2="0" class="c-leg"/>
+      <circle r="11" class="c-btn-cap"/>
+      <text y="30" class="c-small" text-anchor="middle">pulsador</text>
+    </g>
+    <path d="M292 60 H338 V214 H20 V158" class="c-wire c-wire--gnd"/>
+    <text x="${ledX + 4}" y="90" class="c-pin-name">D13</text>
+    <path d="M${ledX} 106 V76 H3 V190 H120" class="c-wire c-wire--sig"/>
+    <g transform="translate(120 182)"><rect width="56" height="16" rx="6" class="c-res"/>
+      <rect x="12" y="0" width="4" height="16" class="c-band1"/><rect x="21" y="0" width="4" height="16" class="c-band1"/>
+      <rect x="30" y="0" width="4" height="16" class="c-band2"/><rect x="44" y="0" width="3" height="16" class="c-band3"/></g>
+    <text x="148" y="176" class="c-small" text-anchor="middle">220 Ω</text>
+    <path d="M176 190 H232" class="c-wire c-wire--sig"/>
+    <g class="c-led" data-pin="13" transform="translate(246 186) rotate(90)">
+      <circle r="24" class="c-glow"/>
+      <path d="M-11 6 V-8 a11 11 0 0 1 22 0 V6 z" class="c-led-body"/>
+      <rect x="-13" y="6" width="26" height="4" rx="2" class="c-led-rim"/>
+    </g>
+    <path d="M257 190 H300 V214" class="c-wire c-wire--gnd"/>
+    <text x="246" y="166" class="c-tiny" text-anchor="middle">LED</text>
+  </svg>
+  <div class="btn-ctl">
+    <button type="button" class="btn-ctl__press" aria-pressed="false" aria-describedby="btn-ctl-help">Pulsador (D2)</button>
+    <span class="btn-ctl__state" aria-live="polite">D2 sin conexión: pulsa Ejecutar</span>
+    ${onScript ? '<button type="button" class="btn btn--ghost btn--sm btn-ctl__script">Reproducir guion del reto</button>' : ''}
+    <p id="btn-ctl-help" class="btn-ctl__help muted small">Mantén pulsado con el ratón, el dedo o Espacio/Intro mientras se ejecuta la simulación.${bounce ? ' Cada pulsación y cada suelta rebota de 3 a 8 veces, como un pulsador real.' : ''}</p>
+  </div>
+  ${pinStripHtml()}`;
+  const led = root.querySelector('.c-led');
+  const onboard = root.querySelector('.c-onboard');
+  const cap = root.querySelector('.c-btn');
+  const press = root.querySelector('.btn-ctl__press');
+  const stateEl = root.querySelector('.btn-ctl__state');
+  const strip = pinStrip(root);
+  const d2 = root.querySelector('.pin-dot[data-pin="2"]');
+  let down = false;
+
+  const showContact = (closed) => {
+    cap.classList.toggle('is-pressed', closed);
+    press.classList.toggle('is-pressed', closed);
+    press.setAttribute('aria-pressed', String(closed));
+  };
+  function set(closed) {
+    if (closed === down) return;
+    down = closed;
+    showContact(closed);
+    if (!onButton(closed) && closed) stateEl.textContent = 'La simulación no está en marcha: pulsa Ejecutar para usar el pulsador.';
+  }
+  press.addEventListener('pointerdown', (e) => { e.preventDefault(); press.setPointerCapture?.(e.pointerId); set(true); });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) press.addEventListener(ev, () => set(false));
+  press.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); set(true); } });
+  press.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); set(false); } });
+  press.addEventListener('blur', () => set(false));
+  press.addEventListener('contextmenu', (e) => e.preventDefault());
+  root.querySelector('.btn-ctl__script')?.addEventListener('click', () => onScript());
+
+  return {
+    update(w) {
+      if (w.pin === 2) return;                 // D2 es la entrada: su estado llega con input()
+      strip.update(w);
+      if (w.pin === 13) { applyLed(led, w); onboard.classList.toggle('is-on', ledState(w).on); }
+    },
+    /** Estado real del modelo en el Worker: { closed, mode, level } (level null = flotante). */
+    input({ closed, mode, level }) {
+      if (!down) showContact(closed);           // el guion también mueve el pulsador
+      stateEl.textContent = `${closed ? 'Pulsado' : 'Suelto'} · ${(BTN_MODE[mode] || BTN_MODE.input)(level)}`;
+      d2.classList.toggle('is-high', level === true);
+      d2.classList.toggle('is-floating', level === null);
+    },
+    reset() {
+      strip.reset();
+      this.update({ pin: 13, duty: 0, level: false, rises: 0 });
+      d2.classList.remove('is-high', 'is-floating');
+      showContact(down);
+      stateEl.textContent = 'D2 sin conexión: pulsa Ejecutar';
+    },
+    stopped() { stateEl.textContent = 'Simulación detenida: el pulsador no está conectado a ningún programa.'; },
+  };
+}

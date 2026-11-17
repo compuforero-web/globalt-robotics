@@ -47,10 +47,13 @@ export class NanoRunner {
     this.usart = new AVRUSART(this.cpu, usart0Config, CLOCK_HZ);
     this.usart.onByteTransmit = (byte) => onSerial(byte, this.timeMs, this.usart.baudRate);
     this.pins = new Map();
+    this.portListeners = [];   // modelos de entrada que reaccionan a cambios de DDR/PORT (pinMode, pull-up)
     const ports = { B: new AVRIOPort(this.cpu, portBConfig), C: new AVRIOPort(this.cpu, portCConfig), D: new AVRIOPort(this.cpu, portDConfig) };
+    this.ports = ports;
     for (const [name, port] of Object.entries(ports)) {
       PORT_PINS[name].forEach((pin) => this.pins.set(pin, false));
       port.addListener(() => {
+        for (const fn of this.portListeners) fn();
         PORT_PINS[name].forEach((pin, bit) => {
           const high = port.pinState(bit) === PinState.High;
           if (high !== this.pins.get(pin)) {
@@ -63,6 +66,46 @@ export class NanoRunner {
   }
 
   get timeMs() { return this.cpu.cycles / (CLOCK_HZ / 1000); }
+
+  /** Puerto y bit de un pin digital (D0–D19). */
+  locate(pin) {
+    for (const [name, pins] of Object.entries(PORT_PINS)) {
+      const bit = pins.indexOf(pin);
+      if (bit >= 0) return { port: this.ports[name], bit };
+    }
+    throw new Error(`Pin D${pin} no existe en el Nano`);
+  }
+
+  /**
+   * Modo eléctrico actual del pin según los registros DDR/PORT del microcontrolador emulado:
+   * 'output', 'pullup' (entrada con resistencia interna) o 'input' (entrada sin resistencia: flotante si nada la fija).
+   */
+  pinMode(pin) {
+    const { port, bit } = this.locate(pin);
+    const state = port.pinState(bit);
+    if (state === PinState.InputPullUp) return 'pullup';
+    if (state === PinState.Input) return 'input';
+    return 'output';
+  }
+
+  /** Nivel eléctrico que un componente externo impone en un pin de entrada (lo lee digitalRead/PINx). */
+  setInput(pin, high) {
+    const { port, bit } = this.locate(pin);
+    port.setPin(bit, Boolean(high));
+  }
+
+  /** Programa `fn` en el ciclo de reloj `cycle` (absoluto): se ejecuta entre dos instrucciones, con precisión de ciclo. */
+  atCycle(cycle, fn) {
+    const delta = Math.max(1, Math.ceil(cycle - this.cpu.cycles));
+    this.cpu.addClockEvent(fn, delta);
+    return fn;
+  }
+
+  /** Programa `fn` en el instante `ms` (ms simulados desde el arranque). */
+  atMs(ms, fn) { return this.atCycle(ms * (CLOCK_HZ / 1000), fn); }
+
+  /** Anula un evento programado con atCycle/atMs. */
+  cancel(fn) { this.cpu.clearClockEvent(fn); }
 
   /** Ejecuta instrucciones hasta alcanzar el ciclo indicado. */
   runUntilCycle(target) {

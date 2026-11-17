@@ -30,6 +30,8 @@ LECCIONES = {
     'arduino-led-serie': 'course-arduino',
     'arduino-protoboard-semaforo': 'course-arduino',
     'arduino-pwm-brillo': 'course-arduino',
+    'arduino-boton-entrada': 'course-arduino',
+    'arduino-boton-flanco': 'course-arduino',
 }
 
 
