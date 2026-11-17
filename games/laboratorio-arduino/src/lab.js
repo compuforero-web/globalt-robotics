@@ -286,10 +286,12 @@ export function startLab(L) {
     pot: L.pot || null,
     sonar: L.sonar || null,
     motors: L.motors || null,
+    servo: L.servo || null,
     onButton(state) { circuit.input?.(state); },
     onPot(state) { circuit.potState?.(state); },
     onSonar(state) { circuit.sonarState?.(state); },
     onMotor(state) { circuit.motorState?.(state); },
+    onServo(state) { circuit.servoState?.(state); },
     onWindows(windows) {
       for (const w of windows) { circuit.update(w); if (w.level || w.duty > 0) pinsSeen.add(w.pin); }
     },

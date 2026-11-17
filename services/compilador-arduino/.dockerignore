@@ -1,4 +1,5 @@
 *
 !Dockerfile
 !build-core.sh
+!build-servo.sh
 !server.py

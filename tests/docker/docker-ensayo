@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Envoltorio de `docker` SOLO para el ensayo en el entorno de desarrollo de Claude, donde las descargas de GitHub pasan
+# por un proxy HTTPS con CA propia. En `docker build`, copia el contexto, añade esa CA a la etapa «nucleo» (la que
+# descarga ArduinoCore-avr y Servo con git) y construye con la red del host y las variables del proxy. La etapa final
+# (la imagen del servicio) es la misma del Dockerfile. Cualquier otra orden pasa intacta al docker real.
+# En el servidor Linux no se usa: allí `docker build` descarga directamente.
+set -euo pipefail
+REAL=${DOCKER_REAL:-/usr/bin/docker}
+CA=${ENSAYO_CA:-/root/.ccr/ca-bundle.crt}
+if [[ ${1:-} != build || ! -f $CA ]]; then exec "$REAL" "$@"; fi
+args=("$@"); ctx=${args[-1]}
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+cp -a "$ctx"/. "$tmp"/
+cp "$CA" "$tmp/ca-ensayo.crt"
+printf '!ca-ensayo.crt\n' >> "$tmp/.dockerignore"
+python3 - "$tmp/Dockerfile" <<'PY'
+import sys, re
+p = sys.argv[1]; s = open(p).read()
+s, n = re.subn(r'(FROM [^\n]* AS nucleo\n)', r'\1COPY ca-ensayo.crt /ca-ensayo.crt\nENV GIT_SSL_CAINFO=/ca-ensayo.crt\n', s, count=1)
+assert n == 1, 'etapa nucleo no encontrada'
+open(p, 'w').write(s)
+PY
+extra=(--network host)
+for v in HTTP_PROXY HTTPS_PROXY http_proxy https_proxy NO_PROXY no_proxy; do [[ -n ${!v:-} ]] && extra+=(--build-arg "$v=${!v}"); done
+unset 'args[-1]'
+"$REAL" build "${extra[@]}" "${args[@]:1}" "$tmp"

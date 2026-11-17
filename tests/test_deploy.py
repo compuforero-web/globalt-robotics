@@ -137,3 +137,38 @@ class DeploymentTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CompilerDeployToolTests(unittest.TestCase):
+    """deploy/linux/compilador-produccion.sh: comprobaciones estáticas (el ensayo con Docker real es tests/docker/ensayo-compilador.sh)."""
+    SCRIPT = ROOT / 'deploy/linux/compilador-produccion.sh'
+
+    def test_syntax_and_orders(self):
+        subprocess.run(['bash', '-n', str(self.SCRIPT)], check=True)
+        texto = self.SCRIPT.read_text()
+        for orden in ('comprobar)', 'preparar)', 'ensayar)', 'promover)', 'recuperar)'):
+            self.assertIn(orden, texto)
+
+    def test_isolation_is_never_weakened(self):
+        texto = self.SCRIPT.read_text()
+        self.assertNotRegex(texto, r'chmod\s+(-R\s+)?0?777|-m\s+0?777|a\+rwx')
+        self.assertNotRegex(texto, r'--publish|\s-p\s+\d|--privileged|--cap-add|--network\s+host|docker\.sock\s*,|src=/var/run/docker')
+        self.assertNotRegex(texto, r'docker\s+(rmi|image\s+rm|volume\s+rm|system\s+prune|image\s+prune)')
+        self.assertIn("--network', 'none'", texto)
+        self.assertIn('monta el socket de Docker', texto)
+        # Producción por defecto; las variables de ensayo solo cambian nombres y rutas, y el fallo simulado exige ensayo.
+        self.assertIn('SOCKET_DIR=${GLOBALT_ENSAYO_SOCKETS:-/var/lib/globalt-robotics-lab/run}', texto)
+        self.assertIn('COMP_C=${GLOBALT_ENSAYO_CONTENEDOR:-globalt-arduino-compiler}', texto)
+        self.assertIn('[[ $ENSAYO == 1 && ${GLOBALT_ENSAYO_FALLO:-} == tras-cambio ]]', texto)
+
+    def test_promotion_requires_rehearsed_image_and_rolls_back(self):
+        texto = self.SCRIPT.read_text()
+        self.assertIn('cambió desde el ensayo', texto)
+        self.assertIn('trap volver ERR', texto)
+        self.assertIn('trap retirar_candidato EXIT', texto)
+        self.assertIn('cmp -s - "$SELF"', texto)
+        self.assertIn('SERVO_COMMIT=2862ad9864d0dda5669b264857deafbba624940d', texto)
+        dockerfile = (ROOT / 'services/compilador-arduino/Dockerfile').read_text()
+        self.assertIn('ARG SERVO_COMMIT=2862ad9864d0dda5669b264857deafbba624940d', dockerfile)
+        self.assertIn('ARG NUCLEO_COMMIT=42fa4a1ea1b1b11d1cc0a60298e529d37f9d14bd', dockerfile)
+        self.assertIn('!build-servo.sh', (ROOT / 'services/compilador-arduino/.dockerignore').read_text())

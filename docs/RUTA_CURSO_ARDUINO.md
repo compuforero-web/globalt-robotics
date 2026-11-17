@@ -35,11 +35,11 @@ Regla que rige todo el plan: **una lección solo se aprueba por el comportamient
 | Elemento | ¿Disponible? | Notas |
 |---|---|---|
 | `pinMode`, `digitalWrite/Read`, `analogWrite`, `analogRead`, `delay`, `millis`, `micros`, `delayMicroseconds`, `pulseIn`, `tone`, `map`, `constrain`, `Serial` | Sí (núcleo) | Compilan. Que **funcionen en la emulación** depende de la tabla 2.2. |
-| `Servo.h` | **No** | No forma parte de ArduinoCore-avr; está en `arduino-libraries/Servo`. `#include <Servo.h>` falla con «No such file». |
+| `Servo.h` | Sí, desde la entrega de las lecciones 12–13 (imagen nueva del compilador) | `arduino-libraries/Servo` 1.3.0, commit `2862ad98…`, solo `Servo.h` y `avr/ServoTimers.h` incluibles. Ver `docs/ACTUALIZACION_LECCIONES_12_13.md`. |
 | `EEPROM.h`, `Wire.h`, `SPI.h`, `SoftwareSerial.h` | **No** | Están en `libraries/` de ArduinoCore-avr, pero `build-core.sh` no las copia ni compila. No son necesarias para esta ruta. |
 | `NewPing.h`, librerías de L298N | **No, y no se añadirán** | El curso enseña `pulseIn` y control directo de IN/EN; así el estudiante entiende la señal. |
 
-**Falta para servo:** añadir `arduino-libraries/Servo` con versión y commit fijados al `Dockerfile`, compilarla a una biblioteca estática junto al núcleo, añadir su carpeta a los directorios de inclusión permitidos (`_directorios`/`revisar_preprocesado` en `server.py`) y enlazarla. Requiere pruebas del filtro de seguridad, **reconstruir la imagen del compilador y desplegarla en Linux** (contenedor `globalt-arduino-compiler`, sin red).
+**Hecho (lecciones 12–13):** añadir `arduino-libraries/Servo` con versión y commit fijados al `Dockerfile`, compilarla a una biblioteca estática junto al núcleo, añadir su carpeta a los directorios de inclusión permitidos (`_directorios`/`revisar_preprocesado` en `server.py`) y enlazarla. Requiere pruebas del filtro de seguridad, **reconstruir la imagen del compilador y desplegarla en Linux** (contenedor `globalt-arduino-compiler`, sin red).
 
 ### 2.2 Emulación (`nano-runner.js`, bundle avr8js)
 

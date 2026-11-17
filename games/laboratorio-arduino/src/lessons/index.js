@@ -12,10 +12,12 @@ import ultrasonicoAlerta from './ultrasonico-alerta.js';
 import l298nDireccion from './l298n-direccion.js';
 import l298nVelocidad from './l298n-velocidad.js';
 import l298nDosMotores from './l298n-dos-motores.js';
+import servoPosiciones from './servo-posiciones.js';
+import servoBarrido from './servo-barrido.js';
 
 export const DEFAULT_LESSON_ID = 'arduino-led-serie';
 export const LESSONS = [ledSerie, semaforo, pwmBrillo, botonEntrada, botonFlanco, potenciometro, ultrasonicoDistancia, ultrasonicoAlerta,
-  l298nDireccion, l298nVelocidad, l298nDosMotores];
+  l298nDireccion, l298nVelocidad, l298nDosMotores, servoPosiciones, servoBarrido];
 export const ID_PATTERN = /^[a-z0-9-]{3,60}$/;
 
 /** Datos públicos de cada lección: orden, tema, título y lecciones previas recomendadas (no bloquean). */

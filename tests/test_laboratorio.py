@@ -227,7 +227,8 @@ for (const bad of ['?leccion=no-existe', '?leccion=ARDUINO-PWM-BRILLO', '?leccio
   assert.equal(r.lesson, null, bad);
   assert.ok(r.requested);
 }
-assert.deepEqual(MANIFEST.map((m) => m.numero), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+assert.deepEqual(MANIFEST.map((m) => m.numero), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+for (const id of ['arduino-servo-posiciones', 'arduino-servo-barrido']) assert.equal(resolveLesson('?leccion=' + id).lesson.id, id);
 for (const id of ['arduino-l298n-direccion', 'arduino-l298n-velocidad', 'arduino-l298n-dos-motores']) assert.equal(resolveLesson('?leccion=' + id).lesson.id, id);
 assert.equal(resolveLesson('?leccion=arduino-ultrasonico-distancia').lesson.id, 'arduino-ultrasonico-distancia');
 assert.equal(resolveLesson('?leccion=arduino-ultrasonico-alerta').lesson.id, 'arduino-ultrasonico-alerta');
@@ -247,7 +248,8 @@ console.log(JSON.stringify({ ids: MANIFEST.map((m) => m.id), def: DEFAULT_LESSON
         self.assertEqual(data['ids'], ['arduino-led-serie', 'arduino-protoboard-semaforo', 'arduino-pwm-brillo',
                                        'arduino-boton-entrada', 'arduino-boton-flanco', 'arduino-potenciometro-pwm',
                                        'arduino-ultrasonico-distancia', 'arduino-ultrasonico-alerta',
-                                       'arduino-l298n-direccion', 'arduino-l298n-velocidad', 'arduino-l298n-dos-motores'])
+                                       'arduino-l298n-direccion', 'arduino-l298n-velocidad', 'arduino-l298n-dos-motores',
+                                       'arduino-servo-posiciones', 'arduino-servo-barrido'])
 
     def test_examples_match_fixtures_and_hints_do_not_solve(self):
         node(f"""
@@ -1153,6 +1155,248 @@ assert.ok(!Object.values(M.EXAMPLES).some((e) => /derech/i.test(e.code)));
 """)
 
 
+class ServoLessonTests(unittest.TestCase):
+    """Lecciones 12–13 (3.1–3.2 de la ruta): modelo SG90 alimentado por los pulsos reales de la librería Servo compilada."""
+
+    def test_model_measures_real_pulses_width_period_and_speed(self):
+        out = node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+import {{ NanoRunner }} from './games/laboratorio-arduino/src/nano-runner.js';
+import {{ ServoModel, SERVO, pulseToAngle, angleToPulse, servoStep }} from './games/laboratorio-arduino/src/servo.js';
+import {{ recordFast }} from './games/laboratorio-arduino/src/sim-worker.js';
+const fx = (n) => readFileSync('{FIX}/' + n + '.hex', 'utf8');
+// Escala de la librería Servo y mecánica a 600 °/s.
+assert.deepEqual([544, 1472, 2400, 300, 3000].map((u) => pulseToAngle(u)), [0, 90, 180, 0, 180]);
+assert.equal(angleToPulse(90), 1472);
+let a = 0, t = 0; while (a < 180) {{ a = servoStep(a, 180, 1); t++; }}
+assert.ok(t === 300 || t === 301, String(t));   // 180° a 600 °/s = 300 ms (redondeo de coma flotante)
+assert.equal(servoStep(10, 10.2, 1), 10.2);
+// Programa real (pos-solucion): pulsos de la librería con precisión de ciclo, cada 20 ms.
+const pulses = [];
+const r = new NanoRunner(fx('pos-solucion'));
+const m = new ServoModel(r, {{ pin: 9, onPulse: (p) => pulses.push(p) }});
+const at = (ms) => {{ r.runUntilCycle(ms * 16000); return m.state(); }};
+const s0 = at(900), s90 = at(1900), s180 = at(2900);
+assert.ok(Math.abs(s0.us - 544) <= 2 && s0.angle === 0 && !s0.moving, JSON.stringify(s0));
+assert.ok(Math.abs(s90.us - 1472) <= 2 && Math.abs(s90.angle - 90) < 0.5, JSON.stringify(s90));
+assert.ok(Math.abs(s180.us - 2400) <= 2 && Math.abs(s180.angle - 180) < 0.5 && s180.receiving, JSON.stringify(s180));
+const periods = pulses.slice(1).map((p) => p.periodMs);
+assert.ok(periods.every((x) => Math.abs(x - 20) < 0.01), String(periods.slice(0, 5)));
+// El eje llega con la velocidad del modelo: de 90° a 180° tarda ~150 ms tras el primer pulso nuevo.
+const tr = recordFast(fx('pos-solucion'), 2400, [9], {{ servo: {{ pin: 9 }} }});
+const first180 = tr.servo.pulses.find((p) => p.valid && p.angle > 179);
+const reach = tr.servo.samples.find((x) => x.t > first180.t && Math.abs(x.a - first180.angle) < 0.05);
+assert.ok(reach.t - first180.t > 140 && reach.t - first180.t < 180, String(reach.t - first180.t));
+// Posición por defecto de attach() (1500 µs ≈ 93°): no es ninguna de las del reto.
+const def = recordFast(fx('pos-default'), 1000, [9], {{ servo: {{ pin: 9 }} }});
+assert.ok(def.servo.pulses.filter((p) => p.valid).every((p) => Math.abs(p.us - 1500) < 10 && Math.abs(p.angle - 93.3) < 1));
+// analogWrite en D9: pulsos a 2 ms → no válidos por periodo; write() sin attach(): ningún pulso; el eje no se mueve.
+const pwm = recordFast(fx('pos-analogwrite'), 2000, [9], {{ servo: {{ pin: 9 }} }});
+assert.ok(pwm.servo.pulses.filter((p) => !p.valid && p.reason === 'periodo').length > 100);
+const none = recordFast(fx('pos-sin-attach'), 1000, [9], {{ servo: {{ pin: 9 }} }});
+assert.equal(none.servo.pulses.length, 0);
+assert.ok(none.servo.samples.every((x) => x.a === 90 && x.g === null));
+// El modelo sigue al pin, no al texto: el mismo HEX con el servo en D10 no recibe nada; attach(10) sí llega a D10.
+assert.equal(recordFast(fx('pos-solucion'), 600, [], {{ servo: {{ pin: 10 }} }}).servo.pulses.length, 0);
+assert.ok(recordFast(fx('pos-otro-pin'), 600, [], {{ servo: {{ pin: 10 }} }}).servo.pulses.filter((p) => p.valid).length > 20);
+// Sin pulsos válidos durante 60 ms, «sin señal».
+{{
+  const r2 = new NanoRunner(fx('pos-solucion'));
+  const m2 = new ServoModel(r2, {{ pin: 9 }});
+  r2.runFor(500);
+  assert.equal(m2.state().receiving, true);
+  m2.edge(true, r2.cpu.cycles);    // pulso de 3 ms inyectado: ancho no válido, no cambia la orden
+  m2.edge(false, r2.cpu.cycles + 48000);
+  assert.equal(m2.state().invalid.reason, 'ancho');
+  assert.equal(m2.state().target, 0);
+}}
+// Determinista: dos ejecuciones dan la misma traza.
+assert.equal(JSON.stringify(recordFast(fx('bar-solucion'), 1500, [9, 13], {{ servo: {{ pin: 9 }} }})),
+  JSON.stringify(recordFast(fx('bar-solucion'), 1500, [9, 13], {{ servo: {{ pin: 9 }} }})));
+console.log('ok');
+""")
+        self.assertIn('ok', out)
+
+    def test_timers_coexist_with_servo_library(self):
+        """Servo toma el Timer1 (D9/D10); Timer0 (millis, D5/D6) y Timer2 (D3/D11) siguen igual."""
+        out = node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+import {{ recordFast }} from './games/laboratorio-arduino/src/sim-worker.js';
+import {{ blinkPeriods }} from './games/laboratorio-arduino/src/lessons/servo-eval.js';
+const tr = recordFast(readFileSync('{FIX}/servo-convivencia.hex', 'utf8'), 2000, [3, 5, 6, 9, 10, 11, 13], {{ servo: {{ pin: 9 }} }});
+const avg = (pin, k) => {{ const ws = tr.windows.filter((w) => w.pin === pin && w.t0 >= 1000 && w[k] !== null); return ws.reduce((a, w) => a + w[k], 0) / ws.length; }};
+for (const [pin, duty, freq] of [[5, 64, 976.6], [6, 128, 976.6], [3, 192, 490.2], [11, 32, 490.2]]) {{
+  assert.ok(Math.abs(avg(pin, 'duty') - duty / 255) < 0.005, `D${{pin}} duty`);
+  assert.ok(Math.abs(avg(pin, 'freq') - freq) < 1, `D${{pin}} freq`);
+}}
+assert.ok(tr.windows.filter((w) => w.pin === 10 && w.t0 >= 100).every((w) => w.rises === 0 && w.duty === 0), 'D10 sin PWM con Servo');
+const v = tr.servo.pulses.filter((p) => p.valid && p.t > 200);
+assert.ok(v.every((p) => Math.abs(p.us - 1008) <= 2 && Math.abs(p.periodMs - 20) < 0.01 && Math.abs(p.angle - 45) < 0.5));
+const led = blinkPeriods(tr, 13);
+assert.ok(led.length >= 3 && led.every((p) => Math.abs(p.end - p.start - 500) < 1 && Math.abs(p.high - 250) < 1), JSON.stringify(led[0]));
+console.log('ok');
+""")
+        self.assertIn('ok', out)
+
+    def test_robot_map_with_servo_motors_and_trig(self):
+        """Mapa del futuro evasor: servo D9 + motores (D2, D4, D10, D11, PWM D5/D6) + TRIG D7 en un solo programa real."""
+        out = node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+import {{ NanoRunner }} from './games/laboratorio-arduino/src/nano-runner.js';
+import {{ MotorModel, PIN_MAPS, pinMapProblems }} from './games/laboratorio-arduino/src/motor.js';
+import {{ ServoModel }} from './games/laboratorio-arduino/src/servo.js';
+assert.deepEqual(pinMapProblems(PIN_MAPS.robot, {{ 7: 'TRIG', 8: 'ECHO', 9: 'servo' }}), []);
+let trig = 0;
+const r = new NanoRunner(readFileSync('{FIX}/servo-robot.hex', 'utf8'), {{ onPin: (p, h) => {{ if (p === 7 && h) trig++; }} }});
+const motors = new MotorModel(r, {{ channels: PIN_MAPS.robot }});
+const angles = [];
+const servo = new ServoModel(r, {{ pin: 9, onPulse: (p) => p.valid && angles.push(p.angle) }});
+r.runFor(3000);
+const st = motors.state();
+assert.ok(st.every((c) => c.order === 'adelante' && Math.abs(c.duty - 200 / 255) < 0.005 && c.speed > 0.6), JSON.stringify(st));
+assert.ok(Math.min(...angles) <= 32 && Math.max(...angles) >= 148, `${{Math.min(...angles)}}–${{Math.max(...angles)}}`);
+assert.ok(trig >= 45, String(trig));
+assert.equal(servo.state().receiving, true);
+console.log('ok');
+""")
+        self.assertIn('ok', out)
+
+    def test_posiciones_solutions_pass_and_failures_explain(self):
+        r = evaluate_button('servo-posiciones.js', [
+            'pos-solucion', 'pos-solucion-micros', 'pos-default', 'pos-otro-pin', 'pos-analogwrite', 'pos-tiempos',
+            'pos-orden', 'pos-angulo', 'pos-sin-serie', 'pos-mensaje-tarde', 'pos-sin-attach', 'pos-ejemplo',
+            'pos-ej-micros', 'pos-ej-imprimir'])
+        for name in ('pos-solucion', 'pos-solucion-micros'):
+            self.assertTrue(r[name]['passed'], r[name])
+        ok = lambda n: r[n]['checks']
+        d = lambda n, c: r[n]['details'][c]
+        self.assertEqual(ok('pos-default'), {'senal': True, 'posiciones': False, 'tiempos': False, 'servo': False, 'mensajes': False, 'baud': True})
+        self.assertIn('posición por defecto de attach()', d('pos-default', 'posiciones'))
+        self.assertIn('Hay pulsos cada 20 ms en D10', d('pos-otro-pin', 'senal'))
+        self.assertIn('PWM de analogWrite', d('pos-analogwrite', 'senal'))
+        self.assertIn('¿Falta servo.attach(9)?', d('pos-sin-attach', 'senal'))
+        self.assertEqual(ok('pos-tiempos'), {'senal': True, 'posiciones': True, 'tiempos': False, 'servo': True, 'mensajes': True, 'baud': True})
+        self.assertIn('1460 ms', d('pos-tiempos', 'tiempos'))
+        self.assertIn('fue 180°', d('pos-orden', 'posiciones'))
+        self.assertIn('fue 160°', d('pos-angulo', 'posiciones'))
+        self.assertEqual(ok('pos-sin-serie'), {'senal': True, 'posiciones': True, 'tiempos': True, 'servo': True, 'mensajes': False, 'baud': False})
+        self.assertEqual(ok('pos-mensaje-tarde'), {'senal': True, 'posiciones': True, 'tiempos': True, 'servo': True, 'mensajes': False, 'baud': True})
+        self.assertIn('llegó a los 1,00 s', d('pos-mensaje-tarde', 'mensajes'))
+        self.assertIn('Llega a cada posición en 157', d('pos-solucion', 'servo'))
+        for name in ('pos-ejemplo', 'pos-ej-micros', 'pos-ej-imprimir'):
+            self.assertFalse(r[name]['passed'], name)
+        self.assertLess(evaluate_button('servo-posiciones.js', ['pos-solucion'])['pos-solucion']['ms'], 8000)
+
+    def test_barrido_solutions_pass_and_failures_explain(self):
+        r = evaluate_button('servo-barrido.js', [
+            'bar-solucion', 'bar-solucion-funciones', 'bar-bloqueante', 'bar-led-detenido', 'bar-led-pin', 'bar-rapido',
+            'bar-lento', 'bar-medio', 'bar-otro-pin', 'bar-saltos', 'bar-inmovil', 'bar-ejemplo', 'bar-ej-reloj', 'bar-ej-rebote'])
+        for name in ('bar-solucion', 'bar-solucion-funciones'):
+            self.assertTrue(r[name]['passed'], r[name])
+        ok = lambda n: r[n]['checks']
+        d = lambda n, c: r[n]['details'][c]
+        self.assertEqual(ok('bar-bloqueante'), {'senal': True, 'barrido': True, 'suave': True, 'velocidad': True, 'led': False, 'servo': True})
+        self.assertIn('delay() bloquea el loop', d('bar-bloqueante', 'led'))
+        self.assertEqual(ok('bar-ejemplo'), {'senal': True, 'barrido': True, 'suave': True, 'velocidad': True, 'led': False, 'servo': True})
+        self.assertIn('se quedó apagado', d('bar-led-detenido', 'led'))
+        self.assertIn('Hay cambios en D12', d('bar-led-pin', 'led'))
+        self.assertIn('200 °/s', d('bar-rapido', 'velocidad'))
+        self.assertIn('33 °/s', d('bar-lento', 'velocidad'))
+        self.assertIn('de 0° a 90°', d('bar-medio', 'barrido'))
+        self.assertIn('Hay pulsos cada 20 ms en D10', d('bar-otro-pin', 'senal'))
+        self.assertIn('saltó de 0° a 180°', d('bar-saltos', 'suave'))
+        self.assertIn('no se movió', d('bar-inmovil', 'barrido'))
+        self.assertIn('periodo medio 1000 ms', d('bar-solucion', 'led'))
+        self.assertIn('67 °/s', d('bar-solucion', 'velocidad'))
+        for name in ('bar-ej-reloj', 'bar-ej-rebote'):
+            self.assertFalse(r[name]['passed'], name)
+        self.assertLess(evaluate_button('servo-barrido.js', ['bar-solucion'])['bar-solucion']['ms'], 8000)
+
+    def test_servo_evaluators_use_only_the_measured_trace(self):
+        node("""
+import assert from 'node:assert/strict';
+import { evaluatePosiciones, evaluateBarrido, commandPhases, sweepSegments, blinkPeriods } from './games/laboratorio-arduino/src/lessons/servo-eval.js';
+// Traza fabricada (sin programa): pulsos de 0/90/180/90 y líneas serie en su momento → aprueba.
+const pulses = [], samples = [], serial = [];
+const seq = [0, 90, 180, 90, 0, 90];
+for (let t = 0; t < 5600; t += 20) {
+  const ang = seq[Math.floor(t / 1000)];
+  pulses.push({ t, us: 544 + ang / 180 * 1856, periodMs: t ? 20 : null, valid: true, reason: null, angle: ang });
+}
+for (let t = 0; t < 5600; t += 10) samples.push({ t, a: seq[Math.floor(Math.max(0, t - 300) / 1000)], g: seq[Math.floor(t / 1000)] });
+for (let k = 0; k < 6; k++) for (const ch of `Angulo ${seq[k]}\\n`) serial.push({ byte: ch.charCodeAt(0), t: k * 1000 + 1, baud: 9600 });
+const tr = { durationMs: 5600, windows: [], pins: [], serial, servo: { pulses, samples, params: { signalLostMs: 60 } } };
+assert.equal(evaluatePosiciones(tr).passed, true, JSON.stringify(evaluatePosiciones(tr).checks.filter((c) => !c.ok)));
+assert.deepEqual(commandPhases(tr).map((p) => p.angle), [0, 90, 180, 90, 0, 90]);
+// Los mismos pulsos con un hueco de 200 ms crean una fase «sin señal».
+const gap = { ...tr, servo: { ...tr.servo, pulses: pulses.filter((p) => p.t < 1500 || p.t > 1700) } };
+assert.ok(commandPhases(gap).some((p) => p.angle === null));
+// Sin traza del servo, todo suspende.
+for (const ev of [evaluatePosiciones, evaluateBarrido]) assert.equal(ev({ durationMs: 5000, windows: [], pins: [], serial: [] }).passed, false);
+// Tramos del barrido con histéresis y parpadeos de subida a subida.
+const sw = [];
+let ang = 0, dir = 1;
+for (let t = 0; t < 7000; t += 20) { sw.push({ t, angle: ang, valid: true }); ang += dir * 4 / 3; if (ang >= 180) { ang = 180; dir = -1; } if (ang <= 0) { ang = 0; dir = 1; } }
+const segs = sweepSegments(sw);
+assert.deepEqual(segs.map((s) => s.dir), [1, -1, 1]);
+assert.ok(Math.abs(segs[1].from - 180) < 1e-9 && Math.abs(segs[2].from) < 1e-9);
+const pins = [];
+for (let t = 0; t < 4000; t += 500) pins.push({ pin: 13, high: (t / 500) % 2 === 0, t });
+assert.deepEqual(blinkPeriods({ pins }, 13).map((p) => [p.end - p.start, p.high]), [[1000, 500], [1000, 500], [1000, 500]]);
+""")
+
+    def test_servo_examples_match_fixtures_and_hints_do_not_solve(self):
+        node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+const fx = (n) => readFileSync('{FIX}/' + n + '.ino', 'utf8');
+const P = await import('./games/laboratorio-arduino/src/lessons/servo-posiciones.js');
+const B = await import('./games/laboratorio-arduino/src/lessons/servo-barrido.js');
+for (const [L, pre] of [[P, 'pos'], [B, 'bar']]) {{
+  assert.equal(fx(pre + '-ejemplo'), L.EXAMPLE_CODE);
+  for (const [k, e] of Object.entries(L.EXAMPLES)) assert.equal(fx(pre + '-ej-' + k), e.code);
+  assert.equal(L.chooseTopic({{ code: L.EXAMPLE_CODE, untouched: true, step: 2 }}).topic, 'paso-2');
+  assert.equal(L.chooseTopic({{ compileError: {{ errorLine: 3, errorHelp: 'x' }} }}).topic, 'compilar');
+  const html = L.default.html();
+  assert.ok(html.includes('GND común') && html.includes('5&nbsp;V'), L.ID);
+  assert.deepEqual(L.default.servo, {{ pin: 9 }});
+  assert.deepEqual(L.default.evaluation.stimulus.servo, L.default.servo);
+  assert.ok(L.default.pins.includes(9));
+}}
+assert.deepEqual(B.default.pins, [9, 13]);
+// Pistas según el código.
+assert.equal(P.analyzeCode(P.EXAMPLE_CODE).topic, 'serie');
+assert.equal(P.analyzeCode(fx('pos-analogwrite')).topic, 'analogwrite');
+assert.equal(P.analyzeCode(fx('pos-sin-attach')).topic, 'attach');
+assert.equal(P.analyzeCode(fx('pos-otro-pin')).topic, 'pin');
+assert.equal(P.analyzeCode(fx('pos-default')).topic, 'write');
+assert.equal(P.analyzeCode(fx('pos-sin-serie')).topic, 'serie');
+assert.equal(P.analyzeCode(fx('pos-tiempos')).topic, 'tiempos');
+assert.equal(P.analyzeCode(fx('pos-solucion')).topic, 'comprobar');
+assert.equal(P.chooseTopic({{ code: fx('pos-solucion'), lastChecks: [{{ id: 'senal', ok: true }}, {{ id: 'mensajes', ok: false }}] }}).topic, 'mensajes');
+assert.equal(P.chooseTopic({{ code: fx('pos-solucion'), completed: true }}).topic, 'superado');
+assert.equal(B.analyzeCode(B.EXAMPLE_CODE).topic, 'millis');
+assert.equal(B.analyzeCode(fx('bar-bloqueante')).topic, 'millis');
+assert.equal(B.analyzeCode(fx('bar-led-detenido')).topic, 'led');
+assert.equal(B.analyzeCode(fx('bar-otro-pin')).topic, 'pin');
+assert.equal(B.analyzeCode(fx('bar-solucion')).topic, 'comprobar');
+assert.equal(B.chooseTopic({{ code: fx('bar-solucion'), lastChecks: [{{ id: 'led', ok: false, detail: 'Un barrido con delay() bloquea el loop' }}] }}).topic, 'millis');
+assert.equal(B.chooseTopic({{ code: fx('bar-led-pin'), lastChecks: [{{ id: 'led', ok: false, detail: 'Hay cambios en D12' }}] }}).topic, 'pin');
+assert.equal(B.chooseTopic({{ code: fx('bar-rapido'), lastChecks: [{{ id: 'velocidad', ok: false }}] }}).topic, 'velocidad');
+// Ninguna pista ni ejemplo contiene la solución.
+const solved = [/write\\(0\\)[\\s\\S]*write\\(90\\)[\\s\\S]*write\\(180\\)[\\s\\S]*write\\(90\\)/, /millis[\\s\\S]*15[\\s\\S]*millis[\\s\\S]*500|millis[\\s\\S]*500[\\s\\S]*millis[\\s\\S]*15/];
+for (const [L, bad] of [[P, solved[0]], [B, solved[1]]]) {{
+  for (const t of L.TOPIC_IDS) for (let i = 0; i < 4; i++) assert.doesNotMatch(L.hintText(t, i, {{ delays: [], errorHelp: '' }}).text, bad);
+  for (const ex of Object.values(L.EXAMPLES)) assert.doesNotMatch(ex.code, bad);
+  assert.doesNotMatch(L.EXAMPLE_CODE, bad);
+}}
+assert.ok(!Object.values(B.EXAMPLES).some((e) => /Servo/.test(e.code)));
+""")
+
+
 class InterfaceModuleTests(unittest.TestCase):
     def test_highlight_help_progress_and_guide(self):
         node('''
@@ -1285,6 +1529,103 @@ class CompilerServiceTests(unittest.TestCase):
         self.assertFalse(bad['ok'])
         self.assertEqual(bad['diagnosticos'][0]['linea'], 3)
         self.assertNotIn('/tmp/', bad['salida'])
+
+    @unittest.skipUnless(shutil.which('avr-g++') and os.environ.get('COMPILADOR_NUCLEO'),
+                         'requiere avr-gcc y COMPILADOR_NUCLEO (ver services/compilador-arduino/README.md)')
+    def test_servo_library_with_strictly_limited_includes(self):
+        compilador.NUCLEO = Path(os.environ['COMPILADOR_NUCLEO'])
+        servo = compilador.carpeta_servo()
+        if servo is None:
+            self.skipTest('el núcleo indicado no incluye Servo (build-servo.sh)')
+        ok = compilador.compilar((FIX / 'pos-solucion.ino').read_text())
+        self.assertTrue(ok['ok'], ok['salida'])
+        self.assertEqual(ok['hex'], (FIX / 'pos-solucion.hex').read_text())
+        self.assertRegex(ok['version']['servo'], r'^Servo 1\.3\.0 \(arduino-libraries/Servo, commit 2862ad9864d0dda5669b264857deafbba624940d\)$')
+        # Solo dos carpetas propias de cabeceras, y en la de Servo solo sus dos cabeceras AVR.
+        raiz = os.path.realpath(compilador.NUCLEO)
+        propias = [d for d in compilador.directorios_permitidos() if d.startswith(raiz + os.sep)]
+        self.assertEqual(propias, [os.path.realpath(compilador.NUCLEO / 'include'), os.path.realpath(servo / 'include')])
+        archivos = sorted(str(p.relative_to(servo / 'include')) for p in (servo / 'include').rglob('*') if p.is_file())
+        self.assertEqual(archivos, ['Servo.h', 'avr/ServoTimers.h'])
+        self.assertTrue((compilador.NUCLEO / 'LICENSE-Servo-LGPL-2.1.txt').read_text().startswith('                  GNU LESSER GENERAL PUBLIC LICENSE'))
+        loop = '\nvoid setup(){}\nvoid loop(){}\n'
+        otra = compilador.compilar('#include <sam/ServoTimers.h>' + loop)
+        self.assertFalse(otra['ok'])
+        self.assertIn('No such file', otra['salida'])
+        # Archivos de la librería que no son cabeceras (versión, biblioteca, licencia): el filtro de texto los rechaza
+        # y, saltándolo, el control decisivo del preprocesado también, sin devolver su contenido.
+        lecturas = ['#include <../VERSION>', '#include <../servo.a>', '#include <../../LICENSE-Servo-LGPL-2.1.txt>',
+                    f'#include "{servo / "VERSION"}"', '#include <../../include/../servo/VERSION>']
+        for directiva in lecturas:
+            self.assertIsNotNone(compilador.validar(directiva + loop), directiva)
+            resultado = compilador.compilar(directiva + loop)
+            self.assertFalse(resultado['ok'], directiva)
+            self.assertNotIn('hex', resultado, directiva)
+            self.assertNotIn('arduino-libraries', json.dumps(resultado['diagnosticos'] + [resultado['salida']]), directiva)
+        # Una interrupción propia del Timer1 junto a Servo es un error de enlace normal, con diagnóstico.
+        isr = compilador.compilar('#include <Servo.h>\nServo s;\nISR(TIMER1_COMPA_vect) {}\nvoid setup(){ s.attach(9); }\nvoid loop(){}\n')
+        self.assertFalse(isr['ok'])
+        self.assertTrue(any('multiple definition' in d['mensaje'] or 'ld returned' in d['mensaje'] for d in isr['diagnosticos']), isr['diagnosticos'])
+        # Los programas sin Servo no enlazan la librería: el HEX es idéntico al de antes (una muestra por lección).
+        for nombre in ['solucion', 'semaforo-solucion', 'pwm-solucion', 'boton-solucion', 'flanco-solucion', 'pot-solucion',
+                       'ultra-solucion', 'alerta-solucion', 'dir-solucion', 'vel-solucion', 'dos-solucion']:
+            if not (FIX / f'{nombre}.ino').exists():
+                self.fail(f'falta el programa {nombre}')
+            r = compilador.compilar((FIX / f'{nombre}.ino').read_text())
+            self.assertEqual(r.get('hex'), (FIX / f'{nombre}.hex').read_text(), nombre)
+
+    def test_health_reports_servo_only_when_present(self):
+        anterior = compilador.NUCLEO
+        try:
+            with tempfile.TemporaryDirectory() as vacio:
+                compilador.NUCLEO = Path(vacio)
+                self.assertIsNone(compilador.carpeta_servo())
+                self.assertNotIn('servo', compilador.version())
+                self.assertEqual(set(compilador.version()), {'placa', 'compilador', 'nucleo'})
+                (Path(vacio) / 'servo/include').mkdir(parents=True)
+                (Path(vacio) / 'servo/include/Servo.h').write_text('')
+                (Path(vacio) / 'servo/servo.a').write_text('')
+                (Path(vacio) / 'servo/VERSION').write_text('Servo 9.9.9 (prueba)\n')
+                self.assertEqual(compilador.version()['servo'], 'Servo 9.9.9 (prueba)')
+        finally:
+            compilador.NUCLEO = anterior
+
+    def test_stop_waits_for_requests_in_progress(self):
+        """SIGTERM (docker stop): deja de aceptar conexiones y termina la compilación en curso antes de salir."""
+        from http.server import ThreadingHTTPServer
+        import urllib.request
+        original = compilador.compilar
+        compilador.compilar = lambda codigo: (time.sleep(2.0), {'ok': True, 'lento': True})[1]
+        servidor = ThreadingHTTPServer(('127.0.0.1', 0), compilador.Manejador)
+        servidor.daemon_threads = True
+        hilo = threading.Thread(target=servidor.serve_forever)
+        hilo.start()
+        respuesta = {}
+        def pedir():
+            req = urllib.request.Request(f'http://127.0.0.1:{servidor.server_address[1]}/compilar',
+                                         data=json.dumps({'codigo': 'void setup(){}\nvoid loop(){}'}).encode(),
+                                         headers={'Content-Type': 'application/json'})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                respuesta.update(json.load(r))
+        try:
+            cliente = threading.Thread(target=pedir)
+            cliente.start()
+            for _ in range(100):
+                if compilador.activas['n'] == 1:
+                    break
+                time.sleep(0.03)
+            self.assertEqual(compilador.activas['n'], 1)
+            servidor.shutdown()
+            hilo.join()
+            inicio = time.monotonic()
+            compilador.terminar(servidor, limite=5)
+            self.assertGreater(time.monotonic() - inicio, 0.3)
+            cliente.join(5)
+            self.assertEqual(respuesta, {'ok': True, 'lento': True})
+            with self.assertRaises(OSError):
+                urllib.request.urlopen(f'http://127.0.0.1:{servidor.server_address[1]}/salud', timeout=2)
+        finally:
+            compilador.compilar = original
 
     def test_runner_has_no_preexec_fn(self):
         source = (ROOT / 'services/compilador-arduino/server.py').read_text()

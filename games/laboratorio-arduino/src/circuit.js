@@ -704,3 +704,160 @@ export function createMotorCircuit(root, { channels }) {
     },
   };
 }
+
+// ---------- Servo SG90 (lecciones 12 y 13) ----------
+const SERVO_SHAFT = [252, 127];
+const SERVO_DIAL = 44;
+const polar = (deg, r) => {
+  const a = (deg * Math.PI) / 180;
+  return [SERVO_SHAFT[0] + r * Math.cos(a), SERVO_SHAFT[1] - r * Math.sin(a)];
+};
+const fmtNum = (x, d = 1) => x.toFixed(d).replace('.', ',');
+
+/** Texto de la señal de servo según el estado del modelo (servo.js) en el Worker. */
+export function servoSignalText(s, pin = 9) {
+  if (!s || (!s.pulses && !s.invalid)) return s && s.mode !== 'output' ? `D${pin} sin configurar: no hay pulsos` : `sin pulsos: el servo no recibe órdenes`;
+  if (s.receiving && s.us !== null && s.periodMs) return `${fmtNum(1000 / s.periodMs)} Hz · pulso de ${s.us} µs → ${Math.round(s.target)}°`;
+  if (s.invalid?.reason === 'periodo') return `pulsos cada ${fmtNum(s.invalid.periodMs ?? 0, 2)} ms: no es una señal de servo (¿analogWrite?)`;
+  if (s.invalid?.reason === 'ancho') return `pulso de ${s.invalid.us} µs: fuera de 0,4–2,6 ms, el servo lo ignora`;
+  return 'sin señal: el servo se queda donde está';
+}
+
+/**
+ * Nano + micro servo SG90 en `pin` (señal naranja) alimentado por una fuente externa de 5 V (rojo) con GND común
+ * (marrón). Con `led`, además un LED con 220 Ω en ese pin. El brazo gira con el ángulo que calcula el modelo del Worker
+ * (servoState) y la marca del dial indica el ángulo pedido por el último pulso; nada se anima solo.
+ */
+export function createServoCircuit(root, { pin = 9, led = null } = {}) {
+  const sx = nanoX(pin);
+  const desc = [
+    `Arduino Nano compatible y micro servo SG90. El cable naranja (señal) del servo va a D${pin}.`,
+    'El cable rojo va al positivo de una fuente externa de 5 voltios y el marrón al negativo de esa fuente.',
+    'El negativo de la fuente se une al GND del Nano (GND común). El Nano se alimenta por USB y no alimenta el servo.',
+    led !== null ? `D${led} va por una resistencia de 220 ohmios al ánodo de un LED; el cátodo va a GND.` : '',
+  ].join(' ');
+  const ticks = [0, 45, 90, 135, 180].map((d) => {
+    const [x1, y1] = polar(d, SERVO_DIAL - 4);
+    const [x2, y2] = polar(d, SERVO_DIAL + 2);
+    const [tx, ty] = polar(d, SERVO_DIAL + 10);
+    return `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)}" class="c-servo-tick"/>${d % 90 === 0 ? `<text x="${tx.toFixed(1)}" y="${(ty + (d === 90 ? 2.5 : d === 0 ? -22 : -9)).toFixed(1)}" class="c-tiny" text-anchor="middle">${d}°</text>` : ''}`;
+  }).join('');
+  const [ax, ay] = polar(180, SERVO_DIAL);
+  const [bx, by] = polar(0, SERVO_DIAL);
+  root.innerHTML = `
+  <svg class="circuit circuit--servo" viewBox="0 0 360 232" role="img" aria-labelledby="circuit-title circuit-desc">
+    <title id="circuit-title">Servo SG90 en D${pin}${led !== null ? ` y LED en D${led}` : ''}</title>
+    <desc id="circuit-desc">${esc(desc)}</desc>
+    <rect x="8" y="154" width="150" height="68" rx="7" class="c-pcb"/>
+    <rect x="104" y="176" width="34" height="24" rx="3" class="c-chip"/>
+    <text x="121" y="191" class="c-chip-txt" text-anchor="middle">328P</text>
+    <text x="70" y="214" class="c-label" text-anchor="middle">NANO</text>
+    <text x="70" y="226" class="c-tiny" text-anchor="middle">USB: alimenta solo el Nano</text>
+    ${NANO_PINS.map((p) => `<circle cx="${nanoX(p)}" cy="162" r="2.8" class="c-hole ${p === pin || p === led ? 'is-used' : ''}"/>
+      <text x="${nanoX(p)}" y="173" class="c-tiny" text-anchor="middle">${p}</text>`).join('')}
+    <circle cx="22" cy="200" r="2.8" class="c-hole is-used"/><text x="22" y="192" class="c-tiny" text-anchor="middle">GND</text>
+    <g class="c-battery" transform="translate(20 10)">
+      <rect width="62" height="24" rx="3" class="c-battery-body"/>
+      <text x="31" y="11" class="c-tiny" text-anchor="middle">fuente externa</text>
+      <text x="31" y="20" class="c-tiny" text-anchor="middle">5 V · ≥ 1 A</text>
+    </g>
+    <text x="90" y="14" class="c-tiny">+</text><text x="90" y="33" class="c-tiny">−</text>
+    <path d="M82 16 H338 V127 H310" class="c-wire c-wire--5v"/>
+    <path d="M82 28 H96 V40 H322 V121 H310" class="c-wire c-wire--gnd"/>
+    <path d="M96 40 H6 V200 H22" class="c-wire c-wire--gnd"/>
+    <text x="52" y="52" class="c-tiny" text-anchor="middle">GND común</text>
+    <path d="M310 133 H330 V148 H${sx} V162" class="c-wire c-wire--sig"/>
+    <text x="${(sx + 330) / 2}" y="145" class="c-tiny" text-anchor="middle">señal · D${pin}</text>
+    <text x="344" y="70" class="c-tiny" text-anchor="middle" transform="rotate(90 344 70)">+5 V</text>
+    <path d="M${ax.toFixed(1)} ${ay.toFixed(1)} A${SERVO_DIAL} ${SERVO_DIAL} 0 0 1 ${bx.toFixed(1)} ${by.toFixed(1)}" class="c-servo-dial"/>
+    ${ticks}
+    <g class="c-servo">
+      <rect x="226" y="113" width="10" height="28" rx="2" class="c-servo-tab"/>
+      <rect x="300" y="113" width="10" height="28" rx="2" class="c-servo-tab"/>
+      <rect x="232" y="110" width="74" height="34" rx="4" class="c-servo-body"/>
+      <text x="283" y="140" class="c-tiny" text-anchor="middle">SG90</text>
+      <circle cx="${SERVO_SHAFT[0]}" cy="${SERVO_SHAFT[1]}" r="9" class="c-servo-gear"/>
+      <path class="c-servo-target" d="M0 0" hidden/>
+      <g class="c-servo-horn" transform="translate(${SERVO_SHAFT[0]} ${SERVO_SHAFT[1]}) rotate(-90)">
+        <path d="M-6 -5 L30 -3 A3.5 3.5 0 0 1 30 3 L-6 5 A6 6 0 0 1 -6 -5 z" class="c-servo-arm"/>
+        <circle r="3" class="c-servo-screw"/><circle cx="12" r="1.2" class="c-servo-screw"/><circle cx="21" r="1.2" class="c-servo-screw"/>
+      </g>
+    </g>
+    ${led !== null ? `<path d="M${nanoX(led)} 162 V104 H40" class="c-wire c-wire--sig"/>
+    <g transform="translate(40 96)"><rect width="44" height="16" rx="6" class="c-res"/>
+      <rect x="9" y="0" width="4" height="16" class="c-band1"/><rect x="17" y="0" width="4" height="16" class="c-band1"/>
+      <rect x="25" y="0" width="4" height="16" class="c-band2"/><rect x="35" y="0" width="3" height="16" class="c-band3"/></g>
+    <text x="62" y="92" class="c-tiny" text-anchor="middle">220 Ω</text>
+    <path d="M84 104 H104" class="c-wire c-wire--sig"/>
+    <g class="c-led" data-pin="${led}" transform="translate(116 104) rotate(90)">
+      <circle r="22" class="c-glow"/>
+      <path d="M-11 6 V-8 a11 11 0 0 1 22 0 V6 z" class="c-led-body"/>
+      <rect x="-13" y="6" width="26" height="4" rx="2" class="c-led-rim"/>
+    </g>
+    <text x="116" y="86" class="c-tiny" text-anchor="middle">LED (D${led})</text>
+    <path d="M127 104 H146 V116" class="c-wire c-wire--gnd"/>${gndSym(146, 116)}` : ''}
+  </svg>
+  <div class="motor-read servo-read">
+    <section class="motor-read__ch" aria-label="Servo">
+      <dl>
+        <div><dt>Señal en D${pin} (pulsos medidos)</dt><dd class="servo-read__signal">—</dd></div>
+        <div><dt>Servo (modelo del SG90)</dt><dd class="servo-read__angle">—</dd></div>
+      </dl>
+    </section>
+    <p class="motor-read__help muted small">El ángulo pedido cambia con cada pulso (marca naranja del dial); el brazo tarda en llegar: el modelo gira como máximo a 600 °/s. Escala de la librería Servo: 544 µs = 0°, 2400 µs = 180°.</p>
+  </div>
+  ${pinStripHtml()}`;
+  const strip = pinStrip(root);
+  const horn = root.querySelector('.c-servo-horn');
+  const target = root.querySelector('.c-servo-target');
+  const body = root.querySelector('.c-servo');
+  const signal = root.querySelector('.servo-read__signal');
+  const angleEl = root.querySelector('.servo-read__angle');
+  const ledEl = root.querySelector('.c-led');
+  // Un barrido lento avanza a pasos de 1° que el modelo alcanza en milisegundos: se muestra «girando» mientras el brazo
+  // haya cambiado de ángulo en los últimos 200 ms (tiempo real de la interfaz), no solo en el instante del mensaje.
+  let lastAngle = null;
+  let lastMove = -Infinity;
+  let refresh = null;
+  const setHorn = (a) => horn.setAttribute('transform', `translate(${SERVO_SHAFT[0]} ${SERVO_SHAFT[1]}) rotate(${(-a).toFixed(1)})`);
+  const api = {
+    update(w) {
+      strip.update(w);
+      if (ledEl && w.pin === led) applyLed(ledEl, w);
+    },
+    /** Estado real del modelo en el Worker (servo.js): pulso medido, ángulo pedido y ángulo del eje. */
+    servoState(s) {
+      signal.textContent = servoSignalText(s, pin);
+      const a = s.angle ?? 90;
+      const now = performance.now();
+      if (lastAngle === null || Math.abs(a - lastAngle) > 0.5) { if (lastAngle !== null) lastMove = now; lastAngle = a; }
+      const far = s.receiving && s.target !== null && Math.abs(s.target - a) > 0.5;
+      const moving = far || now - lastMove < 200;
+      clearTimeout(refresh);
+      if (moving && !far) refresh = setTimeout(() => api.servoState({ ...s, angle: a }), 220);   // el Worker no avisa cuando ya no cambia
+      angleEl.textContent = moving ? `${Math.round(a)}°${far ? ` → ${Math.round(s.target)}°` : ''} (girando)` : `${Math.round(a)}° · quieto${s.receiving ? '' : ' (sin órdenes)'}`;
+      setHorn(a);
+      body.classList.toggle('is-moving', moving);
+      if (s.target !== null && s.receiving) {
+        const [x1, y1] = polar(s.target, SERVO_DIAL - 6);
+        const [x2, y2] = polar(s.target, SERVO_DIAL + 3);
+        target.setAttribute('d', `M${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)}`);
+        target.hidden = false;
+      } else target.hidden = true;
+    },
+    stopped() { clearTimeout(refresh); },
+    reset() {
+      strip.reset();
+      clearTimeout(refresh);
+      signal.textContent = '—';
+      angleEl.textContent = '—';
+      target.hidden = true;
+      lastAngle = null;
+      lastMove = -Infinity;
+      body.classList.remove('is-moving');
+      setHorn(90);
+      if (ledEl) applyLed(ledEl, { pin: led, duty: 0, level: false, rises: 0 });
+    },
+  };
+  return api;
+}

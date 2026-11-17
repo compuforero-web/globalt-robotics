@@ -8,12 +8,15 @@
 // o lo mueve el guion; el modelo responde a los pulsos reales de TRIG del programa.
 // Las lecciones de motores añaden el puente H L298N y sus motores (motor.js): sin estímulos externos; el modelo sigue
 // el nivel real de los pines IN y el PWM real de EN, y la traza registra órdenes, velocidades e inversiones.
+// Las lecciones del servo añaden el SG90 (servo.js): sin estímulos externos; el modelo mide cada pulso real del pin de
+// señal (ancho y periodo) y la traza registra los pulsos, el ángulo pedido y el ángulo del eje.
 import { NanoRunner, CLOCK_HZ } from './nano-runner.js';
 import { PwmMeter, WINDOW_MS } from './pwm.js';
 import { ButtonModel } from './button.js';
 import { PotModel } from './pot.js';
 import { SonarModel } from './sonar.js';
 import { MotorModel } from './motor.js';
+import { ServoModel } from './servo.js';
 
 const SLICE_MS = 16;            // trabajo máximo por porción antes de devolver el control
 const MAX_LAG_MS = 100;         // si el equipo es lento, el tiempo simulado avanza más despacio
@@ -37,6 +40,9 @@ let sonarSent = '';
 let motor = null;
 let motorSent = '';
 const MOTOR_SAMPLE_MS = 10;     // la traza guarda la velocidad de cada motor cada 10 ms
+let servo = null;
+let servoSent = '';
+const SERVO_SAMPLE_MS = 10;     // la traza guarda el ángulo del servo cada 10 ms
 
 function changed(w) {
   const prev = lastSent.get(w.pin);
@@ -67,6 +73,15 @@ function flush() {
     const channels = motor.state().map((c) => ({ ...c, speed: Math.round(c.speed * 1000) / 1000, angle: Math.round(c.angle) }));
     const key = JSON.stringify(channels);
     if (key !== motorSent) { motorSent = key; postMessage({ type: 'motor', channels, reversals: motor.reversals }); }
+  }
+  if (servo) {
+    const st = servo.state();
+    const r1 = (x) => (x === null ? null : Math.round(x * 10) / 10);
+    const state = { angle: r1(st.angle), target: r1(st.target), us: st.us === null ? null : Math.round(st.us),
+      periodMs: r1(st.periodMs), receiving: st.receiving, moving: st.moving, mode: st.mode, pulses: st.pulses > 0,
+      invalid: st.invalid ? { reason: st.invalid.reason, us: Math.round(st.invalid.us), periodMs: r1(st.invalid.periodMs) } : null };
+    const key = JSON.stringify(state);
+    if (key !== servoSent) { servoSent = key; postMessage({ type: 'servo', ...state }); }
   }
   if (windows.length) { postMessage({ type: 'windows', windows }); windows = []; }
   if (serial.length) { postMessage({ type: 'serial', bytes: serial, baud }); serial = []; }
@@ -176,12 +191,30 @@ export function recordFast(hex, durationMs, watch = [], stimulus = null) {
       } });
     log.params = motor.P;
   }
+  if (stimulus?.servo) {
+    // Sin guion: el programa es la única fuente de pulsos. `pulses` = cada pulso medido en el pin de señal (ancho en µs,
+    // periodo en ms, válido o no y su ángulo), `samples` = ángulo del eje (a) y ángulo pedido (g) cada 10 ms.
+    const log = { pin: stimulus.servo.pin, pulses: [], samples: [], params: null };
+    trace.servo = log;
+    let next = 0;
+    servo = new ServoModel(runner, { pin: stimulus.servo.pin, angle: stimulus.servo.angle ?? 90,
+      onPulse: (x) => { if (log.pulses.length < MAX_TRACE) log.pulses.push(x); },
+      onTick: (t, m) => {
+        if (t + 1e-6 < next) return;
+        next += SERVO_SAMPLE_MS;
+        if (log.samples.length < MAX_TRACE) {
+          log.samples.push({ t, a: Math.round(m.angle * 10) / 10, g: m.target === null || !m.receiving ? null : Math.round(m.target * 10) / 10 });
+        }
+      } });
+    log.params = servo.P;
+  }
   advance(durationMs, (ws) => { for (const w of ws) trace.windows.push(w); });
   if (motor) trace.motor.outputs = motor.channels.map((c) => ({ id: c.id, ...c.everOutput }));
   button = null;
   pot = null;
   sonar = null;
   motor = null;
+  servo = null;
   return trace;
 }
 
@@ -220,6 +253,9 @@ if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScop
         motor = new MotorModel(runner, { channels: data.motors.channels, onReverse: (x) => { reversals.push(x); if (reversals.length > 5) reversals.shift(); } });
         motor.reversals = reversals;
       }
+      servo = null;
+      servoSent = '';
+      if (data.servo) servo = new ServoModel(runner, { pin: data.servo.pin, angle: data.servo.angle ?? 90 });
       postMessage({ type: 'ready' });
       realtime(data.limitMs || Infinity);
     } catch (error) {

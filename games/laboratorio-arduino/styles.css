@@ -371,3 +371,14 @@
 .motor-read dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .motor-read__warn { grid-column: 1 / -1; margin: 0; padding: 6px 10px; border-radius: 8px; background: rgba(234, 179, 8, .14); border: 1px solid rgba(234, 179, 8, .5); color: #fde68a; }
 .motor-read__help { grid-column: 1 / -1; margin: 0; }
+/* Servo SG90 (lecciones 12 y 13) */
+.c-servo-body { fill: #1d4ed8; stroke: #93c5fd; stroke-opacity: .55; }
+.c-servo-tab { fill: #1e40af; stroke: #93c5fd; stroke-opacity: .4; }
+.c-servo-gear { fill: #e2e8f0; stroke: #64748b; }
+.c-servo-arm { fill: #f8fafc; stroke: #64748b; stroke-width: 1; }
+.c-servo-screw { fill: #94a3b8; }
+.c-servo-dial { fill: none; stroke: #475569; stroke-width: 1.5; stroke-dasharray: 2 3; }
+.c-servo-tick { stroke: #94a3b8; stroke-width: 1.5; }
+.c-servo-target { stroke: #f97316; stroke-width: 3; stroke-linecap: round; }
+.c-servo.is-moving .c-servo-body { stroke: #86efac; stroke-opacity: 1; }
+.servo-read { grid-template-columns: 1fr; }

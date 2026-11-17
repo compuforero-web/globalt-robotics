@@ -11,13 +11,16 @@ No está desplegado. Este directorio no se publica en la web (`deploy/linux/upda
 | Ubuntu (imagen base) | 24.04, fijada por digest | varias (paquetes Debian/Ubuntu) | Docker Hub `ubuntu` |
 | gcc-avr / binutils-avr / avr-libc | 7.3.0 / Ubuntu 24.04 | GPL-3 (compilador) · licencia BSD modificada (avr-libc) | apt de Ubuntu |
 | ArduinoCore-avr | 1.8.6, commit `42fa4a1e…` | LGPL-2.1 | github.com/arduino/ArduinoCore-avr |
+| Servo | 1.3.0, commit `2862ad9864d0dda5669b264857deafbba624940d` (solo `src/avr`, `Servo.h` y `avr/ServoTimers.h`) | LGPL-2.1 | github.com/arduino-libraries/Servo |
 | `server.py` | — | código de GLOBALT, solo biblioteca estándar de Python 3 | este repositorio |
 
-El HEX enlaza el núcleo Arduino (LGPL-2.1), como hace el IDE de Arduino. Se copia el texto de la LGPL en la imagen (`/opt/nucleo-nano/`).
+El HEX enlaza el núcleo Arduino (LGPL-2.1), como hace el IDE de Arduino. Se copia el texto de la LGPL en la imagen (`/opt/nucleo-nano/`), también el `LICENSE.txt` original de Servo (`LICENSE-Servo-LGPL-2.1.txt`).
+
+**Servo** (`build-servo.sh`): se descarga al construir la imagen (versión y commit comprobados en el `Dockerfile`), se compila solo `src/avr/Servo.cpp` a `servo/servo.a` y se copian únicamente `Servo.h` y `avr/ServoTimers.h` a `servo/include/`, que es la única carpeta añadida a los directorios de inclusión permitidos (filtro de texto y control decisivo sin cambios). `servo.a` se enlaza antes que `core.a`: solo entra en el HEX si el programa usa `Servo`; los programas sin Servo producen exactamente el mismo HEX que antes (comprobado con los 135 programas de prueba anteriores). Servo usa el Timer1: con un servo conectado no hay `analogWrite` en D9 y D10. El núcleo, avr-gcc y la imagen base no cambian.
 
 ## API (mismo origen, detrás del proxy en `/api/arduino/`)
 
-`GET /api/arduino/salud` → `200 {"ok": true, "version": {...}}` o `503` si falta el núcleo.
+`GET /api/arduino/salud` → `200 {"ok": true, "version": {...}}` o `503` si falta el núcleo. Si la imagen incluye Servo, `version.servo` = `"Servo 1.3.0 (arduino-libraries/Servo, commit 2862ad98…)"`; las demás claves no cambian (los clientes existentes la ignoran).
 
 `POST /api/arduino/compilar` con `Content-Type: application/json`:
 
@@ -56,6 +59,8 @@ El aislamiento lo da el **contenedor**; los filtros de código solo reducen lo q
 - Salida: se lee mientras se genera; se conservan 64 KB (con aviso «salida recortada») y, si supera 4 MB, se detiene el proceso.
 - Carpeta temporal propia por compilación que se borra siempre.
 - Concurrencia: 2 compilaciones a la vez, hasta 8 en espera; el resto recibe 429.
+- Parada ordenada: con SIGTERM (`docker stop --time 30`) deja de aceptar conexiones y espera a que terminen las compilaciones en curso (como máximo `COMPILADOR_TIEMPO` + 5 s).
+- Despliegue en el servidor: `deploy/linux/compilador-produccion.sh` (preparar, ensayar con socket propio, promover y recuperar); ver `docs/ACTUALIZACION_LECCIONES_12_13.md`.
 
 ### Lectura de archivos y ensamblador (dos capas)
 
