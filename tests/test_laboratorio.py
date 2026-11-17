@@ -227,7 +227,8 @@ for (const bad of ['?leccion=no-existe', '?leccion=ARDUINO-PWM-BRILLO', '?leccio
   assert.equal(r.lesson, null, bad);
   assert.ok(r.requested);
 }
-assert.deepEqual(MANIFEST.map((m) => m.numero), [1, 2, 3, 4, 5, 6, 7, 8]);
+assert.deepEqual(MANIFEST.map((m) => m.numero), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+for (const id of ['arduino-l298n-direccion', 'arduino-l298n-velocidad', 'arduino-l298n-dos-motores']) assert.equal(resolveLesson('?leccion=' + id).lesson.id, id);
 assert.equal(resolveLesson('?leccion=arduino-ultrasonico-distancia').lesson.id, 'arduino-ultrasonico-distancia');
 assert.equal(resolveLesson('?leccion=arduino-ultrasonico-alerta').lesson.id, 'arduino-ultrasonico-alerta');
 assert.equal(resolveLesson('?leccion=arduino-potenciometro-pwm').lesson.id, 'arduino-potenciometro-pwm');
@@ -245,7 +246,8 @@ console.log(JSON.stringify({ ids: MANIFEST.map((m) => m.id), def: DEFAULT_LESSON
         self.assertEqual(set(api.values()), {'course-arduino'})
         self.assertEqual(data['ids'], ['arduino-led-serie', 'arduino-protoboard-semaforo', 'arduino-pwm-brillo',
                                        'arduino-boton-entrada', 'arduino-boton-flanco', 'arduino-potenciometro-pwm',
-                                       'arduino-ultrasonico-distancia', 'arduino-ultrasonico-alerta'])
+                                       'arduino-ultrasonico-distancia', 'arduino-ultrasonico-alerta',
+                                       'arduino-l298n-direccion', 'arduino-l298n-velocidad', 'arduino-l298n-dos-motores'])
 
     def test_examples_match_fixtures_and_hints_do_not_solve(self):
         node(f"""
@@ -891,6 +893,263 @@ assert.deepEqual(D.default.pins, [7]);
 assert.deepEqual(A.default.pins, [9, 7]);
 assert.deepEqual(D.default.evaluation.stimulus.sonarScript.map((s) => s.cm), [10, 35, 80, 150]);
 assert.deepEqual(A.default.evaluation.stimulus.sonarScript.map((s) => s.cm), [70, 40, 30, 20, 6, null, 30]);
+""")
+
+
+class MotorLessonTests(unittest.TestCase):
+    """Lecciones 9–11 (5.1–5.3 de la ruta): modelo L298N + motor que responde a los pines reales, con HEX compilados de verdad."""
+
+    def test_model_pwm_dead_zone_inertia_and_pin_maps(self):
+        out = node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+import {{ NanoRunner }} from './games/laboratorio-arduino/src/nano-runner.js';
+import {{ MotorModel, PwmInput, MOTOR, PIN_MAPS, bridgeOrder, motorStep, pinMapProblems, STEADY_MS }} from './games/laboratorio-arduino/src/motor.js';
+const fx = (n) => readFileSync('{FIX}/' + n + '.hex', 'utf8');
+// Tabla del puente H.
+assert.deepEqual([[1, 0, 1], [0, 1, 1], [0, 0, 1], [1, 1, 1], [1, 0, 0]].map(([a, b, e]) => bridgeOrder(!!a, !!b, e)),
+  ['adelante', 'atras', 'freno', 'freno', 'libre']);
+// Ciclo de trabajo desde flancos: periodo completo; sin flancos 5 ms → nivel; un pulso suelto antiguo no cuenta.
+{{
+  const p = new PwmInput();
+  const C = 16000;   // ciclos por ms
+  for (let k = 0; k < 4; k++) {{ p.edge(true, k * 2 * C); p.edge(false, (k * 2 + 0.5) * C); }}
+  assert.ok(Math.abs(p.duty(7 * C) - 0.25) < 1e-9);
+  assert.equal(p.duty((7 + STEADY_MS + 1) * C), 0);
+  p.edge(true, 100 * C);
+  assert.equal(p.duty(100.5 * C), 0);       // subida tras una pausa: no mide un periodo falso, mantiene el valor anterior…
+  assert.equal(p.duty(106 * C), 1);         // …y sin más flancos durante 5 ms, es un HIGH continuo
+}}
+// Programa real: ENA a 60, 120 y 255 (1 s cada uno), hacia adelante.
+const r = new NanoRunner(fx('vel-niveles'));
+const m = new MotorModel(r, {{ channels: PIN_MAPS.velocidad }});
+const at = (ms) => {{ r.runUntilCycle(ms * 16000); return m.state()[0]; }};
+const s60 = at(950), s120 = at(1950), s255 = at(2950), coast = at(3300);
+assert.ok(Math.abs(s60.duty - 60 / 255) < 0.003 && s60.speed === 0 && s60.order === 'adelante', JSON.stringify(s60));
+assert.ok(Math.abs(s120.duty - 120 / 255) < 0.003 && Math.abs(s120.speed - (120 / 255 - MOTOR.deadZone) / (1 - MOTOR.deadZone)) < 0.01);
+assert.ok(s255.duty === 1 && s255.speed > 0.99);
+assert.ok(coast.order === 'libre' && coast.speed > 0.2 && coast.speed < 0.45, JSON.stringify(coast));   // rueda libre: frena despacio
+// La mecánica integrada coincide con la solución exacta del primer orden.
+let v = 0; for (let t = 0; t < 120; t++) v = motorStep(v, 'adelante', 1, 1);
+assert.ok(Math.abs(v - (1 - Math.exp(-1))) < 1e-9);
+v = 1; for (let t = 0; t < 40; t++) v = motorStep(v, 'freno', 1, 1);
+assert.ok(Math.abs(v - Math.exp(-1)) < 1e-9);
+// Mapas: los de las lecciones y el del robot son válidos; el del robot no choca con el HC-SR04 (D7/D8) ni con el servo (D9).
+for (const map of Object.values(PIN_MAPS)) assert.deepEqual(pinMapProblems(map), []);
+assert.deepEqual(pinMapProblems(PIN_MAPS.robot, {{ 7: 'TRIG', 8: 'ECHO', 9: 'servo' }}), []);
+assert.ok(pinMapProblems(PIN_MAPS.dosMotores, {{ 7: 'TRIG', 8: 'ECHO' }}).some((p) => p.includes('D7')));
+assert.ok(pinMapProblems([{{ id: 'A', in1: 2, in2: 3, en: 4 }}]).some((p) => p.includes('no tiene PWM')));
+assert.ok(pinMapProblems([{{ id: 'A', in1: 0, in2: 3, en: 5 }}]).some((p) => p.includes('monitor serie')));
+assert.throws(() => new MotorModel(new NanoRunner(fx('vel-niveles')), {{ channels: [{{ id: 'A', in1: 7, in2: 7, en: 9 }}] }}));
+const robotPins = PIN_MAPS.robot.flatMap((c) => [c.in1, c.in2, c.en]);
+assert.equal(new Set([...robotPins, 7, 8, 9]).size, 9);
+assert.ok(PIN_MAPS.robot.every((c) => [5, 6].includes(c.en)));
+console.log('ok');
+""")
+        self.assertIn('ok', out)
+
+    def test_model_follows_real_pins_modes_and_reversals(self):
+        out = node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+import {{ NanoRunner }} from './games/laboratorio-arduino/src/nano-runner.js';
+import {{ MotorModel, PIN_MAPS }} from './games/laboratorio-arduino/src/motor.js';
+import {{ recordFast }} from './games/laboratorio-arduino/src/sim-worker.js';
+import {{ maneuvers }} from './games/laboratorio-arduino/src/lessons/motor-eval.js';
+const fx = (n) => readFileSync('{FIX}/' + n + '.hex', 'utf8');
+const run = (name, channels, ms) => recordFast(fx(name), ms, [], {{ motors: {{ channels }} }});
+const kinds = (tr, id) => tr.motor.orders.filter((o) => o.ch === id).map((o) => o.order);
+// El mismo programa con IN1/IN2 cableados al revés: el modelo sigue los pines, no el texto.
+const ok = run('dir-solucion', PIN_MAPS.direccion, 3100);
+const swapped = run('dir-solucion', [{{ id: 'A', name: 'Motor', in1: 8, in2: 7, en: null }}], 3100);
+assert.deepEqual(kinds(ok, 'A').slice(0, 4), ['adelante', 'freno', 'atras', 'freno']);
+assert.deepEqual(kinds(swapped, 'A').slice(0, 4), ['atras', 'freno', 'adelante', 'freno']);
+assert.equal(ok.motor.reversals.length, 0);
+// Inversión sin parada: evento con el motor a toda velocidad.
+const rev = run('dir-sin-parada', PIN_MAPS.direccion, 2100);
+assert.ok(rev.motor.reversals.length >= 1 && Math.abs(rev.motor.reversals[0].speed) > 0.99 && Math.abs(rev.motor.reversals[0].t - 1000) < 2);
+// Pin sin configurar: digitalWrite(8, HIGH) sin pinMode solo activa la resistencia interna → sin orden.
+{{
+  const r = new NanoRunner(fx('dir-sin-pinmode'));
+  const m = new MotorModel(r, {{ channels: PIN_MAPS.direccion }});
+  r.runFor(2000);
+  const st = m.state()[0];
+  assert.equal(st.modes.in2, 'pullup');
+  assert.equal(st.order, 'freno');
+  assert.equal(m.channels[0].everOutput.in2, false);
+}}
+// Mapa del futuro robot (D2, D4, D10, D11, D5, D6) con un programa que además usa D7 como TRIG.
+const robot = run('motor-mapa-robot', PIN_MAPS.robot, 2600);
+assert.deepEqual(maneuvers(robot).map((p) => p.kind), ['avanzar', 'derecha', 'parar']);
+assert.deepEqual(kinds(robot, 'A').filter((k, i, a) => k !== a[i - 1]), ['libre', 'adelante', 'freno', 'libre']);
+assert.ok(robot.windows.some((w) => w.pin === 7 && w.rises > 0));
+// Ese mismo programa leído con el mapa de la lección 11: el modelo obedece a lo que hay en esos pines. D7 (pulsos TRIG) y
+// D8 (sin configurar) no mueven el canal A; D4 = LOW y D2 = HIGH con ENB (D6) activo mueven el canal B hacia atrás.
+const lesson = run('motor-mapa-robot', PIN_MAPS.dosMotores, 2600);
+assert.ok(lesson.motor.samples.every((s) => s.v[0] === 0));
+assert.ok(Math.min(...lesson.motor.samples.map((s) => s.v[1])) < -0.5);
+// Freno frente a rueda libre: la orden es instantánea, la parada del eje no.
+const stop = (tr, k, t) => tr.motor.samples.find((s) => s.t >= t && s.v[k] === 0).t - t;
+assert.ok(stop(ok, 0, 1000) > 100 && stop(ok, 0, 1000) < 250);
+const dos = run('dos-solucion', PIN_MAPS.dosMotores, 4200);
+const tParar = dos.motor.orders.filter((o) => o.order === 'libre').pop().t;
+assert.ok(stop(dos, 0, tParar) > 800 && stop(dos, 0, tParar) < 1400);
+// Determinista: dos ejecuciones dan la misma traza; una nueva no hereda nada de la anterior.
+assert.equal(JSON.stringify(run('dos-solucion', PIN_MAPS.dosMotores, 1500)), JSON.stringify(run('dos-solucion', PIN_MAPS.dosMotores, 1500)));
+assert.equal(run('vel-niveles', PIN_MAPS.velocidad, 3).motor.samples[0].v[0], 0);
+console.log('ok');
+""")
+        self.assertIn('ok', out)
+
+    def test_direccion_solutions_pass_and_failures_explain(self):
+        r = evaluate_button('l298n-direccion.js', [
+            'dir-solucion', 'dir-solucion-alta', 'dir-sentido', 'dir-sin-parada', 'dir-parada-corta', 'dir-sin-pinmode',
+            'dir-tiempos', 'dir-otros-pines', 'dir-ejemplo', 'dir-ej-tabla', 'dir-ej-funcion'])
+        for name in ('dir-solucion', 'dir-solucion-alta'):
+            self.assertTrue(r[name]['passed'], r[name])
+        ok = lambda n: r[n]['checks']
+        d = lambda n, c: r[n]['details'][c]
+        self.assertEqual(ok('dir-sentido'), {'salidas': True, 'sentido': False, 'secuencia': False, 'inversion': True, 'motor': True})
+        self.assertIn('fue hacia atrás', d('dir-sentido', 'sentido'))
+        self.assertFalse(ok('dir-sin-parada')['inversion'])
+        self.assertIn('sin pasar por parado', d('dir-sin-parada', 'inversion'))
+        self.assertIn('pico de corriente', d('dir-sin-parada', 'inversion'))
+        self.assertIn('tras solo 50 ms parado', d('dir-parada-corta', 'inversion'))
+        self.assertIn('pinMode(8, OUTPUT)', d('dir-sin-pinmode', 'salidas'))
+        self.assertFalse(ok('dir-sin-pinmode')['motor'])
+        self.assertEqual(ok('dir-tiempos'), {'salidas': True, 'sentido': True, 'secuencia': False, 'inversion': True, 'motor': True})
+        self.assertIn('1499 ms', d('dir-tiempos', 'secuencia'))
+        self.assertIn('Hay actividad en D9, D10', d('dir-otros-pines', 'sentido'))
+        for name in ('dir-ejemplo', 'dir-ej-tabla', 'dir-ej-funcion'):
+            self.assertFalse(r[name]['passed'], name)
+        self.assertIn('ms en detenerse', d('dir-solucion', 'motor'))
+        self.assertLess(evaluate_button('l298n-direccion.js', ['dir-solucion'])['dir-solucion']['ms'], 8000)
+
+    def test_velocidad_solutions_pass_and_failures_explain(self):
+        r = evaluate_button('l298n-velocidad.js', [
+            'vel-solucion', 'vel-solucion-millis', 'vel-salto', 'vel-otro-pin', 'vel-digital', 'vel-atras', 'vel-rapida',
+            'vel-sin-pinmode', 'vel-freno', 'vel-niveles', 'vel-ejemplo', 'vel-ej-pasos', 'vel-ej-calculo'])
+        for name in ('vel-solucion', 'vel-solucion-millis'):
+            self.assertTrue(r[name]['passed'], r[name])
+        ok = lambda n: r[n]['checks']
+        d = lambda n, c: r[n]['details'][c]
+        self.assertFalse(ok('vel-salto')['suave'])
+        self.assertIn('rampa brusca', d('vel-salto', 'suave'))
+        self.assertIn('Hay PWM en D10', d('vel-otro-pin', 'pwm'))
+        self.assertIn('deshabilitado', d('vel-otro-pin', 'pwm'))
+        self.assertIn('solo estuvo en 0 % o en 100 %', d('vel-digital', 'pwm'))
+        self.assertEqual(ok('vel-atras'), {'pwm': True, 'perfil': True, 'suave': True, 'direccion': False, 'motor': False})
+        self.assertIn('hacia atrás', d('vel-atras', 'direccion'))
+        self.assertEqual(ok('vel-rapida'), {'pwm': True, 'perfil': False, 'suave': True, 'direccion': True, 'motor': True})
+        self.assertIn('Llegó al 100 % en 1,0 s', d('vel-rapida', 'perfil'))
+        self.assertIn('pinMode(7, OUTPUT)', d('vel-sin-pinmode', 'direccion'))
+        self.assertIn('el puente frena', d('vel-freno', 'direccion'))
+        self.assertIn('zona muerta', d('vel-solucion', 'motor'))
+        for name in ('vel-niveles', 'vel-ejemplo', 'vel-ej-pasos', 'vel-ej-calculo'):
+            self.assertFalse(r[name]['passed'], name)
+        self.assertIn('estuvo siempre en 0 %', d('vel-ej-pasos', 'pwm'))
+        self.assertLess(evaluate_button('l298n-velocidad.js', ['vel-solucion'])['vel-solucion']['ms'], 8000)
+
+    def test_dos_motores_solutions_pass_and_failures_explain(self):
+        r = evaluate_button('l298n-dos-motores.js', [
+            'dos-solucion', 'dos-pausas', 'dos-izquierda', 'dos-pivote', 'dos-sin-enb', 'dos-zona-muerta', 'dos-pines-cambiados',
+            'dos-giro-largo', 'dos-mensaje-tarde', 'dos-sin-mensajes', 'dos-repite', 'dos-ejemplo', 'dos-ej-parametros',
+            'dos-ej-motor'])
+        for name in ('dos-solucion', 'dos-pausas'):
+            self.assertTrue(r[name]['passed'], r[name])
+        ok = lambda n: r[n]['checks']
+        d = lambda n, c: r[n]['details'][c]
+        self.assertIn('Giró a la izquierda', d('dos-izquierda', 'maniobras'))
+        self.assertIn('Solo giró un motor', d('dos-pivote', 'maniobras'))
+        self.assertIn('ENB (D6) nunca se activó', d('dos-sin-enb', 'salidas'))
+        self.assertIn('ENB en 0 %', d('dos-sin-enb', 'maniobras'))
+        self.assertEqual(ok('dos-zona-muerta'), {'salidas': True, 'maniobras': True, 'tiempos': True, 'motores': False, 'mensajes': True, 'baud': True})
+        self.assertIn('zona muerta', d('dos-zona-muerta', 'motores'))
+        self.assertIn('IN3/IN4', d('dos-pines-cambiados', 'maniobras'))
+        self.assertEqual(ok('dos-giro-largo'), {'salidas': True, 'maniobras': True, 'tiempos': False, 'motores': True, 'mensajes': True, 'baud': True})
+        self.assertEqual(ok('dos-mensaje-tarde'), {'salidas': True, 'maniobras': True, 'tiempos': True, 'motores': True, 'mensajes': False, 'baud': True})
+        self.assertIn('llegó a los 0,30 s', d('dos-mensaje-tarde', 'mensajes'))
+        self.assertFalse(ok('dos-sin-mensajes')['mensajes'] or ok('dos-sin-mensajes')['baud'])
+        self.assertIn('una sola vez', d('dos-repite', 'maniobras'))
+        self.assertIn('detenerse por inercia', d('dos-solucion', 'motores'))
+        for name in ('dos-ejemplo', 'dos-ej-parametros', 'dos-ej-motor'):
+            self.assertFalse(r[name]['passed'], name)
+        self.assertLess(evaluate_button('l298n-dos-motores.js', ['dos-solucion'])['dos-solucion']['ms'], 8000)
+
+    def test_motor_evaluators_use_only_the_measured_trace(self):
+        node("""
+import assert from 'node:assert/strict';
+import { evaluateDireccion, evaluateVelocidad, evaluateDosMotores, mergePhases, profileDuty, maneuverOf, VELOCIDAD } from './games/laboratorio-arduino/src/lessons/motor-eval.js';
+// Fases: un estado de menos de 20 ms entre dos iguales no corta la fase.
+const ph = mergePhases([{ kind: 'a', start: 0, end: 100 }, { kind: 'b', start: 100, end: 105 }, { kind: 'a', start: 105, end: 200 }], 200);
+assert.deepEqual(ph.map((p) => [p.kind, p.start, p.end, p.open]), [['a', 0, 200, true]]);
+assert.deepEqual([0, 1000, 2000, 2500, 4000, 5500, 7000].map((t) => profileDuty(t)), [0, 0.5, 1, 1, 0.5, 0, 0.5]);
+assert.equal(VELOCIDAD.periodMs, 6000);
+assert.deepEqual([['adelante', 'adelante'], ['adelante', 'atras'], ['atras', 'adelante'], ['freno', 'libre'], ['adelante', 'freno']].map(([a, b]) => maneuverOf(a, b)),
+  ['avanzar', 'derecha', 'izquierda', 'parar', 'solo-izq']);
+// Una traza fabricada (sin programa) se evalúa igual: el evaluador solo mira órdenes, velocidades, ventanas y serie.
+const orders = [], samples = [];
+let t = 0;
+for (let c = 0; c < 3; c++) for (const [order, ms] of [['adelante', 1000], ['freno', 500], ['atras', 1000], ['freno', 500]]) { orders.push({ t, ch: 'A', order, duty: 1 }); t += ms; }
+for (let s = 0; s < 6600; s += 10) { const o = orders.filter((x) => x.t <= s).pop(); samples.push({ t: s, v: [o.order === 'adelante' ? 1 : o.order === 'atras' ? -1 : 0] }); }
+const tr = { durationMs: 6600, windows: [], serial: [], motor: { orders, samples, reversals: [], outputs: [{ id: 'A', in1: true, in2: true, en: true }] } };
+assert.equal(evaluateDireccion(tr).passed, true);
+assert.equal(evaluateDireccion({ ...tr, motor: { ...tr.motor, outputs: [{ id: 'A', in1: true, in2: false, en: true }] } }).passed, false);
+for (const ev of [evaluateDireccion, evaluateVelocidad, evaluateDosMotores]) assert.equal(ev({ durationMs: 5000, windows: [], serial: [] }).passed, false);
+""")
+
+    def test_motor_examples_match_fixtures_and_hints_do_not_solve(self):
+        node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+const fx = (n) => readFileSync('{FIX}/' + n + '.ino', 'utf8');
+const D = await import('./games/laboratorio-arduino/src/lessons/l298n-direccion.js');
+const V = await import('./games/laboratorio-arduino/src/lessons/l298n-velocidad.js');
+const M = await import('./games/laboratorio-arduino/src/lessons/l298n-dos-motores.js');
+for (const [L, pre] of [[D, 'dir'], [V, 'vel'], [M, 'dos']]) {{
+  assert.equal(fx(pre + '-ejemplo'), L.EXAMPLE_CODE);
+  for (const [k, e] of Object.entries(L.EXAMPLES)) assert.equal(fx(pre + '-ej-' + k), e.code);
+  assert.equal(L.chooseTopic({{ code: L.EXAMPLE_CODE, untouched: true, step: 2 }}).topic, 'paso-2');
+  assert.equal(L.chooseTopic({{ compileError: {{ errorLine: 3, errorHelp: 'x' }} }}).topic, 'compilar');
+  assert.ok(L.default.html().includes('GND'));
+  const pins = L.default.motors.channels.flatMap((c) => [c.in1, c.in2, c.en].filter((p) => p !== null));
+  assert.deepEqual([...L.default.pins].sort((a, b) => a - b), [...pins].sort((a, b) => a - b));
+  assert.deepEqual(L.default.evaluation.stimulus.motors.channels, L.default.motors.channels);
+}}
+// Mapas didácticos conservados (docs/INTEGRACION_PINES_ARDUINO.md).
+assert.deepEqual(D.default.motors.channels.map(({{ in1, in2, en }}) => [in1, in2, en]), [[7, 8, null]]);
+assert.deepEqual(V.default.motors.channels.map(({{ in1, in2, en }}) => [in1, in2, en]), [[7, 8, 9]]);
+assert.deepEqual(M.default.motors.channels.map(({{ in1, in2, en }}) => [in1, in2, en]), [[7, 8, 5], [4, 2, 6]]);
+// Pistas según el código.
+assert.equal(D.analyzeCode(D.EXAMPLE_CODE).topic, 'bucle');
+assert.equal(D.analyzeCode(fx('dir-sin-pinmode')).topic, 'pinmode');
+assert.equal(D.analyzeCode(fx('dir-solucion')).topic, 'comprobar');
+assert.equal(D.chooseTopic({{ code: fx('dir-sin-parada'), lastChecks: [{{ id: 'salidas', ok: true }}, {{ id: 'sentido', ok: true }}, {{ id: 'secuencia', ok: false }}] }}).topic, 'secuencia');
+assert.equal(D.chooseTopic({{ code: fx('dir-sentido'), lastChecks: [{{ id: 'sentido', ok: false }}] }}).topic, 'sentido');
+assert.equal(D.chooseTopic({{ code: fx('dir-solucion'), completed: true }}).topic, 'superado');
+assert.equal(V.analyzeCode(V.EXAMPLE_CODE).topic, 'bucle');
+assert.equal(V.analyzeCode('void setup(){{}}\\nvoid loop(){{ digitalWrite(9, HIGH); }}').topic, 'analogwrite');
+assert.equal(V.analyzeCode(fx('vel-otro-pin')).topic, 'pin');
+assert.equal(V.analyzeCode(fx('vel-sin-pinmode')).topic, 'sentido');
+assert.equal(V.analyzeCode(fx('vel-solucion')).topic, 'comprobar');
+assert.equal(V.chooseTopic({{ code: fx('vel-salto'), lastChecks: [{{ id: 'pwm', ok: false }}, {{ id: 'suave', ok: false }}] }}).topic, 'bucle');
+assert.equal(V.chooseTopic({{ code: fx('vel-solucion'), lastChecks: [{{ id: 'pwm', ok: true }}, {{ id: 'suave', ok: false }}] }}).topic, 'suave');
+assert.equal(V.chooseTopic({{ code: fx('vel-rapida'), lastChecks: [{{ id: 'perfil', ok: false }}] }}).topic, 'perfil');
+assert.equal(M.analyzeCode(M.EXAMPLE_CODE).topic, 'giro');
+assert.equal(M.analyzeCode(fx('dos-sin-mensajes')).topic, 'mensajes');
+assert.equal(M.analyzeCode(fx('dos-solucion')).topic, 'comprobar');
+assert.equal(M.chooseTopic({{ code: fx('dos-sin-enb'), lastChecks: [{{ id: 'salidas', ok: false, detail: 'ENB (D6) nunca se activó' }}] }}).topic, 'habilitar');
+assert.equal(M.chooseTopic({{ code: fx('dos-solucion'), lastChecks: [{{ id: 'salidas', ok: false, detail: 'ENB (D6) nunca se activó' }}] }}).topic, 'habilitar');
+assert.equal(M.chooseTopic({{ code: fx('dos-izquierda'), lastChecks: [{{ id: 'salidas', ok: true }}, {{ id: 'maniobras', ok: false, detail: 'Giró a la izquierda' }}] }}).topic, 'maniobras');
+assert.equal(M.chooseTopic({{ code: fx('dos-zona-muerta'), lastChecks: [{{ id: 'motores', ok: false }}] }}).topic, 'velocidad');
+// Ninguna pista ni ejemplo contiene la solución.
+const solved = [/delay\\(1000\\)[\\s\\S]*delay\\(500\\)[\\s\\S]*delay\\(1000\\)/, /for\\s*\\([\\s\\S]*analogWrite[\\s\\S]*for\\s*\\(/, /delay\\(600\\)/];
+for (const [L, bad] of [[D, solved[0]], [V, solved[1]], [M, solved[2]]]) {{
+  for (const t of L.TOPIC_IDS) for (let i = 0; i < 4; i++) assert.doesNotMatch(L.hintText(t, i, {{ delays: [], errorHelp: '' }}).text, bad);
+  for (const ex of Object.values(L.EXAMPLES)) assert.doesNotMatch(ex.code, bad);
+}}
+assert.ok(!Object.values(V.EXAMPLES).some((e) => /analogWrite/.test(e.code)));
+assert.ok(!Object.values(M.EXAMPLES).some((e) => /derech/i.test(e.code)));
 """)
 
 

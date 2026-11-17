@@ -346,3 +346,28 @@
 .sonar-ctl__read dt { color: var(--muted); }
 .sonar-ctl__read dd { margin: 0; font-variant-numeric: tabular-nums; }
 .sonar-ctl__help { flex-basis: 100%; margin: 0; }
+/* Puente H L298N y motores (lecciones 9–11) */
+.circuit--motor { max-height: 300px; }
+.c-l298-pcb { fill: #7f1d1d; stroke: #fca5a5; stroke-opacity: .45; }
+.c-l298-sink { fill: #1f2937; stroke: #64748b; }
+.c-terminal { fill: #2563eb; stroke: #93c5fd; stroke-opacity: .6; }
+.c-jumper { fill: #0f172a; stroke: #e2e8f0; stroke-width: 1; }
+.c-wire--in { stroke: #f97316; stroke-width: 2.2; }
+.c-wire--en { stroke: #38bdf8; stroke-width: 2.2; }
+.c-wire--vs { stroke: #ef4444; }
+.c-wire--out { stroke: #eab308; }
+.c-battery-body { fill: #334155; stroke: #94a3b8; }
+.c-battery-tip { fill: #94a3b8; }
+.c-motor-body { fill: #475569; stroke: #cbd5e1; stroke-width: 1.5; }
+.c-motor-hub { fill: #1e293b; stroke: #94a3b8; }
+.c-motor-spoke { stroke: #94a3b8; stroke-width: 1.6; }
+.c-motor-mark { fill: #f97316; }
+.c-motor.is-moving .c-motor-body { stroke: #86efac; }
+.motor-read { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px 14px; margin: 6px 0 2px; font-size: .85rem; }
+.motor-read__ch { min-width: 0; }
+.motor-read__title { margin: 0 0 2px; font-size: .9rem; }
+.motor-read dl { margin: 0; display: grid; gap: 2px; }
+.motor-read dt { color: var(--muted); }
+.motor-read dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.motor-read__warn { grid-column: 1 / -1; margin: 0; padding: 6px 10px; border-radius: 8px; background: rgba(234, 179, 8, .14); border: 1px solid rgba(234, 179, 8, .5); color: #fde68a; }
+.motor-read__help { grid-column: 1 / -1; margin: 0; }

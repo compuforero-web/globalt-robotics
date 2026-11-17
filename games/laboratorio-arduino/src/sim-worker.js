@@ -6,11 +6,14 @@
 // 'input') o un guion; en la evaluación, siempre el guion reproducible de la lección, con precisión de ciclo.
 // Las lecciones del sensor ultrasónico añaden el HC-SR04 (sonar.js): el estudiante mueve el obstáculo ('distance')
 // o lo mueve el guion; el modelo responde a los pulsos reales de TRIG del programa.
+// Las lecciones de motores añaden el puente H L298N y sus motores (motor.js): sin estímulos externos; el modelo sigue
+// el nivel real de los pines IN y el PWM real de EN, y la traza registra órdenes, velocidades e inversiones.
 import { NanoRunner, CLOCK_HZ } from './nano-runner.js';
 import { PwmMeter, WINDOW_MS } from './pwm.js';
 import { ButtonModel } from './button.js';
 import { PotModel } from './pot.js';
 import { SonarModel } from './sonar.js';
+import { MotorModel } from './motor.js';
 
 const SLICE_MS = 16;            // trabajo máximo por porción antes de devolver el control
 const MAX_LAG_MS = 100;         // si el equipo es lento, el tiempo simulado avanza más despacio
@@ -31,6 +34,9 @@ let potSent = '';
 let sonar = null;
 let sonarState = null;          // último disparo y último eco del HC-SR04 (para la interfaz)
 let sonarSent = '';
+let motor = null;
+let motorSent = '';
+const MOTOR_SAMPLE_MS = 10;     // la traza guarda la velocidad de cada motor cada 10 ms
 
 function changed(w) {
   const prev = lastSent.get(w.pin);
@@ -56,6 +62,11 @@ function flush() {
     const state = { cm: sonar.cm, trigMode: runner.pinMode(sonar.trig), measures: sonar.measures, echoHigh: sonar.echoHigh, ...sonarState };
     const key = JSON.stringify(state);
     if (key !== sonarSent) { sonarSent = key; postMessage({ type: 'sonar', ...state }); }
+  }
+  if (motor) {
+    const channels = motor.state().map((c) => ({ ...c, speed: Math.round(c.speed * 1000) / 1000, angle: Math.round(c.angle) }));
+    const key = JSON.stringify(channels);
+    if (key !== motorSent) { motorSent = key; postMessage({ type: 'motor', channels, reversals: motor.reversals }); }
   }
   if (windows.length) { postMessage({ type: 'windows', windows }); windows = []; }
   if (serial.length) { postMessage({ type: 'serial', bytes: serial, baud }); serial = []; }
@@ -149,10 +160,28 @@ export function recordFast(hex, durationMs, watch = [], stimulus = null) {
       onDistance: (cm, t) => log.distances.push({ t, cm }) });
     sonar.play(stimulus.sonarScript || []);
   }
+  if (stimulus?.motors) {
+    // Sin guion: el programa es la única fuente de órdenes. `orders` = cambios de orden del puente H por canal
+    // (y de EN en ≥ 2 puntos), `samples` = velocidad de cada motor cada 10 ms, `reversals` = inversiones con el motor girando.
+    const log = { channels: stimulus.motors.channels, orders: [], reversals: [], samples: [], params: null, outputs: null };
+    trace.motor = log;
+    let next = 0;
+    motor = new MotorModel(runner, { channels: stimulus.motors.channels,
+      onOrder: (x) => { if (log.orders.length < MAX_TRACE) log.orders.push(x); },
+      onReverse: (x) => { if (log.reversals.length < MAX_TRACE) log.reversals.push(x); },
+      onTick: (t, m) => {
+        if (t + 1e-6 < next) return;
+        next += MOTOR_SAMPLE_MS;
+        if (log.samples.length < MAX_TRACE) log.samples.push({ t, v: m.channels.map((c) => Math.round(c.speed * 1000) / 1000) });
+      } });
+    log.params = motor.P;
+  }
   advance(durationMs, (ws) => { for (const w of ws) trace.windows.push(w); });
+  if (motor) trace.motor.outputs = motor.channels.map((c) => ({ id: c.id, ...c.everOutput }));
   button = null;
   pot = null;
   sonar = null;
+  motor = null;
   return trace;
 }
 
@@ -183,6 +212,13 @@ if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScop
           onTrigger: (x) => { sonarState = { ...sonarState, trig: x }; },
           onEcho: (x) => { sonarState = { ...sonarState, echo: x }; } });
         if (Array.isArray(data.sonarScript)) sonar.play(data.sonarScript);
+      }
+      motor = null;
+      motorSent = '';
+      if (data.motors) {
+        const reversals = [];
+        motor = new MotorModel(runner, { channels: data.motors.channels, onReverse: (x) => { reversals.push(x); if (reversals.length > 5) reversals.shift(); } });
+        motor.reversals = reversals;
       }
       postMessage({ type: 'ready' });
       realtime(data.limitMs || Infinity);

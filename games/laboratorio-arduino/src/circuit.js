@@ -561,3 +561,146 @@ export function createSonarCircuit(root, { onDistance = () => false, onScript = 
     },
   };
 }
+
+// ---------- Puente H L298N y motores (lecciones 9–11) ----------
+const ORDER_TEXT = { adelante: 'adelante', atras: 'atrás', freno: 'freno', libre: 'libre (sin tensión)' };
+const HEADER = [['ENA', 'A', 'en'], ['IN1', 'A', 'in1'], ['IN2', 'A', 'in2'], ['IN3', 'B', 'in1'], ['IN4', 'B', 'in2'], ['ENB', 'B', 'en']];
+const headerX = (k) => 188 + k * 16;
+const fmtPct = (d) => `${Math.round(d * 100)} %`;
+const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+/**
+ * Nano + módulo L298N + uno o dos motores DC + batería del motor (7–9 V) con GND común.
+ * `channels` = mapa de pines de motor.js (canal A y, si hay, B); `en: null` dibuja el puente (jumper) de ENA.
+ * Los motores giran con el ángulo y la velocidad que calcula el modelo del Worker (motorState); nada se anima solo.
+ */
+export function createMotorCircuit(root, { channels }) {
+  const byId = Object.fromEntries(channels.map((c) => [c.id, c]));
+  const two = channels.length > 1;
+  const used = new Set(channels.flatMap((c) => [c.in1, c.in2, c.en].filter((p) => p !== null)));
+  const signals = HEADER.map(([label, id, sig], k) => ({ label, id, sig, k, pin: byId[id] ? byId[id][sig] : undefined }))
+    .filter((s) => byId[s.id]);
+  const wired = signals.filter((s) => s.pin !== null && s.pin !== undefined);
+  const lanes = [...wired].sort((a, b) => nanoX(a.pin) - nanoX(b.pin));
+  const motorY = { A: two ? 60 : 86, B: 104 };
+  const desc = [
+    'Arduino Nano compatible conectado a un módulo puente H L298N.',
+    ...wired.map((s) => `${s.label} del L298N a D${s.pin}.`),
+    ...channels.filter((c) => c.en === null).map((c) => `${c.id === 'A' ? 'ENA' : 'ENB'} lleva el puente puesto: canal siempre habilitado.`),
+    `${two ? 'OUT1 y OUT2 van al motor izquierdo; OUT3 y OUT4, al motor derecho.' : 'OUT1 y OUT2 van al motor.'}`,
+    'Una batería de 7 a 9 voltios alimenta los motores por el borne VS del L298N; su negativo va al GND del L298N y ese GND se une al GND del Nano (GND común).',
+    'El Nano se alimenta por USB y no alimenta los motores; el borne de 5 V del módulo queda sin usar.',
+  ].join(' ');
+  const motorSvg = (c) => `<g class="c-motor" data-motor="${c.id}" transform="translate(326 ${motorY[c.id]})">
+      <circle r="19" class="c-motor-body"/>
+      <g class="c-motor-rotor"><circle r="12" class="c-motor-hub"/><path d="M0 -12 V12 M-10.4 -6 L10.4 6 M-10.4 6 L10.4 -6" class="c-motor-spoke"/><circle cy="-9" r="2.6" class="c-motor-mark"/></g>
+      <text y="${c.id === 'A' ? -24 : 31}" class="c-tiny" text-anchor="middle">${esc(c.name)}</text>
+    </g>`;
+  root.innerHTML = `
+  <svg class="circuit circuit--motor" viewBox="0 0 360 232" role="img" aria-labelledby="circuit-title circuit-desc">
+    <title id="circuit-title">Puente H L298N y ${two ? 'dos motores' : 'motor DC'}</title>
+    <desc id="circuit-desc">${esc(desc)}</desc>
+    <rect x="8" y="154" width="150" height="68" rx="7" class="c-pcb"/>
+    <rect x="104" y="176" width="34" height="24" rx="3" class="c-chip"/>
+    <text x="121" y="191" class="c-chip-txt" text-anchor="middle">328P</text>
+    <text x="70" y="214" class="c-label" text-anchor="middle">NANO</text>
+    <text x="70" y="226" class="c-tiny" text-anchor="middle">USB: alimenta solo el Nano</text>
+    ${NANO_PINS.map((p) => `<circle cx="${nanoX(p)}" cy="162" r="2.8" class="c-hole ${used.has(p) ? 'is-used' : ''}"/>
+      <text x="${nanoX(p)}" y="173" class="c-tiny" text-anchor="middle">${p}</text>`).join('')}
+    <circle cx="22" cy="200" r="2.8" class="c-hole is-used"/><text x="22" y="192" class="c-tiny" text-anchor="middle">GND</text>
+    ${lanes.map((s, i) => {
+      const lane = 148 - i * 3.6;
+      return `<path d="M${nanoX(s.pin)} 162 V${lane} H${headerX(s.k)} V134" class="c-wire c-wire--${s.sig === 'en' ? 'en' : 'in'}"/>`;
+    }).join('')}
+    <rect x="176" y="44" width="116" height="90" rx="5" class="c-l298-pcb"/>
+    <rect x="214" y="58" width="40" height="34" rx="2" class="c-l298-sink"/>
+    <text x="234" y="104" class="c-small" text-anchor="middle">L298N</text>
+    ${signals.map((s) => `<circle cx="${headerX(s.k)}" cy="130" r="2.6" class="c-hole ${s.pin !== undefined ? 'is-used' : ''}"/>
+      <text x="${headerX(s.k)}" y="122" class="c-tiny" text-anchor="middle">${s.label}</text>`).join('')}
+    ${channels.filter((c) => c.en === null).map((c) => {
+      const x = headerX(c.id === 'A' ? 0 : 5);
+      return `<rect x="${x - 4}" y="125" width="8" height="12" rx="1.5" class="c-jumper"/><text x="${x}" y="146" class="c-tiny" text-anchor="middle">puente</text>`;
+    }).join('')}
+    ${[['5V', 190], ['GND', 208], ['VS', 226]].map(([t, x]) => `<rect x="${x - 6}" y="44" width="12" height="10" class="c-terminal"/><text x="${x}" y="64" class="c-tiny" text-anchor="middle">${t}</text>`).join('')}
+    <text x="190" y="72" class="c-tiny" text-anchor="middle">sin usar</text>
+    <g class="c-battery" transform="translate(200 6)">
+      <rect width="60" height="20" rx="3" class="c-battery-body"/>
+      <rect x="60" y="6" width="4" height="8" class="c-battery-tip"/>
+      <text x="30" y="14" class="c-tiny" text-anchor="middle">batería 7–9 V</text>
+      <text x="56" y="-1" class="c-tiny" text-anchor="middle">+</text><text x="4" y="-1" class="c-tiny" text-anchor="middle">−</text>
+    </g>
+    <path d="M264 16 H272 V36 H226 V44" class="c-wire c-wire--vs"/>
+    <path d="M200 16 H196 V34 H208 V44" class="c-wire c-wire--gnd"/>
+    <path d="M196 34 H6 V200 H22" class="c-wire c-wire--gnd"/>
+    <text x="70" y="30" class="c-tiny" text-anchor="middle">GND común</text>
+    ${channels.map((c) => {
+      const y = motorY[c.id];
+      const [o1, o2] = c.id === 'A' ? ['OUT1', 'OUT2'] : ['OUT3', 'OUT4'];
+      return `<path d="M292 ${y - 6} H307" class="c-wire c-wire--out"/><path d="M292 ${y + 6} H307" class="c-wire c-wire--out"/>
+        <text x="289" y="${y - 3.5}" class="c-tiny" text-anchor="end">${o1}</text><text x="289" y="${y + 8.5}" class="c-tiny" text-anchor="end">${o2}</text>`;
+    }).join('')}
+    ${channels.map(motorSvg).join('')}
+  </svg>
+  <div class="motor-read">
+    ${channels.map((c) => `<section class="motor-read__ch" data-ch="${c.id}" aria-label="${esc(c.name)}">
+      <h4 class="motor-read__title">${esc(c.name)} <span class="muted small">(IN ${c.in1 !== undefined ? `D${c.in1}/D${c.in2}` : ''}${c.en === null ? ', EN con puente' : `, EN D${c.en}`})</span></h4>
+      <dl>
+        <div><dt>Orden del puente H</dt><dd class="motor-read__order">—</dd></div>
+        <div><dt>Motor (modelo con inercia)</dt><dd class="motor-read__speed">—</dd></div>
+      </dl>
+    </section>`).join('')}
+    <p class="motor-read__warn" role="status" hidden></p>
+    <p class="motor-read__help muted small">La orden cambia en cuanto cambian los pines; el eje del motor tarda en acelerar y en detenerse. Velocidades del modelo: zona muerta 30 %, 200 rpm al 100 %.</p>
+  </div>
+  ${pinStripHtml()}`;
+  const strip = pinStrip(root);
+  const els = Object.fromEntries(channels.map((c) => [c.id, {
+    rotor: root.querySelector(`[data-motor="${c.id}"] .c-motor-rotor`),
+    motor: root.querySelector(`[data-motor="${c.id}"]`),
+    order: root.querySelector(`[data-ch="${c.id}"] .motor-read__order`),
+    speed: root.querySelector(`[data-ch="${c.id}"] .motor-read__speed`),
+  }]));
+  const warn = root.querySelector('.motor-read__warn');
+  let warned = 0;
+  const level = (mode, high) => (mode !== 'output' ? 'sin configurar' : high ? 'HIGH' : 'LOW');
+  const show = (s) => {
+    const c = byId[s.id];
+    const e = els[s.id];
+    const [n1, n2, ne] = c.id === 'A' ? ['IN1', 'IN2', 'ENA'] : ['IN3', 'IN4', 'ENB'];
+    const enText = c.en === null ? `${ne} con puente` : s.modes.en !== 'output' ? `${ne} sin configurar (0 %)` : `${ne} ${fmtPct(s.duty)}`;
+    e.order.textContent = `${ORDER_TEXT[s.order]} · ${n1} ${level(s.modes.in1, s.levels.in1)}, ${n2} ${level(s.modes.in2, s.levels.in2)}, ${enText}`;
+    const rpm = Math.round(Math.abs(s.rpm));
+    const moving = s.order === 'adelante' || s.order === 'atras';
+    let txt;
+    if (rpm === 0) txt = moving && s.duty > 0 ? `parado: con ${fmtPct(s.duty)} no vence la zona muerta` : 'parado';
+    else txt = `${rpm} rpm ${s.speed > 0 ? '↻ adelante' : '↺ atrás'}${moving ? '' : ` · deteniéndose (${s.order === 'freno' ? 'freno' : 'rueda libre'})`}`;
+    e.speed.textContent = txt;
+    e.rotor.setAttribute('transform', `rotate(${s.angle})`);
+    e.motor.classList.toggle('is-moving', rpm > 0);
+  };
+  return {
+    update(w) { strip.update(w); },
+    /** Estado real del modelo en el Worker (motor.js): órdenes, velocidad, ángulo e inversiones bruscas. */
+    motorState({ channels: states, reversals = [] }) {
+      for (const s of states) show(s);
+      if (reversals.length > warned) {
+        const r = reversals[reversals.length - 1];
+        warned = reversals.length;
+        warn.hidden = false;
+        warn.textContent = `⚠ A los ${(r.t / 1000).toFixed(2).replace('.', ',')} s, ${byId[r.ch].name.toLowerCase()} pasó de ${ORDER_TEXT[r.from]} a ${ORDER_TEXT[r.to]} girando al ${fmtPct(Math.abs(r.speed))}. En un motor real eso provoca un pico de corriente y un golpe en los engranajes; una parada breve antes de invertir lo evita.`;
+      }
+    },
+    stopped() {},
+    reset() {
+      strip.reset();
+      warned = 0;
+      warn.hidden = true;
+      for (const c of channels) {
+        els[c.id].order.textContent = '—';
+        els[c.id].speed.textContent = '—';
+        els[c.id].rotor.setAttribute('transform', 'rotate(0)');
+        els[c.id].motor.classList.remove('is-moving');
+      }
+    },
+  };
+}

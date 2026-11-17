@@ -1,6 +1,6 @@
 # Integración de pines: motores y futuro robot evasor
 
-Contrato de planificación para combinar componentes en el Nano ATmega328P emulado. No implementa modelos, no cambia circuitos publicados y no exige acciones en Linux.
+Contrato para combinar componentes en el Nano ATmega328P emulado. El modelo de motores ya lo cumple (ver «Implementación»); el robot integrado sigue siendo una fase futura.
 
 ## Conflicto resuelto en el plan
 
@@ -42,3 +42,12 @@ No renombrar identificadores ni alterar las ocho lecciones publicadas. Las tres 
 6. Al desarrollar el evasor, comprobar que cada señal tenga un pin exclusivo y que ENA/ENB sean pines PWM. No reutilizar D7/D8 para dirección.
 
 Validación de este plan: nueve señales con pines distintos, ENA/ENB en D5/D6, D0/D1 sin asignar y mapas de las lecciones de motores conservados. No se ha probado todavía el robot integrado: es una entrega futura.
+
+## Implementación del modelo de motores (lecciones 9–11)
+
+- `games/laboratorio-arduino/src/motor.js` define los cuatro mapas como datos (`PIN_MAPS.direccion`, `velocidad`, `dosMotores` y `robot`) y un único `MotorModel` configurable por canal (`{ id, name, in1, in2, en }`, `en: null` = puente). Las tres lecciones usan sus mapas didácticos sin cambios; el robot usará `PIN_MAPS.robot` con el mismo modelo, sin una segunda lógica de motores.
+- Circuito, código inicial, ejemplos, evaluador y pistas de cada lección leen el mismo mapa (`motor-eval.js` exporta `DIRECCION_PINS`, `VELOCIDAD_PINS`, `DOS_PINS`); una prueba comprueba que los pines vigilados y el estímulo de la evaluación coinciden con el mapa.
+- `pinMapProblems(canales, ocupados)` aplica las reglas 1 y 6: pin exclusivo para cada señal (también frente a otros componentes, p. ej. `{ 7: 'TRIG', 8: 'ECHO', 9: 'servo' }`), ENA/ENB en pines PWM y D0/D1 libres. `MotorModel` rechaza un mapa inválido.
+- Comprobado (`tests/test_laboratorio.py`, `MotorLessonTests`): el mapa del robot no tiene problemas junto a TRIG D7, ECHO D8 y servo D9 (nueve señales distintas, EN en D5/D6); el de la lección 11 choca con el sonar en D7/D8, como se esperaba; un programa compilado con el mapa del robot (`motor-mapa-robot.ino`, que además da pulsos en D7) produce avanzar → girar a la derecha → parar, y el mismo HEX leído con el mapa de la lección 11 mueve solo lo que dicen esos pines.
+- Temporizadores: ENA/ENB del robot (D5/D6) usan Timer0 (~980 Hz, el mismo que `millis`/`delay`, sin conflicto). El servo de D9 usará Timer1, que la librería Servo reconfigura: dejará sin `analogWrite` a D9 y D10 (D10 en el robot es IN3, solo digital, así que no se ve afectado). Queda por comprobar con la librería real cuando se incorpore.
+- Pendiente de la fase del evasor: la combinación real sonar + motores en una sola lección y el mundo 2D.
