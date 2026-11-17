@@ -7,9 +7,11 @@ import pwmBrillo from './pwm-brillo.js';
 import botonEntrada from './boton-entrada.js';
 import botonFlanco from './boton-flanco.js';
 import potenciometro from './potenciometro.js';
+import ultrasonicoDistancia from './ultrasonico-distancia.js';
+import ultrasonicoAlerta from './ultrasonico-alerta.js';
 
 export const DEFAULT_LESSON_ID = 'arduino-led-serie';
-export const LESSONS = [ledSerie, semaforo, pwmBrillo, botonEntrada, botonFlanco, potenciometro];
+export const LESSONS = [ledSerie, semaforo, pwmBrillo, botonEntrada, botonFlanco, potenciometro, ultrasonicoDistancia, ultrasonicoAlerta];
 export const ID_PATTERN = /^[a-z0-9-]{3,60}$/;
 
 /** Datos públicos de cada lección: orden, tema, título y lecciones previas recomendadas (no bloquean). */

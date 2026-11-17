@@ -294,7 +294,7 @@ Sobre aprobaciones en el servidor: la evaluación ocurre en el navegador, así q
 
 1. Entradas programadas + 2.2 y 2.3. **Implementada (17-11-2026)** en la rama `feature/lecciones-boton` (PR pendiente de desplegar la API; procedimiento en `docs/ACTUALIZACION_LECCIONES_4_5.md`, detalle en `docs/LABORATORIO_ARDUINO.md`). Ajustes anunciados en cada reto: en 2.2 el mensaje debe empezar en ≤ 50 ms tras el cambio y se admite un saludo al arrancar; en 2.3 la respuesta (≤ 60 ms) se mide desde que el contacto deja de rebotar, el guion rebota también al soltar y dura 5,5 s.
 2. Bundle con ADC + 2.4. **Implementada (17-11-2026)** en la rama `feature/leccion-potenciometro` (PR pendiente de desplegar la API; procedimiento en `docs/ACTUALIZACION_LECCION_6.md`, detalle en `docs/LABORATORIO_ARDUINO.md`). Ajustes anunciados en el reto: el guion añade un tramo final de vuelta a 1,25 V y sus cambios no caen en múltiplos de 250 ms (evaluación de 5,4 s); la línea debe contener la lectura como número entero; ritmo de 250 ms ±10 %.
-3. Modelo HC-SR04 + 4.1 y 4.2.
+3. Modelo HC-SR04 + 4.1 y 4.2. **Implementada (17-11-2026)** en la rama `feature/lecciones-ultrasonico` (PR pendiente de desplegar la API; procedimiento en `docs/ACTUALIZACION_LECCIONES_7_8.md`, detalle en `docs/LABORATORIO_ARDUINO.md`). Ajustes anunciados en cada reto: en 4.1 cada valor debe salir de un eco medido, se evalúan 6,1 s y el ritmo admite ±10 %; en 4.2 el LED también debe apagarse sin eco, el tramo sin eco dura 1,1 s, el guion vuelve a 30 cm y «Fuera de rango» no puede aparecer con eco. El módulo modelado baja ECHO a los 38 ms sin eco.
 4. Modelo L298N/motor + 5.1–5.3.
 5. Librería Servo en el compilador (despliegue de imagen) + 3.1 y 3.2.
 6. Mundo 2D en lazo cerrado + 6.1 y 6.2 (6.3 opcional).

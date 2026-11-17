@@ -319,3 +319,30 @@
 .pot-ctl__volts { min-width: 4.5em; font-weight: 600; font-variant-numeric: tabular-nums; }
 .pot-ctl__adc { font-size: .85rem; font-variant-numeric: tabular-nums; }
 .pot-ctl__help { flex-basis: 100%; margin: 0; }
+/* Sensor ultrasónico HC-SR04 (lecciones 7 y 8) */
+.c-wire--trig { stroke: #f97316; }
+.c-wire--echo { stroke: #38bdf8; }
+.c-gnd-sym { stroke: #94a3b8; stroke-width: 2; fill: none; }
+.c-sonar-pcb { fill: #1d4ed8; stroke: #93c5fd; stroke-opacity: .5; }
+.c-sonar-can { fill: #cbd5e1; stroke: #64748b; }
+.circuit--sonar .c-sonar-can + .c-tiny { fill: #0f172a; }
+.c-wall-body { fill: #a16207; stroke: #fde68a; stroke-opacity: .6; }
+.c-wall.is-none { opacity: 0; }
+.c-beam { stroke: #38bdf8; stroke-width: 2; stroke-dasharray: 3 4; opacity: .35; fill: none; }
+.c-ruler { stroke: #94a3b8; stroke-width: 1; fill: none; }
+.circuit--sonar.is-noecho .c-beam--back { opacity: 0; }
+.circuit--sonar.is-ping .c-beam { animation: sonar-ping .35s ease-out; }
+@keyframes sonar-ping { from { opacity: 1; stroke-width: 3; } to { opacity: .35; stroke-width: 2; } }
+@media (prefers-reduced-motion: reduce) { .circuit--sonar.is-ping .c-beam { animation: none; } }
+.sonar-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 6px 0 2px; }
+.sonar-ctl__label { font-weight: 600; }
+.sonar-ctl__range { flex: 1 1 200px; min-width: 0; height: 44px; accent-color: #38bdf8; cursor: pointer; }
+.sonar-ctl__range:focus-visible, .sonar-ctl__check:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+.sonar-ctl__range:disabled { opacity: .45; cursor: not-allowed; }
+.sonar-ctl__cm { min-width: 6.5em; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sonar-ctl__none { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+.sonar-ctl__check { width: 20px; height: 20px; accent-color: #38bdf8; }
+.sonar-ctl__read { flex-basis: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 4px 12px; margin: 0; font-size: .85rem; }
+.sonar-ctl__read dt { color: var(--muted); }
+.sonar-ctl__read dd { margin: 0; font-variant-numeric: tabular-nums; }
+.sonar-ctl__help { flex-basis: 100%; margin: 0; }

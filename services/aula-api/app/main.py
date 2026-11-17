@@ -33,6 +33,8 @@ LECCIONES = {
     'arduino-boton-entrada': 'course-arduino',
     'arduino-boton-flanco': 'course-arduino',
     'arduino-potenciometro-pwm': 'course-arduino',
+    'arduino-ultrasonico-distancia': 'course-arduino',
+    'arduino-ultrasonico-alerta': 'course-arduino',
 }
 
 
