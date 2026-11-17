@@ -227,7 +227,8 @@ for (const bad of ['?leccion=no-existe', '?leccion=ARDUINO-PWM-BRILLO', '?leccio
   assert.equal(r.lesson, null, bad);
   assert.ok(r.requested);
 }
-assert.deepEqual(MANIFEST.map((m) => m.numero), [1, 2, 3]);
+assert.deepEqual(MANIFEST.map((m) => m.numero), [1, 2, 3, 4, 5]);
+assert.equal(resolveLesson('?leccion=arduino-boton-flanco').lesson.id, 'arduino-boton-flanco');
 for (const l of LESSONS) {
   assert.match(l.id, ID_PATTERN);
   assert.ok(l.steps.length >= 4 && l.challenge.criteria.length >= 4 && l.evaluation.durationMs > 0, l.id);
@@ -239,7 +240,8 @@ console.log(JSON.stringify({ ids: MANIFEST.map((m) => m.id), def: DEFAULT_LESSON
         self.assertEqual(data['def'], 'arduino-led-serie')
         self.assertEqual(sorted(data['ids']), sorted(api))
         self.assertEqual(set(api.values()), {'course-arduino'})
-        self.assertEqual(data['ids'][:3], ['arduino-led-serie', 'arduino-protoboard-semaforo', 'arduino-pwm-brillo'])
+        self.assertEqual(data['ids'], ['arduino-led-serie', 'arduino-protoboard-semaforo', 'arduino-pwm-brillo',
+                                       'arduino-boton-entrada', 'arduino-boton-flanco'])
 
     def test_examples_match_fixtures_and_hints_do_not_solve(self):
         node(f"""
@@ -272,6 +274,180 @@ for (const [M, bad] of [[S, /delay\\(3000\\)[\\s\\S]*delay\\(1000\\)/], [P, /for
 // El monitor serie no es requisito del reto de PWM; sí lo es en el semáforo.
 assert.ok(!P.CHALLENGE.criteria.some((c) => /serie|baudios/i.test(c)));
 assert.ok(S.CHALLENGE.criteria.some((c) => /9600 baudios/.test(c)));
+""")
+
+
+def evaluate_button(module, names):
+    """Graba la traza de cada HEX con el guion de pulsaciones de la lección (el mismo del Worker) y la evalúa."""
+    def script(name):
+        return f"""
+import {{ readFileSync }} from 'node:fs';
+import {{ recordFast }} from './games/laboratorio-arduino/src/sim-worker.js';
+const L = (await import('./games/laboratorio-arduino/src/lessons/{module}')).default;
+const t0 = performance.now();
+const tr = recordFast(readFileSync('{FIX}/{name}.hex', 'utf8'), L.evaluation.durationMs, L.pins, L.evaluation.stimulus);
+const r = L.evaluation.evaluate(tr);
+console.log(JSON.stringify({{ passed: r.passed, checks: Object.fromEntries(r.checks.map((c) => [c.id, c.ok])),
+  details: Object.fromEntries(r.checks.map((c) => [c.id, c.detail])), ms: performance.now() - t0 }}));
+"""
+    procs = {n: subprocess.Popen(['node', '--input-type=module', '-e', script(n)], cwd=ROOT, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, text=True) for n in names}
+    results = {}
+    for name, proc in procs.items():
+        out, err = proc.communicate(timeout=180)
+        if proc.returncode:
+            raise AssertionError(f'{name}: {err}')
+        results[name] = json.loads(out)
+    return results
+
+
+class ButtonLessonTests(unittest.TestCase):
+    """Lecciones 4 y 5 (2.2 y 2.3 de la ruta): HEX reales con el guion de pulsaciones aplicado al modelo eléctrico."""
+
+    def test_input_model_pullup_floating_and_cycle_precision(self):
+        out = node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+import {{ NanoRunner }} from './games/laboratorio-arduino/src/nano-runner.js';
+import {{ ButtonModel, buildScript, bounceBurst, rng }} from './games/laboratorio-arduino/src/button.js';
+const run = (name, script, ms) => {{
+  const edges = [], modes = [];
+  const r = new NanoRunner(readFileSync('{FIX}/' + name + '.hex', 'utf8'), {{ onPin: (p, h, t) => {{ if (p === 13) edges.push({{ t, h }}); }} }});
+  const b = new ButtonModel(r, {{ pin: 2, seed: 5, onMode: (m, t) => modes.push(m) }});
+  b.play(script);
+  r.runFor(ms);
+  return {{ edges, modes, b }};
+}};
+// Con INPUT_PULLUP el LED sigue al contacto en microsegundos: el guion se aplica entre instrucciones.
+const ok = run('boton-solucion', buildScript([{{ down: 100.25, up: 180.5 }}]).events, 300);
+assert.deepEqual(ok.modes, ['input', 'pullup']);
+assert.equal(ok.edges.length, 2);
+assert.ok(ok.edges[0].h && ok.edges[0].t - 100.25 < 0.05 && ok.edges[0].t >= 100.25, ok.edges[0].t);
+assert.ok(!ok.edges[1].h && ok.edges[1].t - 180.5 < 0.05 && ok.edges[1].t >= 180.5, ok.edges[1].t);
+// Sin pull-up el pin flota: el LED cambia solo, sin tocar el botón; pulsado, D2 queda fijo en LOW.
+const fl = run('boton-sin-pullup', buildScript([{{ down: 200, up: 300 }}]).events, 400);
+assert.deepEqual(fl.modes, ['input']);
+assert.ok(fl.edges.filter((e) => e.t < 200).length > 20);
+assert.equal(fl.edges.filter((e) => e.t > 201 && e.t < 300).length, 0);
+// Mismo HEX + mismo guion + misma semilla → misma traza (reproducible).
+const again = run('boton-sin-pullup', buildScript([{{ down: 200, up: 300 }}]).events, 400);
+assert.deepEqual(again.edges, fl.edges);
+// Guion con rebotes: determinista y dentro de los límites de la ruta (3–8 rebotes de 0,2–2 ms).
+const a = buildScript([{{ down: 10, up: 90 }}], {{ bounce: true, seed: 9 }});
+assert.deepEqual(a, buildScript([{{ down: 10, up: 90 }}], {{ bounce: true, seed: 9 }}));
+for (let s = 1; s < 200; s++) {{
+  const burst = bounceBurst(0, true, rng(s));
+  assert.ok(burst.bounces >= 3 && burst.bounces <= 8);
+  assert.equal(burst.events.length, 1 + 2 * burst.bounces);
+  burst.events.slice(1).forEach((e, k) => {{ const d = e.t - burst.events[k].t; assert.ok(d >= 0.2 && d <= 2, d); }});
+  assert.equal(burst.events.at(-1).closed, true);
+}}
+console.log('ok');
+""")
+        self.assertIn('ok', out)
+
+    def test_entrada_solutions_pass_and_failures_explain(self):
+        r = evaluate_button('boton-entrada.js', [
+            'boton-solucion', 'boton-solucion-bool', 'boton-sin-pullup', 'boton-invertido', 'boton-repite',
+            'boton-lento', 'boton-sin-actualizar', 'boton-ejemplo', 'boton-ej-flotante', 'boton-ej-recordar-anterior'])
+        for name in ('boton-solucion', 'boton-solucion-bool'):
+            self.assertTrue(r[name]['passed'], r[name])
+        self.assertEqual(r['boton-sin-pullup']['checks']['entrada'], False)
+        self.assertIn('INPUT_PULLUP', r['boton-sin-pullup']['details']['entrada'])
+        self.assertIn('cientos de veces', r['boton-sin-pullup']['details']['led'])
+        self.assertEqual(r['boton-invertido']['checks'], {'entrada': True, 'led': False, 'baud': True, 'mensajes': True})
+        self.assertIn('lógica es invertida', r['boton-invertido']['details']['led'])
+        self.assertEqual(r['boton-lento']['checks']['led'], False)
+        self.assertIn('tardó', r['boton-lento']['details']['led'])
+        self.assertFalse(r['boton-repite']['checks']['mensajes'])
+        self.assertEqual(r['boton-sin-actualizar']['checks'], {'entrada': True, 'led': True, 'baud': True, 'mensajes': False})
+        for name in ('boton-ejemplo', 'boton-ej-flotante', 'boton-ej-recordar-anterior'):
+            self.assertFalse(r[name]['passed'], name)
+        alone = evaluate_button('boton-entrada.js', ['boton-solucion'])
+        self.assertLess(alone['boton-solucion']['ms'], 8000)
+
+    def test_flanco_solutions_pass_and_failures_explain(self):
+        r = evaluate_button('boton-flanco.js', [
+            'flanco-solucion', 'flanco-solucion-50', 'flanco-bloqueo', 'flanco-delay', 'flanco-sin-antirrebote',
+            'flanco-al-soltar', 'flanco-lento', 'flanco-sin-pullup', 'flanco-sin-led', 'flanco-ejemplo',
+            'flanco-ej-millis-sin-bloquear', 'flanco-ej-duracion'])
+        for name in ('flanco-solucion', 'flanco-solucion-50', 'flanco-bloqueo', 'flanco-delay'):
+            self.assertTrue(r[name]['passed'], r[name])
+        self.assertFalse(r['flanco-sin-antirrebote']['checks']['cuenta'])
+        self.assertIn('rebotes', r['flanco-sin-antirrebote']['details']['cuenta'])
+        self.assertFalse(r['flanco-sin-antirrebote']['checks']['led'])
+        self.assertEqual(r['flanco-al-soltar']['checks'], {'entrada': True, 'cuenta': True, 'led': True, 'respuesta': False, 'baud': True})
+        self.assertIn('al soltar', r['flanco-al-soltar']['details']['respuesta'])
+        self.assertFalse(r['flanco-lento']['checks']['cuenta'])     # la pulsación de 120 ms se pierde
+        self.assertFalse(r['flanco-sin-pullup']['checks']['entrada'])
+        self.assertEqual(r['flanco-sin-led']['checks']['cuenta'], True)
+        self.assertEqual(r['flanco-sin-led']['checks']['led'], False)
+        for name in ('flanco-ejemplo', 'flanco-ej-millis-sin-bloquear', 'flanco-ej-duracion'):
+            self.assertFalse(r[name]['passed'], name)
+
+    def test_button_evaluators_use_only_the_measured_trace(self):
+        """Trazas sintéticas: la decisión depende de lo medido (pulsador, D13, serie), nunca del código."""
+        node("""
+import assert from 'node:assert/strict';
+import { evaluateEntrada, evaluateFlanco, ENTRADA, FLANCO } from './games/laboratorio-arduino/src/lessons/boton-eval.js';
+const line = (text, t) => [...text + '\\r\\n'].map((c, k) => ({ byte: c.charCodeAt(0), t: t + k, baud: 9615 }));
+const input = { pin: 2, contact: [], modes: [{ t: 0, mode: 'input' }, { t: 0.02, mode: 'pullup' }] };
+const changes = ENTRADA.presses.flatMap((p) => [[p.down, true], [p.up, false]]);
+const ideal = (delay) => ({ durationMs: ENTRADA.durationMs, input,
+  pins: changes.map(([t, h]) => ({ pin: 13, high: h, t: t + delay })),
+  serial: changes.flatMap(([t, h]) => line(h ? 'Pulsado' : 'Suelto', t + delay + 1)) });
+assert.equal(evaluateEntrada(ideal(1)).passed, true);
+assert.equal(evaluateEntrada(ideal(29)).passed, true);
+assert.equal(evaluateEntrada(ideal(31)).checks.find((c) => c.id === 'led').ok, false);
+assert.equal(evaluateEntrada({ ...ideal(1), input: { ...input, modes: [{ t: 0, mode: 'input' }] } }).passed, false);
+const repeated = ideal(1); repeated.serial.push(...line('Suelto', 4700));
+assert.equal(evaluateEntrada(repeated).checks.find((c) => c.id === 'mensajes').ok, false);
+const P = FLANCO.presses;
+const flanco = (offset) => ({ durationMs: FLANCO.durationMs, input,
+  pins: P.map((p, k) => ({ pin: 13, high: k % 2 === 0, t: p.stableDown + offset })),
+  serial: P.flatMap((p, k) => line('Pulsaciones: ' + (k + 1), p.stableDown + offset)) });
+assert.equal(evaluateFlanco(flanco(60)).passed, true);
+assert.equal(evaluateFlanco(flanco(61)).checks.find((c) => c.id === 'respuesta').ok, false);
+// Sin rastro de ejecución (traza vacía) nunca se aprueba.
+assert.equal(evaluateEntrada({ durationMs: 5000, pins: [], serial: [] }).passed, false);
+assert.equal(evaluateFlanco({ durationMs: 5500, pins: [], serial: [] }).passed, false);
+""")
+
+    def test_button_examples_match_fixtures_and_hints_do_not_solve(self):
+        node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+const fx = (n) => readFileSync('{FIX}/' + n + '.ino', 'utf8');
+const E = await import('./games/laboratorio-arduino/src/lessons/boton-entrada.js');
+const F = await import('./games/laboratorio-arduino/src/lessons/boton-flanco.js');
+assert.equal(fx('boton-ejemplo'), E.EXAMPLE_CODE);
+for (const [k, e] of Object.entries(E.EXAMPLES)) assert.equal(fx('boton-ej-' + k), e.code);
+assert.equal(fx('flanco-ejemplo'), F.EXAMPLE_CODE);
+for (const [k, e] of Object.entries(F.EXAMPLES)) assert.equal(fx('flanco-ej-' + k), e.code);
+assert.equal(E.chooseTopic({{ code: E.EXAMPLE_CODE, untouched: true, step: 1 }}).topic, 'paso-1');
+assert.equal(E.analyzeCode(fx('boton-sin-pullup')).topic, 'pullup');
+assert.equal(E.analyzeCode(E.EXAMPLE_CODE).topic, 'retardo');
+assert.equal(E.analyzeCode(fx('boton-solucion')).topic, 'comprobar');
+assert.equal(E.chooseTopic({{ code: fx('boton-invertido'), lastChecks: [{{ id: 'entrada', ok: true }}, {{ id: 'led', ok: false, detail: 'Con el botón suelto' }}] }}).topic, 'invertida');
+assert.equal(E.chooseTopic({{ code: fx('boton-solucion'), completed: true }}).topic, 'superado');
+assert.equal(F.analyzeCode(F.EXAMPLE_CODE).topic, 'texto');
+assert.equal(F.analyzeCode(fx('flanco-sin-antirrebote')).topic, 'antirrebote');
+assert.equal(F.analyzeCode(fx('flanco-solucion')).topic, 'comprobar');
+assert.equal(F.chooseTopic({{ code: fx('flanco-al-soltar'), lastChecks: [{{ id: 'respuesta', ok: false, detail: 'reaccionó al soltar' }}] }}).topic, 'soltar');
+assert.equal(F.chooseTopic({{ code: fx('flanco-lento'), lastChecks: [{{ id: 'cuenta', ok: false, detail: 'Alguna pulsación no se detectó' }}] }}).topic, 'lento');
+// Ninguna pista ni ejemplo contiene el antirrebote completo (estado aceptado + espera + cuenta).
+const solved = /millis\(\)[\s\S]*Pulsaciones/;
+for (const t of F.TOPIC_IDS) for (let i = 0; i < 4; i++) assert.doesNotMatch(F.hintText(t, i, {{ errorHelp: '' }}).text, solved);
+for (const ex of Object.values(F.EXAMPLES)) assert.ok(!/Pulsaciones/.test(ex.code));
+for (const t of E.TOPIC_IDS) for (let i = 0; i < 4; i++) assert.doesNotMatch(E.hintText(t, i, {{ delays: [], errorHelp: '' }}).text, /"Pulsado"[\s\S]*"Suelto"/);
+for (const ex of Object.values(E.EXAMPLES)) assert.ok(!/Pulsado|Suelto/.test(ex.code));
+// La evaluación declara su guion: siempre el mismo y aplicado con el modelo, nunca el texto del programa.
+for (const L of [E.default, F.default]) {{
+  assert.ok(L.evaluation.stimulus.script.length >= 10 && L.button.pin === 2);
+  assert.deepEqual(L.pins, [13]);
+}}
+assert.equal(E.default.evaluation.stimulus.script.length, 10);
+assert.ok(F.default.evaluation.stimulus.script.length > 12 * 7);
 """)
 
 

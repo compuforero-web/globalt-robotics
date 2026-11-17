@@ -292,7 +292,7 @@ Sobre aprobaciones en el servidor: la evaluación ocurre en el navegador, así q
 
 ### Entregas posteriores (orden propuesto)
 
-1. Entradas programadas + 2.2 y 2.3.
+1. Entradas programadas + 2.2 y 2.3. **Implementada (17-11-2026)** en la rama `feature/lecciones-boton` (PR pendiente de desplegar la API; procedimiento en `docs/ACTUALIZACION_LECCIONES_4_5.md`, detalle en `docs/LABORATORIO_ARDUINO.md`). Ajustes anunciados en cada reto: en 2.2 el mensaje debe empezar en ≤ 50 ms tras el cambio y se admite un saludo al arrancar; en 2.3 la respuesta (≤ 60 ms) se mide desde que el contacto deja de rebotar, el guion rebota también al soltar y dura 5,5 s.
 2. Bundle con ADC + 2.4.
 3. Modelo HC-SR04 + 4.1 y 4.2.
 4. Modelo L298N/motor + 5.1–5.3.

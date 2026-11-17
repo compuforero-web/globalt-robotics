@@ -19,7 +19,12 @@ export function startLab(L) {
   $('#lesson').innerHTML = L.html();
   const guide = createGuide($('#guide'), {
     providers: [L.guide.help], getContext: () => guideContext(), chooseTopic: L.guide.chooseTopic, hintText: L.guide.hintText });
-  const circuit = L.circuit($('#circuit'));
+  // Lecciones con pulsador: el circuito envía las pulsaciones al modelo eléctrico del Worker y puede
+  // reproducir el guion del reto en tiempo real (el mismo que usa la evaluación).
+  const circuit = L.circuit($('#circuit'), {
+    onButton: (closed) => simulation.input(closed),
+    onScript: L.evaluation.stimulus ? () => playScript() : null,
+  });
 
   const stored = progress.getLesson(L.id);
   let savedCode = typeof stored.code === 'string' ? stored.code : L.exampleCode;
@@ -275,6 +280,8 @@ export function startLab(L) {
   let baudWarned = false;
   const simulation = new Simulation({
     watch: L.pins,
+    button: L.button || null,
+    onButton(state) { circuit.input?.(state); },
     onWindows(windows) {
       for (const w of windows) { circuit.update(w); if (w.level || w.duty > 0) pinsSeen.add(w.pin); }
     },
@@ -295,6 +302,7 @@ export function startLab(L) {
     onStop(reason) {
       $('#sim-state').textContent = 'Detenida';
       $('#sim-panel').classList.remove('is-running');
+      circuit.stopped?.();
       if (reason) setStatus(reason, 'warn');
       updateButtons();
     },
@@ -302,11 +310,11 @@ export function startLab(L) {
 
   function clearMonitor() { monitorText = ''; $('#monitor').textContent = ''; $('#baud-warning').hidden = true; baudWarned = false; }
 
-  function startSimulation(hex) {
+  function startSimulation(hex, options = {}) {
     clearMonitor();
     circuit.reset();
     pinsSeen = new Set();
-    simulation.start(hex);
+    simulation.start(hex, options);
     $('#sim-state').textContent = 'En ejecución';
     $('#sim-panel').classList.add('is-running');
     updateButtons();
@@ -323,7 +331,15 @@ export function startLab(L) {
     if (hex) { startSimulation(hex); setStatus('Simulación en ejecución.', 'ok'); }
   }));
   $('#btn-stop').addEventListener('click', () => { simulation.stop(); setStatus('Simulación detenida.'); });
-  $('#btn-reset').addEventListener('click', () => { if (simulation.hex) { startSimulation(simulation.hex); setStatus('Microcontrolador reiniciado (como pulsar RESET).'); } });
+  function playScript() {
+    withBusy(async () => {
+      const hex = await ensureCompiled();
+      if (!hex) return;
+      startSimulation(hex, { script: L.evaluation.stimulus.script });
+      setStatus(`Reproduciendo el guion del reto en tiempo real (${L.evaluation.durationMs / 1000} s): el pulsador se mueve solo, como en la comprobación.`, 'ok');
+    });
+  }
+  $('#btn-reset').addEventListener('click', () => { if (simulation.hex) { startSimulation(simulation.hex, { script: simulation.script }); setStatus('Microcontrolador reiniciado (como pulsar RESET).'); } });
   $('#btn-clear').addEventListener('click', clearMonitor);
   $('#btn-save').addEventListener('click', () => { if (save()) setStatus('Código guardado en este navegador.', 'ok'); });
   $('#btn-restore').addEventListener('click', restoreExample);
@@ -341,7 +357,7 @@ export function startLab(L) {
     if (!hex) { $('#eval-result').innerHTML = '<p class="muted">La evaluación necesita un programa compilado sin errores.</p>'; return; }
     setStatus(`Evaluando: ${L.evaluation.durationMs / 1000} s simulados…`, 'busy');
     try {
-      const result = L.evaluation.evaluate(await recordTrace(hex, L.evaluation.durationMs, { watch: L.pins }));
+      const result = L.evaluation.evaluate(await recordTrace(hex, L.evaluation.durationMs, { watch: L.pins, stimulus: L.evaluation.stimulus || null }));
       progress.recordAttempt(L.id);
       lastEval = { code, checks: result.checks };
       renderChecks(result);

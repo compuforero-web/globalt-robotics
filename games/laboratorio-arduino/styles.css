@@ -296,3 +296,14 @@
 .lesson-picker__t small { color: var(--muted); font-size: .76rem; }
 .lesson-picker__ok { flex: none; color: #4ade80; font-size: .76rem; font-weight: 600; }
 .lesson-picker__prev { margin: 6px 2px 0; color: #fbbf24; font-size: .82rem; }
+/* Pulsador (lecciones 2.2 y 2.3) */
+.c-btn-base { fill: #1f2937; stroke: #475569; }
+.c-btn-cap { fill: #334155; stroke: #94a3b8; stroke-width: 2; transition: transform .05s; }
+.c-btn.is-pressed .c-btn-cap { fill: #f97316; stroke: #fed7aa; transform: scale(.82); }
+.btn-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 6px 0 2px; }
+.btn-ctl__press { min-width: 150px; min-height: 48px; padding: 8px 16px; border-radius: 999px; border: 2px solid var(--border); background: var(--surface-2); color: inherit; font: 600 .95rem var(--font); cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.btn-ctl__press:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+.btn-ctl__press.is-pressed { background: #f97316; border-color: #fed7aa; color: #111827; }
+.btn-ctl__state { font-size: .85rem; font-variant-numeric: tabular-nums; }
+.btn-ctl__help { flex-basis: 100%; margin: 0; }
+.pin-dot.is-floating { background: repeating-linear-gradient(45deg, rgba(234, 179, 8, .25) 0 4px, transparent 4px 8px); color: #fde68a; border-color: rgba(234, 179, 8, .6); }
