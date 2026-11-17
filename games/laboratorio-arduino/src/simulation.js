@@ -1,14 +1,14 @@
 // Controla los Workers de simulación desde la interfaz: ejecutar, detener, reiniciar y evaluar.
 // `watch` = pines del circuito de la lección, que se miden en todas las ventanas aunque no cambien.
 // `button` = configuración del pulsador de la lección ({ pin, seed, bounce }) o null si no tiene entradas.
-// `motors` = { channels } del puente H L298N (motor.js) o null.
+// `motors` = { channels } del puente H L298N (motor.js) o null. `servo` = { pin } del servo SG90 (servo.js) o null.
 const WORKER_URL = new URL('./sim-worker.js', import.meta.url);
 const WATCHDOG_MS = 4000;     // sin señales del Worker durante este tiempo → se detiene
 const MAX_RUN_MS = 10 * 60 * 1000;
 
 export class Simulation {
-  constructor({ onWindows, onSerial, onStatus, onStop, onButton = () => {}, onPot = () => {}, onSonar = () => {}, onMotor = () => {}, watch = [], button = null, pot = null, sonar = null, motors = null }) {
-    Object.assign(this, { onWindows, onSerial, onStatus, onStop, onButton, onPot, onSonar, onMotor, watch, button, pot, sonar, motors });
+  constructor({ onWindows, onSerial, onStatus, onStop, onButton = () => {}, onPot = () => {}, onSonar = () => {}, onMotor = () => {}, onServo = () => {}, watch = [], button = null, pot = null, sonar = null, motors = null, servo = null }) {
+    Object.assign(this, { onWindows, onSerial, onStatus, onStop, onButton, onPot, onSonar, onMotor, onServo, watch, button, pot, sonar, motors, servo });
     this.worker = null;
     this.hex = null;
   }
@@ -42,13 +42,14 @@ export class Simulation {
       else if (data.type === 'pot') this.onPot(data);
       else if (data.type === 'sonar') this.onSonar(data);
       else if (data.type === 'motor') this.onMotor(data);
+      else if (data.type === 'servo') this.onServo(data);
       else if (data.type === 'limit') this.stop('Simulación pausada tras 10 minutos simulados.');
       else if (data.type === 'error') this.stop('No se pudo cargar el programa: ' + data.message);
     };
     worker.onerror = (event) => { event.preventDefault?.(); this.stop('La simulación no pudo iniciarse en este navegador.'); };
     const pot = this.pot ? { ...this.pot, volts: potScript?.[0]?.t === 0 ? potScript[0].volts : potVolts } : null;
     const sonar = this.sonar ? { ...this.sonar, cm: sonarScript?.[0]?.t === 0 ? sonarScript[0].cm : sonarCm } : null;
-    worker.postMessage({ type: 'start', mode: 'realtime', hex, limitMs: MAX_RUN_MS, watch: this.watch, button: this.button, script, pot, potScript, sonar, sonarScript, motors: this.motors });
+    worker.postMessage({ type: 'start', mode: 'realtime', hex, limitMs: MAX_RUN_MS, watch: this.watch, button: this.button, script, pot, potScript, sonar, sonarScript, motors: this.motors, servo: this.servo });
   }
 
   /** El estudiante mueve el potenciómetro a `volts` (0–5 V). */

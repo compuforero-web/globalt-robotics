@@ -18,7 +18,7 @@ Las lecciones de motores 5.1–5.3 usan D7/D8 para dirección. Las lecciones de 
 | L298N, canal B | IN4 | D11 | Dirección |
 | L298N, canal A | ENA | D5 | PWM |
 | L298N, canal B | ENB | D6 | PWM |
-| Servo opcional | Señal | D9 | Reservado; todavía requiere su implementación |
+| Servo opcional | Señal | D9 | Modelo `servo.js` (lecciones 12–13); librería Servo en el compilador |
 
 D0/D1 quedan libres para la comunicación serie. Alimentación y GND no son pines de control: los diagramas deben identificar la alimentación de motores y la referencia de tierra común, sin presentar el Nano como fuente de alimentación del motor.
 
@@ -49,5 +49,5 @@ Validación de este plan: nueve señales con pines distintos, ENA/ENB en D5/D6, 
 - Circuito, código inicial, ejemplos, evaluador y pistas de cada lección leen el mismo mapa (`motor-eval.js` exporta `DIRECCION_PINS`, `VELOCIDAD_PINS`, `DOS_PINS`); una prueba comprueba que los pines vigilados y el estímulo de la evaluación coinciden con el mapa.
 - `pinMapProblems(canales, ocupados)` aplica las reglas 1 y 6: pin exclusivo para cada señal (también frente a otros componentes, p. ej. `{ 7: 'TRIG', 8: 'ECHO', 9: 'servo' }`), ENA/ENB en pines PWM y D0/D1 libres. `MotorModel` rechaza un mapa inválido.
 - Comprobado (`tests/test_laboratorio.py`, `MotorLessonTests`): el mapa del robot no tiene problemas junto a TRIG D7, ECHO D8 y servo D9 (nueve señales distintas, EN en D5/D6); el de la lección 11 choca con el sonar en D7/D8, como se esperaba; un programa compilado con el mapa del robot (`motor-mapa-robot.ino`, que además da pulsos en D7) produce avanzar → girar a la derecha → parar, y el mismo HEX leído con el mapa de la lección 11 mueve solo lo que dicen esos pines.
-- Temporizadores: ENA/ENB del robot (D5/D6) usan Timer0 (~980 Hz, el mismo que `millis`/`delay`, sin conflicto). El servo de D9 usará Timer1, que la librería Servo reconfigura: dejará sin `analogWrite` a D9 y D10 (D10 en el robot es IN3, solo digital, así que no se ve afectado). Queda por comprobar con la librería real cuando se incorpore.
+- Temporizadores: ENA/ENB del robot (D5/D6) usan Timer0 (~980 Hz, el mismo que `millis`/`delay`, sin conflicto). El servo de D9 usará Timer1, que la librería Servo reconfigura: dejará sin `analogWrite` a D9 y D10 (D10 en el robot es IN3, solo digital, así que no se ve afectado). Comprobado con la librería real (lecciones 12–13, `ServoLessonTests`): con Servo en D9, D10 queda sin PWM, D5/D6 siguen a 976,6 Hz y D3/D11 a 490,2 Hz, `millis()` exacto; un programa con el mapa del robot mueve a la vez servo, motores y TRIG (`servo-robot.ino`).
 - Pendiente de la fase del evasor: la combinación real sonar + motores en una sola lección y el mundo 2D.

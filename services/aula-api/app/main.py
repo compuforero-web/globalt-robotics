@@ -38,6 +38,8 @@ LECCIONES = {
     'arduino-l298n-direccion': 'course-arduino',
     'arduino-l298n-velocidad': 'course-arduino',
     'arduino-l298n-dos-motores': 'course-arduino',
+    'arduino-servo-posiciones': 'course-arduino',
+    'arduino-servo-barrido': 'course-arduino',
 }
 
 

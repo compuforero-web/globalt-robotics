@@ -15,7 +15,7 @@ Criterios del reto de la lección 1: al menos 4 encendidos en 5 s; encendidos de
 
 Sin el servicio, la página muestra «Compilación próximamente», desactiva solo Compilar, Ejecutar y Comprobar reto, y no simula ni aprueba nada. No hay salidas pregrabadas ni análisis de palabras del código: el evaluador solo mira el comportamiento medido.
 
-Funciones soportadas en la emulación: GPIO digital (salidas y **entradas** con `digitalRead`, `INPUT` e `INPUT_PULLUP`), PWM por hardware (`analogWrite` en D3, D5, D6, D9, D10, D11), ADC de 10 bits (`analogRead` en A0–A5 con referencia AVcc de 5 V), temporizadores 0–2 (`delay`, `millis`, `micros`), USART0 (`Serial.begin/print/println/write`). Modelos de componentes: pulsador, potenciómetro, HC-SR04 y puente H L298N con motores DC. No soportado aún: referencias del ADC `INTERNAL`/`EXTERNAL`, servos, librerías adicionales, entrada desde el monitor serie; `attachInterrupt` no se ha verificado. Cada lección tiene un circuito fijo (no hay editor de cableado).
+Funciones soportadas en la emulación: GPIO digital (salidas y **entradas** con `digitalRead`, `INPUT` e `INPUT_PULLUP`), PWM por hardware (`analogWrite` en D3, D5, D6, D9, D10, D11), ADC de 10 bits (`analogRead` en A0–A5 con referencia AVcc de 5 V), temporizadores 0–2 (`delay`, `millis`, `micros`), USART0 (`Serial.begin/print/println/write`). Modelos de componentes: pulsador, potenciómetro, HC-SR04, puente H L298N con motores DC y micro servo SG90 (librería oficial `Servo` 1.3.0 compilada en el servicio). No soportado aún: referencias del ADC `INTERNAL`/`EXTERNAL`, varios servos a la vez en una lección, otras librerías, entrada desde el monitor serie; `attachInterrupt` no se ha verificado. Cada lección tiene un circuito fijo (no hay editor de cableado).
 
 ## Lecciones
 
@@ -34,6 +34,8 @@ El manifiesto `src/lessons/index.js` define las lecciones; la URL elige una con 
 | 9 | `arduino-l298n-direccion` (5.1 de la ruta) | L298N: IN1 D7, IN2 D8, ENA con puente; motor DC; batería 7–9 V a VS/GND del módulo y GND común con el Nano | 6,6 s sin estímulos · `lessons/motor-eval.js` |
 | 10 | `arduino-l298n-velocidad` (5.2 de la ruta) | L298N: IN1 D7, IN2 D8, ENA D9 (PWM); motor DC; batería y GND común | 6,6 s sin estímulos · `lessons/motor-eval.js` |
 | 11 | `arduino-l298n-dos-motores` (5.3 de la ruta) | L298N completo: IN1 D7, IN2 D8, IN3 D4, IN4 D2, ENA D5, ENB D6; dos motores; batería y GND común | 4,2 s sin estímulos · `lessons/motor-eval.js` |
+| 12 | `arduino-servo-posiciones` (3.1 de la ruta) | Servo SG90: señal D9; fuente externa de 5 V y GND común | 5,6 s sin estímulos · `lessons/servo-eval.js` |
+| 13 | `arduino-servo-barrido` (3.2 de la ruta) | Servo SG90 en D9 (fuente externa, GND común) y LED con 220 Ω en D13 | 7 s sin estímulos · `lessons/servo-eval.js` |
 
 Cada módulo de lección (`lessons/led-serie.js`, `semaforo.js`, `pwm-brillo.js`, `boton-entrada.js`, `boton-flanco.js`, `potenciometro.js`, `ultrasonico-distancia.js`, `ultrasonico-alerta.js`, `l298n-direccion.js`, `l298n-velocidad.js`, `l298n-dos-motores.js`) reúne contenido por pasos, ejemplos (ninguno es la solución), reto, circuito, pines vigilados, evaluación y pistas de Chispa. Las lecciones previas solo se recomiendan; no bloquean.
 
@@ -67,6 +69,15 @@ Cada módulo de lección (`lessons/led-serie.js`, `semaforo.js`, `pwm-brillo.js`
 - **Traza de evaluación:** `motor = { channels, orders: [{ t, ch, order, duty }], samples: [{ t, v: [...] }] (cada 10 ms), reversals, outputs: [{ id, in1, in2, en }] }` (`outputs` = si cada pin llegó a ser salida). Sin guion: el programa es la única fuente de órdenes.
 - **Interfaz:** Nano por USB (solo alimenta el Nano), módulo L298N con bornes 5V (sin usar), GND y VS, batería 7–9 V con su + a VS y su − al GND del módulo, cable «GND común» al GND del Nano, puente de ENA cuando corresponde, salidas OUT1–OUT4 y motores. Bajo el dibujo, por motor: «Orden del puente H» (orden, niveles de IN, % de EN o «sin configurar») y «Motor (modelo con inercia)» (rpm y sentido, «deteniéndose (freno/rueda libre)» o «parado: con N % no vence la zona muerta»). El rotor gira con el ángulo integrado por el modelo en el Worker; si la simulación se detiene, se queda quieto.
 - Simplificaciones: PWM promediado por periodo, mismo rozamiento para arrancar y para seguir girando, sin carga, sin caída de tensión del L298N (~2 V) ni límite de corriente; no se simulan la batería ni las tensiones (el GND común y la alimentación solo se representan en el diagrama). Los motores no mueven ningún robot (el mundo 2D es una fase posterior).
+
+## Micro servo SG90 (`src/servo.js`, lecciones 12–13)
+
+- **Señal real:** el modelo mide cada pulso del pin de señal con precisión de ciclo (flancos de `NanoRunner.pinListeners`): ancho (subida → bajada) y periodo (subida → subida). Los pulsos los genera la librería `Servo` compilada de verdad con el Timer1 y su interrupción; el modelo no lee el código.
+- **Orden válida:** ancho 400–2600 µs y al menos 5 ms desde la subida anterior. El PWM de `analogWrite` (≈ 490 Hz) o un HIGH continuo no son órdenes y se informan como tales. Ángulo con la escala de la librería: 544 µs = 0°, 2400 µs = 180° (lineal, limitado a 0–180°). Sin pulsos válidos durante 60 ms: «sin señal» y el eje se queda donde está.
+- **Mecánica:** el eje va hacia el ángulo pedido a 600 °/s como máximo (SG90 a 5 V sin carga: 0,1 s / 60°), paso de 1 ms simulado. La orden cambia al terminar cada pulso; la posición tarda (de 0° a 180°, ≈ 300 ms).
+- **Interfaz:** Nano por USB, SG90 con dial 0–180°, brazo que gira con el ángulo del modelo y marca naranja con el ángulo pedido; fuente externa de 5 V (rojo), negativo (marrón) unido al GND del Nano («GND común»), señal naranja a D9; LED de D13 en la lección 13. Lecturas: «Señal en D9» (Hz, µs y ángulo, o el motivo de que no sea una señal de servo) y «Servo (modelo del SG90)».
+- **Temporizadores (comprobado con la librería real, `servo-convivencia`):** Servo toma el Timer1 → sin `analogWrite` en D9 y D10; Timer0 (`millis`, PWM 976,6 Hz en D5/D6) y Timer2 (490,2 Hz en D3/D11) intactos. El mapa del futuro robot (motores D2/D4/D10/D11 y EN D5/D6, TRIG D7, servo D9) funciona en un solo programa (`servo-robot`).
+- **Evaluación (`lessons/servo-eval.js`):** solo la traza (pulsos medidos, ángulo del eje cada 10 ms, flancos y serie). La posición por defecto de `attach()` (1500 µs ≈ 93°) no aprueba nada. Simplificaciones: sin carga ni inercia del brazo, sin zona muerta ni vibración en los topes, misma escala para cualquier servo; la fuente y el GND común solo están en el diagrama.
 
 ## Sensor ultrasónico HC-SR04 (`src/sonar.js`)
 
@@ -155,6 +166,8 @@ LAB_URL=… [AULA_SITIO=http://127.0.0.1:8180] [LAB_SHOTS=carpeta] node tests/e2
 LAB_URL=… [AULA_SITIO=http://127.0.0.1:8180] [LAB_SHOTS=carpeta] node tests/e2e/potenciometro.e2e.mjs
 # Lecciones 7 y 8: HC-SR04 con teclado, ratón, dedo y «Sin obstáculo» (Pixel 7, iPhone 13), TRIG inválido, RESET, guion, retos, borradores y cuenta:
 LAB_URL=… [AULA_SITIO=http://127.0.0.1:8180] [LAB_SHOTS=carpeta] node tests/e2e/ultrasonico.e2e.mjs
+# Lecciones 12–13: servo (pulsos reales, orden frente a giro, barrido con LED), retos, borradores, móvil y cuenta:
+LAB_URL=http://localhost:8080/games/laboratorio-arduino/index.html node tests/e2e/servo.e2e.mjs
 # Lecciones 9–11: L298N y motores (órdenes, inercia, avisos), retos, borradores, móvil (Pixel 7, iPhone 13) y cuenta:
 LAB_URL=… [AULA_SITIO=http://127.0.0.1:8180] [LAB_SHOTS=carpeta] node tests/e2e/motores.e2e.mjs
 ```

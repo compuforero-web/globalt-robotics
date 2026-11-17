@@ -8,7 +8,7 @@ la emulación ocurre en el navegador. Sin dependencias fuera de la biblioteca es
 Variables de entorno:
   COMPILADOR_SOCKET   ruta de socket Unix donde escuchar (recomendado en producción)
   COMPILADOR_TCP      alternativa de desarrollo, p. ej. 127.0.0.1:8090
-  COMPILADOR_NUCLEO   carpeta con core.a e include/ (ver build-core.sh)
+  COMPILADOR_NUCLEO   carpeta con core.a e include/ (ver build-core.sh) y, si existe, servo/ (build-servo.sh)
   COMPILADOR_SIMULTANEOS (2)  COMPILADOR_ESPERA (10 s)  COMPILADOR_TIEMPO (20 s)
 """
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -52,6 +52,32 @@ DIAGNOSTICO = re.compile(r'^sketch\.ino:(\d+):(?:(\d+):)?\s*(fatal error|error|w
 
 cola = threading.BoundedSemaphore(SIMULTANEOS)
 en_cola = threading.BoundedSemaphore(MAX_EN_COLA)
+activas = {'n': 0}                    # peticiones en curso (para terminar las pendientes al detener el servicio)
+activas_cerrojo = threading.Lock()
+
+
+def carpeta_servo():
+    """Librería Servo precompilada (build-servo.sh) o None si esta imagen no la incluye."""
+    carpeta = NUCLEO / 'servo'
+    return carpeta if (carpeta / 'servo.a').is_file() and (carpeta / 'include' / 'Servo.h').is_file() else None
+
+
+def version_servo():
+    carpeta = carpeta_servo()
+    try:
+        return (carpeta / 'VERSION').read_text().strip()[:200] if carpeta else None
+    except OSError:
+        return None
+
+
+def version():
+    """Versión que informan /salud y /compilar. «servo» solo aparece si la imagen incluye la librería
+    (los clientes existentes ignoran claves nuevas)."""
+    datos = {**VERSION, 'compilador': version_compilador()}
+    servo = version_servo()
+    if servo:
+        datos['servo'] = servo
+    return datos
 
 
 def version_compilador():
@@ -226,7 +252,9 @@ def directorios_permitidos():
                                 text=True, timeout=10).stderr
         bloque = salida.split('search starts here:')[-1].split('End of search list.')[0]
         _directorios = [os.path.realpath(l.strip()) for l in bloque.splitlines() if l.strip().startswith('/')]
-    return [*_directorios, os.path.realpath(NUCLEO / 'include')]
+    servo = carpeta_servo()
+    # Solo dos carpetas propias: cabeceras del núcleo y las dos cabeceras de Servo (Servo.h y avr/ServoTimers.h).
+    return [*_directorios, os.path.realpath(NUCLEO / 'include'), *([os.path.realpath(servo / 'include')] if servo else [])]
 
 
 def archivo_permitido(nombre, carpeta):
@@ -252,7 +280,7 @@ def revisar_ensamblador(carpeta):
 
 
 def rechazo(mensaje):
-    return {'ok': False, 'salida': '', 'version': {**VERSION, 'compilador': version_compilador()},
+    return {'ok': False, 'salida': '', 'version': version(),
             'diagnosticos': [{'linea': None, 'columna': None, 'tipo': 'error', 'mensaje': mensaje}]}
 
 
@@ -263,7 +291,12 @@ def compilar(codigo):
     try:
         fuente = carpeta / 'sketch.cpp'
         fuente.write_text('#include <Arduino.h>\n' + prototipos(codigo) + '\n#line 1 "sketch.ino"\n' + codigo + '\n')
-        incluir = ['-I', str(NUCLEO / 'include'), '-I', str(NUCLEO / 'include' / 'variant')]
+        servo = carpeta_servo()
+        incluir = ['-I', str(NUCLEO / 'include'), '-I', str(NUCLEO / 'include' / 'variant'),
+                   *(['-I', str(servo / 'include')] if servo else [])]
+        # servo.a va antes que core.a: el enlazador solo toma Servo.o (y su interrupción de Timer1) si el programa
+        # usa la clase Servo; los programas sin Servo producen el mismo HEX que sin la librería.
+        bibliotecas = [*([str(servo / 'servo.a')] if servo else []), str(NUCLEO / 'core.a')]
         limpio = lambda t: t.replace(str(carpeta) + '/', '').replace(str(NUCLEO) + '/', '')
         # 1) Preprocesar y comprobar qué archivos se abrieron antes de devolver ningún mensaje.
         codigo_salida, texto = ejecutar(['avr-g++', '-E', *FLAGS, *incluir, 'sketch.cpp', '-o', 'sketch.ii'],
@@ -279,14 +312,14 @@ def compilar(codigo):
         # 3) Ensamblar y enlazar con el núcleo Arduino precompilado.
         for paso in (['avr-gcc', '-mmcu=atmega328p', '-c', 'sketch.s', '-o', 'sketch.o'],
                      ['avr-gcc', '-mmcu=atmega328p', '-Os', '-Wl,--gc-sections', '-o', 'sketch.elf',
-                      'sketch.o', str(NUCLEO / 'core.a'), '-lm']):
+                      'sketch.o', *bibliotecas, '-lm']):
             if codigo_salida != 0:
                 break
             codigo_salida, adicional = ejecutar(paso, carpeta, restante())
             texto += adicional
         texto = limpio(texto)
         respuesta = {'ok': False, 'diagnosticos': diagnosticos(texto), 'salida': texto,
-                     'version': {**VERSION, 'compilador': version_compilador()}}
+                     'version': version()}
         if codigo_salida == 0:
             ejecutar(['avr-objcopy', '-O', 'ihex', '-R', '.eeprom', 'sketch.elf', 'sketch.hex'], carpeta, 10)
             _, medidas = ejecutar(['avr-size', '-A', 'sketch.elf'], carpeta, 10)
@@ -307,6 +340,15 @@ class Manejador(BaseHTTPRequestHandler):
     server_version = 'GlobaltCompilador/1'
     sys_version = ''
     timeout = 15
+
+    def handle(self):
+        with activas_cerrojo:
+            activas['n'] += 1
+        try:
+            super().handle()
+        finally:
+            with activas_cerrojo:
+                activas['n'] -= 1
 
     def address_string(self):
         return 'cliente'
@@ -331,7 +373,7 @@ class Manejador(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.ruta() == '/salud':
             listo = (NUCLEO / 'core.a').is_file() and shutil.which('avr-g++') is not None
-            self.responder(200 if listo else 503, {'ok': listo, 'version': {**VERSION, 'compilador': version_compilador()}})
+            self.responder(200 if listo else 503, {'ok': listo, 'version': version()})
         else:
             self.responder(404, {'ok': False, 'error': 'Ruta no encontrada'})
 
@@ -390,6 +432,22 @@ def main():
         print(f'Compilador escuchando en http://{host}:{puerto}', flush=True)
     signal.signal(signal.SIGTERM, lambda *_: threading.Thread(target=servidor.shutdown).start())
     servidor.serve_forever()
+    terminar(servidor)
+
+
+def terminar(servidor, limite=None):
+    """Parada ordenada (SIGTERM, p. ej. docker stop --time 30): deja de aceptar conexiones y espera a que
+    terminen las compilaciones en curso (como máximo COMPILADOR_TIEMPO + 5 s) antes de salir."""
+    servidor.server_close()
+    fin = time.monotonic() + (TIEMPO + 5 if limite is None else limite)
+    while time.monotonic() < fin:
+        with activas_cerrojo:
+            if activas['n'] == 0:
+                break
+        time.sleep(0.1)
+    with activas_cerrojo:
+        pendientes = activas['n']
+    print(f'Compilador detenido ({pendientes} peticiones sin terminar).', flush=True)
 
 
 if __name__ == '__main__':

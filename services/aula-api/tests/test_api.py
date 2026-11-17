@@ -312,7 +312,8 @@ def test_borradores_aislados_por_leccion():
     rutas = {l: '/api/aula/borradores/' + l for l in ('arduino-led-serie', 'arduino-protoboard-semaforo', 'arduino-pwm-brillo',
                                                       'arduino-boton-entrada', 'arduino-boton-flanco', 'arduino-potenciometro-pwm',
                                                       'arduino-ultrasonico-distancia', 'arduino-ultrasonico-alerta',
-                                                      'arduino-l298n-direccion', 'arduino-l298n-velocidad', 'arduino-l298n-dos-motores')}
+                                                      'arduino-l298n-direccion', 'arduino-l298n-velocidad', 'arduino-l298n-dos-motores',
+                                                      'arduino-servo-posiciones', 'arduino-servo-barrido')}
     with cliente() as c, cliente() as otro:
         h = inscrito(c, 'borr.lecciones@example.com')
         ho = inscrito(otro, 'borr.lecciones.otro@example.com')
@@ -354,6 +355,13 @@ def test_borradores_aislados_por_leccion():
         assert r.status_code == 409 and r.json()['borrador']['codigo'] == '// arduino-l298n-direccion'
         r = c.put(rutas['arduino-l298n-dos-motores'], json={'codigo': 'vieja', 'version_base': 1}, headers=h)
         assert r.status_code == 409 and r.json()['borrador']['codigo'] == '// dos v2'
+        # Lecciones 3.1 y 3.2 (servo): versión propia cada una; guardar una no toca la otra ni las once anteriores.
+        assert c.put(rutas['arduino-servo-barrido'], json={'codigo': '// barrido v2', 'version_base': 1}, headers=h).json()['borrador']['version'] == 2
+        posiciones = c.get(rutas['arduino-servo-posiciones']).json()['borrador']
+        assert (posiciones['codigo'], posiciones['version']) == ('// arduino-servo-posiciones', 1)
+        assert c.get(rutas['arduino-l298n-dos-motores']).json()['borrador']['codigo'] == '// dos v2'
+        r = c.put(rutas['arduino-servo-posiciones'], json={'codigo': 'otra', 'version_base': 2}, headers=h)
+        assert r.status_code == 409 and r.json()['borrador']['codigo'] == '// arduino-servo-posiciones'
         # Conflicto por lección: una versión vieja de la lección 3 no sobrescribe.
         r = c.put(rutas['arduino-pwm-brillo'], json={'codigo': 'viejo', 'version_base': 1}, headers=h)
         assert r.status_code == 409 and r.json()['borrador']['codigo'] == '// pwm v2'
@@ -364,8 +372,8 @@ def test_borradores_aislados_por_leccion():
         assert c.get(rutas['arduino-protoboard-semaforo']).json()['borrador']['codigo'] == '// arduino-protoboard-semaforo'
         # Un identificador desconocido no crea filas.
         antes = sql("SELECT count(*) FROM borradores")[0][0]
-        for desconocida in ('arduino-servo-posiciones', 'ARDUINO-PWM-BRILLO', 'arduino-pwm-brillo-v2',
-                            'arduino-servo-barrido', 'arduino-potenciometro', 'arduino-boton', 'arduino-boton-flanco-v2',
+        for desconocida in ('arduino-servo', 'ARDUINO-PWM-BRILLO', 'arduino-pwm-brillo-v2', 'ARDUINO-SERVO-BARRIDO',
+                            'arduino-servo-posiciones-v2', 'arduino-evasor-servo-radar', 'arduino-potenciometro', 'arduino-boton', 'arduino-boton-flanco-v2',
                             'arduino-potenciometro-pwm-v2', 'arduino-ultrasonico', 'arduino-ultrasonico-distancia-v2',
                             'ARDUINO-ULTRASONICO-ALERTA', 'arduino-l298n', 'arduino-l298n-direccion-v2', 'ARDUINO-L298N-VELOCIDAD',
                             'arduino-l298n-dos-motores ', 'arduino-evasor-decision'):

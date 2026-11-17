@@ -63,7 +63,7 @@ async function check(p, timeout = 60000) {
   const p = await ctx.newPage();
   await open(p, L7);
   assert.match(await p.textContent('.lab-top__course'), /Lección 7/);
-  assert.equal(await p.locator('.lesson-picker__list a').count(), 11);
+  assert.equal(await p.locator('.lesson-picker__list a').count(), 13);
   assert.match(await p.textContent('.lesson-picker__prev'), /Lección 1.*Lección 4/);
   assert.equal(await p.locator('#circuit svg .c-sonar').count(), 1);
   assert.equal(await p.locator('#circuit .c-led').count(), 0);
