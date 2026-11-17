@@ -173,3 +173,9 @@ LAB_URL=… [AULA_SITIO=http://127.0.0.1:8180] [LAB_SHOTS=carpeta] node tests/e2
 ```
 
 `tests/fixtures/laboratorio/*.hex` son compilaciones reales de los `.ino` contiguos (generadas con el servicio) para probar emulación y evaluación en CI sin compilador: soluciones y fallos típicos de cada reto (`semaforo-*`, `pwm-*`, `boton-*`, `flanco-*`, `pot-*`, `ultra-*`, `alerta-*`, `dir-*`, `vel-*`, `dos-*`), el código inicial y los ejemplos de cada lección (`*-ejemplo`, `*-ej-*`, que la prueba compara con el código de la lección) `pwm-niveles` para medir el PWM y `ultra-medida-us` (imprime `pulseIn` sin límite, con 30 000 µs y con 5000 µs, y el tiempo de espera medido con `micros`) para la precisión del HC-SR04, `vel-niveles` (ENA a 60, 120 y 255) para la zona muerta y `motor-mapa-robot` para probar el modelo con el mapa del futuro robot.
+
+## Lección 14 · Evasor en banco
+
+`arduino-evasor-decision` une los modelos existentes HC-SR04 y L298N con el mapa sin conflictos del robot. `lessons/evasor-eval.js` evalúa exclusivamente órdenes, ejes, TRIG y ECHO medidos al ejecutar el HEX. `evasor-circuit.js` presenta dos vistas del mismo Nano, con identificadores DOM únicos y controles del obstáculo; todavía no hay pista.
+
+El reto exige estados para parar, retroceder 300–500 ms y girar hasta superar 40 cm, sin dejar de medir. Un obstáculo de ≤25 cm y la ausencia de eco deben producir una orden de parada en ≤150 ms. Los mensajes serie son opcionales. Criterios, pruebas y actualización de API sin migración: `docs/ACTUALIZACION_LECCION_14.md`. Se mantienen las claves de borradores y el registro local de aprobación.
