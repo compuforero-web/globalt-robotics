@@ -14,6 +14,9 @@ const ARDUINO_PUBLIC_LESSONS = [
   'Potenciómetro y control de brillo',
   'Medir distancia con el sensor ultrasónico',
   'Alertas de cercanía y ausencia de eco',
+  'Sentido de giro con L298N',
+  'Velocidad de un motor con PWM',
+  'Dos motores y maniobras',
 ];
 
 export function courseCard(course, index) {
