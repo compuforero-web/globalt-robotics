@@ -1,0 +1,103 @@
+name: Comprobar evasor en pista
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'games/laboratorio-arduino/src/robot-*.js'
+      - 'games/laboratorio-arduino/src/lessons/*pista*'
+      - 'games/laboratorio-arduino/src/sim-worker.js'
+      - 'games/laboratorio-arduino/src/simulation.js'
+      - 'games/laboratorio-arduino/src/lab.js'
+      - 'games/laboratorio-arduino/src/sonar.js'
+      - 'tests/test_pista.py'
+      - 'tests/robot-world.test.mjs'
+      - 'tests/fixtures/laboratorio/pista-*'
+      - 'tests/e2e/evasor-pista.e2e.mjs'
+      - 'scripts/prepare-pista-fixtures.py'
+      - '.github/workflows/pista.yml'
+permissions:
+  contents: read
+jobs:
+  pista:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Construir compilador real sin cambiar producción
+        run: docker build -t globalt-pista-ci services/compilador-arduino
+      - name: Generar HEX de prueba desde las fuentes
+        run: |
+          mkdir -p "$RUNNER_TEMP/pista-hex"
+          docker run --rm --init --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 768m --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m --user "$(id -u):$(id -g)" -v "$PWD:/repo:ro" -v "$RUNNER_TEMP/pista-hex:/out" globalt-pista-ci python3 /repo/scripts/prepare-pista-fixtures.py --output /out
+          cp "$RUNNER_TEMP/pista-hex/"*.hex tests/fixtures/laboratorio/
+      - name: Comprobaciones estáticas y regresión completa
+        run: |
+          python3 scripts/check.py
+          python3 -m unittest discover -s tests -v
+          node --test tests/*.test.mjs
+      - name: Preparar Chromium
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Arrancar réplica local para navegador
+        run: |
+          sudo install -d -m 0770 -o 10001 -g "$(id -g)" "$RUNNER_TEMP/pista-socket"
+          docker run -d --name globalt-pista-compilador --init --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 768m --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m --user "10001:$(id -g)" -e COMPILADOR_SOCKET=/run/compilador/compilador.sock -v "$RUNNER_TEMP/pista-socket:/run/compilador" globalt-pista-ci
+          for n in $(seq 1 40); do
+            if curl --unix-socket "$RUNNER_TEMP/pista-socket/compilador.sock" -fsS http://localhost/api/arduino/salud; then break; fi
+            sleep 0.25
+          done
+          curl --unix-socket "$RUNNER_TEMP/pista-socket/compilador.sock" -fsS http://localhost/api/arduino/salud
+          COMPILADOR_SOCKET="$RUNNER_TEMP/pista-socket/compilador.sock" PORT=8080 nohup node scripts/serve.mjs > "$RUNNER_TEMP/pista-web.log" 2>&1 &
+          mkdir -p "$RUNNER_TEMP/pista-shots"
+      - name: Navegador escritorio, móvil y regresión del banco
+        env:
+          LAB_URL: http://127.0.0.1:8080/games/laboratorio-arduino/index.html
+        run: |
+          export LAB_SHOTS="$RUNNER_TEMP/pista-shots"
+          node tests/e2e/evasor-pista.e2e.mjs
+          node tests/e2e/evasor-decision.e2e.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pista-capturas-y-fixtures
+          path: |
+            ${{ runner.temp }}/pista-shots
+            ${{ runner.temp }}/pista-hex
+            ${{ runner.temp }}/pista-web.log
+          retention-days: 7
+      - name: Retirar contenedor de prueba
+        if: always()
+        run: docker rm -f globalt-pista-compilador || true
+  aula:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16.6-alpine@sha256:1d04b9ba1d4996401f2552b51beda8187f175c0645c091e4781134fc9c9a3eef
+        env:
+          POSTGRES_DB: aula_ci
+          POSTGRES_USER: aula_ci
+          POSTGRES_PASSWORD: solo-pruebas-ci
+        ports:
+          - 5432:5432
+        options: --health-cmd "pg_isready -U aula_ci" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Dependencias y pruebas reales de cuentas y borradores
+        env:
+          AULA_TEST_DATABASE_URL: postgresql://aula_ci:solo-pruebas-ci@127.0.0.1:5432/aula_ci
+          PYTHONPATH: services/aula-api
+        run: |
+          python -m pip install -r services/aula-api/requirements.lock pytest==8.3.5 httpx==0.28.1
+          python -m pytest -q services/aula-api/tests

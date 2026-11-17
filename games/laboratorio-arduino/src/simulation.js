@@ -7,8 +7,8 @@ const WATCHDOG_MS = 4000;     // sin señales del Worker durante este tiempo →
 const MAX_RUN_MS = 10 * 60 * 1000;
 
 export class Simulation {
-  constructor({ onWindows, onSerial, onStatus, onStop, onButton = () => {}, onPot = () => {}, onSonar = () => {}, onMotor = () => {}, onServo = () => {}, watch = [], button = null, pot = null, sonar = null, motors = null, servo = null }) {
-    Object.assign(this, { onWindows, onSerial, onStatus, onStop, onButton, onPot, onSonar, onMotor, onServo, watch, button, pot, sonar, motors, servo });
+  constructor({ onWindows, onSerial, onStatus, onStop, onButton = () => {}, onPot = () => {}, onSonar = () => {}, onMotor = () => {}, onServo = () => {}, onWorld = () => {}, watch = [], button = null, pot = null, sonar = null, motors = null, servo = null, world = null }) {
+    Object.assign(this, { onWindows, onSerial, onStatus, onStop, onButton, onPot, onSonar, onMotor, onServo, onWorld, watch, button, pot, sonar, motors, servo, world });
     this.worker = null;
     this.hex = null;
   }
@@ -20,12 +20,13 @@ export class Simulation {
    * para el potenciómetro; `potVolts` = posición inicial del potenciómetro; `sonarScript` = [{ t, cm }] para el
    * obstáculo del HC-SR04 y `sonarCm` su posición inicial (null = sin obstáculo).
    */
-  start(hex, { script = null, potScript = null, potVolts = 0, sonarScript = null, sonarCm = null } = {}) {
+  start(hex, { script = null, potScript = null, potVolts = 0, sonarScript = null, sonarCm = null, worldTrack = null } = {}) {
     this.stop(null);
     this.hex = hex;
     this.script = script;
     this.potScript = potScript;
     this.sonarScript = sonarScript;
+    this.activeWorldTrack = worldTrack || this.world?.track;
     const worker = new Worker(WORKER_URL, { type: 'module' });
     this.worker = worker;
     let lastSignal = performance.now();
@@ -43,13 +44,15 @@ export class Simulation {
       else if (data.type === 'sonar') this.onSonar(data);
       else if (data.type === 'motor') this.onMotor(data);
       else if (data.type === 'servo') this.onServo(data);
+      else if (data.type === 'world') this.onWorld(data);
       else if (data.type === 'limit') this.stop('Simulación pausada tras 10 minutos simulados.');
       else if (data.type === 'error') this.stop('No se pudo cargar el programa: ' + data.message);
     };
     worker.onerror = (event) => { event.preventDefault?.(); this.stop('La simulación no pudo iniciarse en este navegador.'); };
     const pot = this.pot ? { ...this.pot, volts: potScript?.[0]?.t === 0 ? potScript[0].volts : potVolts } : null;
     const sonar = this.sonar ? { ...this.sonar, cm: sonarScript?.[0]?.t === 0 ? sonarScript[0].cm : sonarCm } : null;
-    worker.postMessage({ type: 'start', mode: 'realtime', hex, limitMs: MAX_RUN_MS, watch: this.watch, button: this.button, script, pot, potScript, sonar, sonarScript, motors: this.motors, servo: this.servo });
+    const world = this.world ? { ...this.world, track: this.activeWorldTrack } : null;
+    worker.postMessage({ type: 'start', mode: 'realtime', hex, limitMs: MAX_RUN_MS, watch: this.watch, button: this.button, script, pot, potScript, sonar, sonarScript, motors: this.motors, servo: this.servo, world });
   }
 
   /** El estudiante mueve el potenciómetro a `volts` (0–5 V). */
@@ -82,17 +85,18 @@ export class Simulation {
   }
 
   /** Reinicia el microcontrolador con el mismo programa (como el botón RESET). */
-  reset(potVolts = 0, sonarCm = null) { if (this.hex) this.start(this.hex, { script: this.script, potScript: this.potScript, potVolts, sonarScript: this.sonarScript, sonarCm }); }
+  reset(potVolts = 0, sonarCm = null) { if (this.hex) this.start(this.hex, { script: this.script, potScript: this.potScript, potVolts, sonarScript: this.sonarScript, sonarCm, worldTrack: this.activeWorldTrack }); }
 }
 
 /** Ejecuta el programa en modo rápido durante `durationMs` simulados y devuelve la traza. */
-export function recordTrace(hex, durationMs, { watch = [], stimulus = null, wallLimitMs = 30000 } = {}) {
+export function recordTrace(hex, durationMs, { watch = [], stimulus = null, wallLimitMs = 30000, onProgress = () => {} } = {}) {
   return new Promise((resolve, reject) => {
     const worker = new Worker(WORKER_URL, { type: 'module' });
     const timer = setTimeout(() => { worker.terminate(); reject(new Error('La evaluación superó el tiempo máximo.')); }, wallLimitMs);
     const finish = (fn, value) => { clearTimeout(timer); worker.terminate(); fn(value); };
     worker.onmessage = ({ data }) => {
-      if (data.type === 'trace') finish(resolve, data.trace);
+      if (data.type === 'progress') onProgress(data.simMs);
+      else if (data.type === 'trace') finish(resolve, data.trace);
       else if (data.type === 'error') finish(reject, new Error(data.message));
     };
     worker.onerror = (event) => { event.preventDefault?.(); finish(reject, new Error('No se pudo iniciar la evaluación.')); };

@@ -43,8 +43,8 @@ export class SonarModel {
    *   onEcho({ t0, t1, us, cm }) al terminar cada ECHO (cm = null si no hubo eco).
    *   onDistance(cm, tMs) cuando cambia el obstáculo.
    */
-  constructor(runner, { trig = 7, echo = 8, cm = 100, onTrigger = () => {}, onEcho = () => {}, onDistance = () => {} } = {}) {
-    Object.assign(this, { runner, trig, echo, onTrigger, onEcho, onDistance });
+  constructor(runner, { trig = 7, echo = 8, cm = 100, onTrigger = () => {}, onEcho = () => {}, onDistance = () => {}, distanceSource = null } = {}) {
+    Object.assign(this, { runner, trig, echo, onTrigger, onEcho, onDistance, distanceSource });
     this.cm = undefined;
     this.riseCycle = null;     // ciclo en que TRIG subió (null si está en LOW)
     this.busy = false;         // midiendo: desde el disparo aceptado hasta que ECHO baja
@@ -94,6 +94,7 @@ export class SonarModel {
       this.runner.atCycle(cycle, ev);
     };
     schedule(start, () => {
+      if (this.distanceSource) this.setDistance(this.distanceSource());
       const cm = this.cm;                       // obstáculo vigente cuando sale la ráfaga
       const us = echoUs(cm);
       const end = start + Math.round(us * CYCLES_PER_US);

@@ -22,7 +22,7 @@ try {
   page.on('pageerror', e=>errors.push(e.message));
   await page.goto(`${BASE}?leccion=${ID}`);
   await page.waitForFunction(()=>document.querySelector('#service').dataset.kind !== '');
-  assert.equal(await page.locator('.lesson-picker__list a').count(),14);
+  assert.equal(await page.locator('.lesson-picker__list a').count(),15);
   assert.equal(await page.locator('#circuit [data-bench]').count(),2);
   assert.equal(await page.locator('#circuit .c-motor').count(),2);
   assert.equal(await page.evaluate(()=>new Set([...document.querySelectorAll('[id]')].map(n=>n.id)).size===document.querySelectorAll('[id]').length),true);

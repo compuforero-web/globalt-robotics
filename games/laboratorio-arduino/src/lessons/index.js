@@ -15,10 +15,11 @@ import l298nDosMotores from './l298n-dos-motores.js';
 import servoPosiciones from './servo-posiciones.js';
 import servoBarrido from './servo-barrido.js';
 import evasorDecision from './evasor-decision.js';
+import evasorPista from './evasor-pista.js';
 
 export const DEFAULT_LESSON_ID = 'arduino-led-serie';
 export const LESSONS = [ledSerie, semaforo, pwmBrillo, botonEntrada, botonFlanco, potenciometro, ultrasonicoDistancia, ultrasonicoAlerta,
-  l298nDireccion, l298nVelocidad, l298nDosMotores, servoPosiciones, servoBarrido, evasorDecision];
+  l298nDireccion, l298nVelocidad, l298nDosMotores, servoPosiciones, servoBarrido, evasorDecision, evasorPista];
 export const ID_PATTERN = /^[a-z0-9-]{3,60}$/;
 
 /** Datos públicos de cada lección: orden, tema, título y lecciones previas recomendadas (no bloquean). */

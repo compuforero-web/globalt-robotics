@@ -313,7 +313,7 @@ def test_borradores_aislados_por_leccion():
                                                       'arduino-boton-entrada', 'arduino-boton-flanco', 'arduino-potenciometro-pwm',
                                                       'arduino-ultrasonico-distancia', 'arduino-ultrasonico-alerta',
                                                       'arduino-l298n-direccion', 'arduino-l298n-velocidad', 'arduino-l298n-dos-motores',
-                                                      'arduino-servo-posiciones', 'arduino-servo-barrido', 'arduino-evasor-decision')}
+                                                      'arduino-servo-posiciones', 'arduino-servo-barrido', 'arduino-evasor-decision', 'arduino-evasor-pista')}
     with cliente() as c, cliente() as otro:
         h = inscrito(c, 'borr.lecciones@example.com')
         ho = inscrito(otro, 'borr.lecciones.otro@example.com')
@@ -376,7 +376,7 @@ def test_borradores_aislados_por_leccion():
                             'arduino-servo-posiciones-v2', 'arduino-evasor-servo-radar', 'arduino-potenciometro', 'arduino-boton', 'arduino-boton-flanco-v2',
                             'arduino-potenciometro-pwm-v2', 'arduino-ultrasonico', 'arduino-ultrasonico-distancia-v2',
                             'ARDUINO-ULTRASONICO-ALERTA', 'arduino-l298n', 'arduino-l298n-direccion-v2', 'ARDUINO-L298N-VELOCIDAD',
-                            'arduino-l298n-dos-motores ', 'arduino-evasor-decision'):
+                            'arduino-l298n-dos-motores ', 'arduino-evasor-decision-v2', 'arduino-evasor-pista-v2'):
             assert c.put('/api/aula/borradores/' + desconocida, json={'codigo': 'x'}, headers=h).status_code == 404
             assert c.get('/api/aula/borradores/' + desconocida).status_code == 404
         assert sql("SELECT count(*) FROM borradores")[0][0] == antes

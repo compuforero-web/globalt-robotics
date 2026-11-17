@@ -382,3 +382,16 @@
 .c-servo-target { stroke: #f97316; stroke-width: 3; stroke-linecap: round; }
 .c-servo.is-moving .c-servo-body { stroke: #86efac; stroke-opacity: 1; }
 .servo-read { grid-template-columns: 1fr; }
+
+/* Pista: sin animación independiente de la emulación. */
+.robot-track__select{width:100%;margin:.4rem 0;padding:.65rem;border:1px solid #41516a;border-radius:.65rem;color:#eef4fa;background:#152036;font:inherit}
+.robot-track__label{font-weight:700}
+.robot-track__scene{overflow:hidden;border-radius:.6rem;margin:.7rem 0}
+.robot-track__svg{display:block;width:100%;height:auto}
+.robot-pose.is-contact>circle{stroke:#ff795f;fill:#582d33}
+.robot-track__stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin:1rem 0}
+.robot-track__stats>div{min-width:0;border-left:2px solid #2b7186;padding-left:.5rem}
+.robot-track__stats dt{color:#94a3b8;font-size:.78rem}
+.robot-track__stats dd{margin:.15rem 0 0;font-size:.88rem;overflow-wrap:anywhere}
+.robot-track__connections{border-top:1px solid #2d3d54;padding-top:.8rem}
+.robot-track__connections>summary{cursor:pointer;font-weight:600}

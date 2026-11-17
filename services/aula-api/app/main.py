@@ -41,6 +41,7 @@ LECCIONES = {
     'arduino-servo-posiciones': 'course-arduino',
     'arduino-servo-barrido': 'course-arduino',
     'arduino-evasor-decision': 'course-arduino',
+    'arduino-evasor-pista': 'course-arduino',
 }
 
 

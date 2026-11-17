@@ -17,6 +17,7 @@ import { PotModel } from './pot.js';
 import { SonarModel } from './sonar.js';
 import { MotorModel } from './motor.js';
 import { ServoModel } from './servo.js';
+import { RobotWorld } from './robot-world.js';
 
 const SLICE_MS = 16;            // trabajo máximo por porción antes de devolver el control
 const MAX_LAG_MS = 100;         // si el equipo es lento, el tiempo simulado avanza más despacio
@@ -42,6 +43,8 @@ let motorSent = '';
 const MOTOR_SAMPLE_MS = 10;     // la traza guarda la velocidad de cada motor cada 10 ms
 let servo = null;
 let servoSent = '';
+let world = null;
+let worldSentMs = -Infinity;
 const SERVO_SAMPLE_MS = 10;     // la traza guarda el ángulo del servo cada 10 ms
 
 function changed(w) {
@@ -52,6 +55,10 @@ function changed(w) {
 }
 
 function flush() {
+  if (world && runner.timeMs - worldSentMs >= 50) {
+    worldSentMs = runner.timeMs;
+    postMessage({ type: 'world', ...world.state() });
+  }
   if (button) {
     // Un pin flotante cambia cada pocos ms: se informa como «flotante» (level null) en lugar de cada cambio.
     const floating = button.mode === 'input' && !button.closed;
@@ -133,7 +140,7 @@ function attachButton(config, script, record = {}) {
  * `stimulus` = { button: { pin, seed }, script: [{ t, closed }] }: el guion de pulsaciones se aplica igual siempre.
  * La traza añade `input` = { pin, contact: [{ t, closed }], modes: [{ t, mode }] } con lo que ocurrió en el pin.
  */
-export function recordFast(hex, durationMs, watch = [], stimulus = null) {
+export function recordFast(hex, durationMs, watch = [], stimulus = null, { onProgress = () => {} } = {}) {
   const trace = { pins: [], serial: [], windows: [], durationMs, truncatedPins: [], adc: [] };
   const perPin = new Map();
   meter = new PwmMeter({ watch });
@@ -148,6 +155,7 @@ export function recordFast(hex, durationMs, watch = [], stimulus = null) {
     onSerial: (byte, t, b) => { if (trace.serial.length < MAX_TRACE) trace.serial.push({ byte, t, baud: b }); },
     onAdc: (channel, value, t) => { if (trace.adc.length < MAX_TRACE) trace.adc.push({ channel, value, t }); },
   });
+  world = stimulus?.world ? new RobotWorld(stimulus.world) : null;
   if (stimulus?.button) {
     const input = { pin: stimulus.button.pin, contact: [], modes: [] };
     trace.input = input;
@@ -172,7 +180,8 @@ export function recordFast(hex, durationMs, watch = [], stimulus = null) {
     sonar = new SonarModel(runner, { trig: stimulus.sonar.trig, echo: stimulus.sonar.echo, cm: stimulus.sonar.cm ?? null,
       onTrigger: (x) => { if (log.triggers.length < MAX_TRACE) log.triggers.push(x); },
       onEcho: (x) => { if (log.echoes.length < MAX_TRACE) log.echoes.push(x); },
-      onDistance: (cm, t) => log.distances.push({ t, cm }) });
+      onDistance: (cm, t) => { if (log.distances.length < MAX_TRACE) log.distances.push({ t, cm }); },
+      distanceSource: world ? () => world.senseCm() : null });
     sonar.play(stimulus.sonarScript || []);
   }
   if (stimulus?.motors) {
@@ -185,8 +194,9 @@ export function recordFast(hex, durationMs, watch = [], stimulus = null) {
       onOrder: (x) => { if (log.orders.length < MAX_TRACE) log.orders.push(x); },
       onReverse: (x) => { if (log.reversals.length < MAX_TRACE) log.reversals.push(x); },
       onTick: (t, m) => {
+        if (world) world.advance(t, m.channels[0].speed, m.channels[1].speed);
         if (t + 1e-6 < next) return;
-        next += MOTOR_SAMPLE_MS;
+        next += world ? 50 : MOTOR_SAMPLE_MS;
         if (log.samples.length < MAX_TRACE) log.samples.push({ t, v: m.channels.map((c) => Math.round(c.speed * 1000) / 1000) });
       } });
     log.params = motor.P;
@@ -208,13 +218,20 @@ export function recordFast(hex, durationMs, watch = [], stimulus = null) {
       } });
     log.params = servo.P;
   }
-  advance(durationMs, (ws) => { for (const w of ws) trace.windows.push(w); });
+  // Solo la pista puede prescindir de ventanas PWM: evalúa el mundo y los ecos.
+  let progressMs = 0;
+  advance(durationMs, (ws) => {
+    if (!world) for (const w of ws) trace.windows.push(w);
+    else if (runner.timeMs - progressMs >= 1000) { progressMs = runner.timeMs; onProgress(runner.timeMs); }
+  });
+  if (world) trace.world = world.state();
   if (motor) trace.motor.outputs = motor.channels.map((c) => ({ id: c.id, ...c.everOutput }));
   button = null;
   pot = null;
   sonar = null;
   motor = null;
   servo = null;
+  world = null;
   return trace;
 }
 
@@ -223,10 +240,10 @@ if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScop
     try {
       if (data.type === 'input') { if (button && runner) { button.press(Boolean(data.closed)); } return; }
       if (data.type === 'analog') { if (pot && runner) pot.set(data.volts); return; }
-      if (data.type === 'distance') { if (sonar && runner) sonar.setDistance(data.cm); return; }
+      if (data.type === 'distance') { if (sonar && runner && !world) sonar.setDistance(data.cm); return; }
       if (data.type !== 'start') return;
       const watch = Array.isArray(data.watch) ? data.watch : [];
-      if (data.mode === 'fast') { postMessage({ type: 'trace', trace: recordFast(data.hex, data.durationMs, watch, data.stimulus || null) }); return; }
+      if (data.mode === 'fast') { postMessage({ type: 'trace', trace: recordFast(data.hex, data.durationMs, watch, data.stimulus || null, { onProgress: (simMs) => postMessage({ type: 'progress', simMs }) }) }); return; }
       meter = new PwmMeter({ watch });
       runner = new NanoRunner(data.hex, {
         onPin: (pin, high, t) => meter.edge(pin, high, t),
@@ -239,18 +256,22 @@ if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScop
         pot = new PotModel(runner, { channel: data.pot.channel, volts: data.pot.volts ?? 0 });
         if (Array.isArray(data.potScript)) pot.play(data.potScript);
       }
+      world = data.world ? new RobotWorld(data.world) : null;
+      worldSentMs = -Infinity;
       if (data.sonar) {
         sonarState = null;
         sonar = new SonarModel(runner, { trig: data.sonar.trig, echo: data.sonar.echo, cm: data.sonar.cm ?? null,
           onTrigger: (x) => { sonarState = { ...sonarState, trig: x }; },
-          onEcho: (x) => { sonarState = { ...sonarState, echo: x }; } });
+          onEcho: (x) => { sonarState = { ...sonarState, echo: x }; },
+          distanceSource: world ? () => world.senseCm() : null });
         if (Array.isArray(data.sonarScript)) sonar.play(data.sonarScript);
       }
       motor = null;
       motorSent = '';
       if (data.motors) {
         const reversals = [];
-        motor = new MotorModel(runner, { channels: data.motors.channels, onReverse: (x) => { reversals.push(x); if (reversals.length > 5) reversals.shift(); } });
+        motor = new MotorModel(runner, { channels: data.motors.channels,
+          onTick: (t, m) => { if (world) world.advance(t, m.channels[0].speed, m.channels[1].speed); }, onReverse: (x) => { reversals.push(x); if (reversals.length > 5) reversals.shift(); } });
         motor.reversals = reversals;
       }
       servo = null;
