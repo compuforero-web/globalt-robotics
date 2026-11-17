@@ -60,13 +60,13 @@ const hornAngle = (p) => p.evaluate(() => -Number(/rotate\((-?[\d.]+)\)/.exec(do
   const p = await ctx.newPage();
   await open(p, L12);
   assert.match(await p.textContent('.lab-top__course'), /Lección 12/);
-  assert.equal(await p.locator('.lesson-picker__list a').count(), 13);
+  assert.equal(await p.locator('.lesson-picker__list a').count(), 14);
   assert.equal(await p.locator('#circuit .c-servo').count(), 1);
   assert.equal(await p.locator('#circuit .c-led').count(), 0);
   const desc = await p.textContent('#circuit-desc');
   for (const re of [/naranja \(señal\) del servo va a D9/, /fuente externa de 5 voltios/, /GND común/, /no alimenta el servo/]) assert.match(desc, re);
   assert.match(await p.textContent('#lesson'), /Fuente separada y GND común/);
-  log('lección 12: selector con 13 lecciones; circuito con SG90 en D9, fuente externa de 5 V y GND común descritos');
+  log('lección 12: selector con 14 lecciones; circuito con SG90 en D9, fuente externa de 5 V y GND común descritos');
 
   // Programa sin Servo: no hay pulsos ni movimiento (no hay animación preparada).
   await setCode(p, 'void setup() {}\nvoid loop() {}\n');

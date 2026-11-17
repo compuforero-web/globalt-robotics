@@ -227,7 +227,7 @@ for (const bad of ['?leccion=no-existe', '?leccion=ARDUINO-PWM-BRILLO', '?leccio
   assert.equal(r.lesson, null, bad);
   assert.ok(r.requested);
 }
-assert.deepEqual(MANIFEST.map((m) => m.numero), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+assert.deepEqual(MANIFEST.map((m) => m.numero), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
 for (const id of ['arduino-servo-posiciones', 'arduino-servo-barrido']) assert.equal(resolveLesson('?leccion=' + id).lesson.id, id);
 for (const id of ['arduino-l298n-direccion', 'arduino-l298n-velocidad', 'arduino-l298n-dos-motores']) assert.equal(resolveLesson('?leccion=' + id).lesson.id, id);
 assert.equal(resolveLesson('?leccion=arduino-ultrasonico-distancia').lesson.id, 'arduino-ultrasonico-distancia');
@@ -249,7 +249,7 @@ console.log(JSON.stringify({ ids: MANIFEST.map((m) => m.id), def: DEFAULT_LESSON
                                        'arduino-boton-entrada', 'arduino-boton-flanco', 'arduino-potenciometro-pwm',
                                        'arduino-ultrasonico-distancia', 'arduino-ultrasonico-alerta',
                                        'arduino-l298n-direccion', 'arduino-l298n-velocidad', 'arduino-l298n-dos-motores',
-                                       'arduino-servo-posiciones', 'arduino-servo-barrido'])
+                                       'arduino-servo-posiciones', 'arduino-servo-barrido', 'arduino-evasor-decision'])
 
     def test_examples_match_fixtures_and_hints_do_not_solve(self):
         node(f"""

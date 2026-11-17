@@ -64,7 +64,7 @@ async function mouseHold(p, ms) {
   await open(p, L4);
   assert.match(await p.textContent('.lab-top__course'), /Lección 4/);
   assert.match(await p.textContent('.lab__lesson-title'), /pulsador/i);
-  assert.equal(await p.locator('.lesson-picker__list a').count(), 13);
+  assert.equal(await p.locator('.lesson-picker__list a').count(), 14);
   assert.match(await p.textContent('.lesson-picker__prev'), /Lección 2/);
   assert.equal(await p.locator('#circuit svg .c-btn').count(), 1);
   assert.equal(await p.locator('.btn-ctl__script').count(), 1);

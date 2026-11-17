@@ -40,6 +40,7 @@ LECCIONES = {
     'arduino-l298n-dos-motores': 'course-arduino',
     'arduino-servo-posiciones': 'course-arduino',
     'arduino-servo-barrido': 'course-arduino',
+    'arduino-evasor-decision': 'course-arduino',
 }
 
 
