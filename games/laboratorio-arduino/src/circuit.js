@@ -282,3 +282,115 @@ export function createButtonCircuit(root, { onButton = () => false, onScript = n
     stopped() { stateEl.textContent = 'Simulación detenida: el pulsador no está conectado a ningún programa.'; },
   };
 }
+
+const fmtV = (v) => `${v.toFixed(2).replace('.', ',')} V`;
+
+/**
+ * Potenciómetro de 10 kΩ como divisor de tensión (5 V – cursor a A0 – GND) y LED con 220 Ω en D9, con medidor
+ * de % y Hz de D9. El control deslizante (teclado, ratón o dedo) fija la tensión del cursor: `onPot(volts)` la
+ * envía al ADC emulado. `potState({ volts, adc })` muestra la posición real y la última conversión que pidió
+ * el programa con analogRead. `onScript()` reproduce el guion del reto.
+ */
+export function createPotCircuit(root, { onPot = () => false, onScript = null } = {}) {
+  const ledX = nanoX(9);
+  const [GND_X, A0_X, V5_X] = [50, 74, 98];
+  root.innerHTML = `
+  <svg class="circuit circuit--pot" viewBox="0 36 360 192" role="img" aria-labelledby="circuit-title circuit-desc">
+    <title id="circuit-title">Potenciómetro en A0 y LED en D9</title>
+    <desc id="circuit-desc">Arduino Nano compatible. Un potenciómetro de 10 kilohmios tiene un extremo en 5 V y el otro en GND; su cursor va a la entrada analógica A0. D9 va por una resistencia de 220 ohmios al LED y el cátodo a GND.</desc>
+    <rect x="8" y="96" width="150" height="72" rx="7" class="c-pcb"/>
+    <rect x="112" y="118" width="34" height="24" rx="3" class="c-chip"/>
+    <text x="129" y="133" class="c-chip-txt" text-anchor="middle">328P</text>
+    <text x="134" y="160" class="c-label" text-anchor="middle">NANO</text>
+    ${NANO_PINS.map((p) => `<circle cx="${nanoX(p)}" cy="106" r="2.8" class="c-hole ${p === 9 ? 'is-used' : ''}"/>
+      <text x="${nanoX(p)}" y="117" class="c-tiny" text-anchor="middle">${p}</text>`).join('')}
+    ${[[GND_X, 'GND'], [A0_X, 'A0'], [V5_X, '5V']].map(([x, t]) => `<circle cx="${x}" cy="156" r="2.8" class="c-hole is-used"/>
+      <text x="${x}" y="148" class="c-tiny" text-anchor="middle">${t}</text>`).join('')}
+    <text x="${ledX + 4}" y="90" class="c-pin-name">D9</text>
+    <path d="M${ledX} 106 V62 H170" class="c-wire c-wire--sig"/>
+    <g transform="translate(170 54)"><rect width="56" height="16" rx="6" class="c-res"/>
+      <rect x="12" y="0" width="4" height="16" class="c-band1"/><rect x="21" y="0" width="4" height="16" class="c-band1"/>
+      <rect x="30" y="0" width="4" height="16" class="c-band2"/><rect x="44" y="0" width="3" height="16" class="c-band3"/></g>
+    <text x="198" y="48" class="c-small" text-anchor="middle">220 Ω</text>
+    <path d="M226 62 H262" class="c-wire c-wire--sig"/>
+    <g class="c-led" data-pin="9" transform="translate(276 58) rotate(90)">
+      <circle r="24" class="c-glow"/>
+      <path d="M-11 6 V-8 a11 11 0 0 1 22 0 V6 z" class="c-led-body"/>
+      <rect x="-13" y="6" width="26" height="4" rx="2" class="c-led-rim"/>
+    </g>
+    <text x="276" y="86" class="c-tiny" text-anchor="middle">LED</text>
+    <path d="M287 62 H346 V222 H${GND_X} V156" class="c-wire c-wire--gnd"/>
+    <path d="M${GND_X} 204 H226" class="c-wire c-wire--gnd"/>
+    <circle cx="${GND_X}" cy="204" r="3" fill="#7c8da2"/>
+    <path d="M${V5_X} 156 V176 H226" class="c-wire c-wire--5v"/>
+    <path d="M${A0_X} 156 V190 H226" class="c-wire c-wire--sig"/>
+    <text x="196" y="172" class="c-tiny" text-anchor="middle">5 V</text>
+    <text x="196" y="186" class="c-tiny" text-anchor="middle">cursor</text>
+    <text x="196" y="200" class="c-tiny" text-anchor="middle">GND</text>
+    <g class="c-pot" transform="translate(258 190)">
+      <rect x="-32" y="-24" width="64" height="48" rx="6" class="c-pot-base"/>
+      <circle r="17" class="c-pot-knob"/>
+      <line class="c-pot-mark" x1="0" y1="0" x2="0" y2="-14"/>
+      <text x="0" y="-29" class="c-small" text-anchor="middle">10 kΩ</text>
+    </g>
+  </svg>
+  <div class="pwm-meter">
+    <span class="pwm-meter__label">D9 medido</span>
+    <span class="pwm-meter__bar" aria-hidden="true"><span class="pwm-meter__fill"></span></span>
+    <span class="pwm-meter__value">0 %</span>
+    <span class="pwm-meter__freq">salida continua</span>
+  </div>
+  <div class="pot-ctl">
+    <label class="pot-ctl__label" for="pot-range">Potenciómetro (A0)</label>
+    <input id="pot-range" class="pot-ctl__range" type="range" min="0" max="500" step="5" value="0" aria-valuetext="0,00 voltios" aria-describedby="pot-ctl-help">
+    <output class="pot-ctl__volts" for="pot-range">0,00 V</output>
+    <span class="pot-ctl__adc" aria-live="polite">Última lectura de analogRead: —</span>
+    ${onScript ? '<button type="button" class="btn btn--ghost btn--sm pot-ctl__script">Reproducir guion del reto</button>' : ''}
+    <p id="pot-ctl-help" class="pot-ctl__help muted small">Arrastra el control o usa las flechas (0,05 V), Re Pág/Av Pág (0,5 V), Inicio y Fin. Funciona con la simulación en marcha.</p>
+  </div>
+  ${pinStripHtml()}`;
+  const led = root.querySelector('.c-led');
+  const strip = pinStrip(root);
+  const meterEl = root.querySelector('.pwm-meter');
+  const range = root.querySelector('.pot-ctl__range');
+  const voltsEl = root.querySelector('.pot-ctl__volts');
+  const adcEl = root.querySelector('.pot-ctl__adc');
+  const mark = root.querySelector('.c-pot-mark');
+  let dragging = false;
+  const volts = () => Number(range.value) / 100;
+  const show = (v) => {
+    voltsEl.textContent = fmtV(v);
+    range.setAttribute('aria-valuetext', `${v.toFixed(2).replace('.', ',')} voltios`);
+    mark.setAttribute('transform', `rotate(${-135 + (v / 5) * 270})`);
+  };
+  let lastUser = -Infinity;   // el eco del Worker no debe devolver el control a una posición anterior
+  range.addEventListener('input', () => { lastUser = performance.now(); show(volts()); onPot(volts()); });
+  range.addEventListener('pointerdown', () => { dragging = true; });
+  for (const ev of ['pointerup', 'pointercancel', 'blur']) range.addEventListener(ev, () => { dragging = false; });
+  root.querySelector('.pot-ctl__script')?.addEventListener('click', () => onScript());
+  show(0);
+  const showMeter = (w) => {
+    const pwm = isPwmWindow(w);
+    const duty = pwm ? w.duty : (w.level ? 1 : 0);
+    meterEl.querySelector('.pwm-meter__fill').style.width = `${(duty * 100).toFixed(1)}%`;
+    meterEl.querySelector('.pwm-meter__value').textContent = pct(duty);
+    meterEl.querySelector('.pwm-meter__freq').textContent = pwm && w.freq ? `PWM a ${Math.round(w.freq)} Hz` : 'salida continua';
+  };
+  return {
+    update(w) {
+      strip.update(w);
+      if (w.pin === 9) { applyLed(led, w); showMeter(w); }
+    },
+    /** Estado real en el Worker: tensión del cursor y última conversión del ADC en A0 (null si no hubo). */
+    potState({ volts: v, adc }) {
+      if (!dragging && performance.now() - lastUser > 400 && Math.abs(v - volts()) > 0.004) { range.value = String(Math.round(v * 100)); show(v); }
+      adcEl.textContent = `Última lectura de analogRead: ${adc === null || adc === undefined ? '— (el programa no ha leído A0)' : adc}`;
+    },
+    potVolts: volts,
+    reset() {
+      strip.reset();
+      this.update({ pin: 9, duty: 0, level: false, rises: 0 });
+      adcEl.textContent = 'Última lectura de analogRead: —';
+    },
+  };
+}

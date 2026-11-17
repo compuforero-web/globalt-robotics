@@ -307,3 +307,15 @@
 .btn-ctl__state { font-size: .85rem; font-variant-numeric: tabular-nums; }
 .btn-ctl__help { flex-basis: 100%; margin: 0; }
 .pin-dot.is-floating { background: repeating-linear-gradient(45deg, rgba(234, 179, 8, .25) 0 4px, transparent 4px 8px); color: #fde68a; border-color: rgba(234, 179, 8, .6); }
+/* Potenciómetro (lección 6) */
+.c-wire--5v { stroke: #ef4444; }
+.c-pot-base { fill: #1e3a8a; stroke: #60a5fa; stroke-opacity: .5; }
+.c-pot-knob { fill: #334155; stroke: #cbd5e1; stroke-width: 2; }
+.c-pot-mark { stroke: #f97316; stroke-width: 3; stroke-linecap: round; }
+.pot-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 6px 0 2px; }
+.pot-ctl__label { font-weight: 600; }
+.pot-ctl__range { flex: 1 1 200px; min-width: 0; height: 44px; accent-color: #f97316; cursor: pointer; }
+.pot-ctl__range:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+.pot-ctl__volts { min-width: 4.5em; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pot-ctl__adc { font-size: .85rem; font-variant-numeric: tabular-nums; }
+.pot-ctl__help { flex-basis: 100%; margin: 0; }

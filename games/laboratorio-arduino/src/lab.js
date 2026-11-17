@@ -23,6 +23,7 @@ export function startLab(L) {
   // reproducir el guion del reto en tiempo real (el mismo que usa la evaluación).
   const circuit = L.circuit($('#circuit'), {
     onButton: (closed) => simulation.input(closed),
+    onPot: (volts) => simulation.analog(volts),
     onScript: L.evaluation.stimulus ? () => playScript() : null,
   });
 
@@ -281,7 +282,9 @@ export function startLab(L) {
   const simulation = new Simulation({
     watch: L.pins,
     button: L.button || null,
+    pot: L.pot || null,
     onButton(state) { circuit.input?.(state); },
+    onPot(state) { circuit.potState?.(state); },
     onWindows(windows) {
       for (const w of windows) { circuit.update(w); if (w.level || w.duty > 0) pinsSeen.add(w.pin); }
     },
@@ -314,7 +317,7 @@ export function startLab(L) {
     clearMonitor();
     circuit.reset();
     pinsSeen = new Set();
-    simulation.start(hex, options);
+    simulation.start(hex, { potVolts: circuit.potVolts?.() ?? 0, ...options });
     $('#sim-state').textContent = 'En ejecución';
     $('#sim-panel').classList.add('is-running');
     updateButtons();
@@ -335,11 +338,12 @@ export function startLab(L) {
     withBusy(async () => {
       const hex = await ensureCompiled();
       if (!hex) return;
-      startSimulation(hex, { script: L.evaluation.stimulus.script });
-      setStatus(`Reproduciendo el guion del reto en tiempo real (${L.evaluation.durationMs / 1000} s): el pulsador se mueve solo, como en la comprobación.`, 'ok');
+      const { script = null, potScript = null } = L.evaluation.stimulus;
+      startSimulation(hex, { script, potScript });
+      setStatus(`Reproduciendo el guion del reto en tiempo real (${L.evaluation.durationMs / 1000} s): ${potScript ? 'el potenciómetro' : 'el pulsador'} se mueve solo, como en la comprobación.`, 'ok');
     });
   }
-  $('#btn-reset').addEventListener('click', () => { if (simulation.hex) { startSimulation(simulation.hex, { script: simulation.script }); setStatus('Microcontrolador reiniciado (como pulsar RESET).'); } });
+  $('#btn-reset').addEventListener('click', () => { if (simulation.hex) { startSimulation(simulation.hex, { script: simulation.script, potScript: simulation.potScript }); setStatus('Microcontrolador reiniciado (como pulsar RESET).'); } });
   $('#btn-clear').addEventListener('click', clearMonitor);
   $('#btn-save').addEventListener('click', () => { if (save()) setStatus('Código guardado en este navegador.', 'ok'); });
   $('#btn-restore').addEventListener('click', restoreExample);

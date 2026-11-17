@@ -227,7 +227,8 @@ for (const bad of ['?leccion=no-existe', '?leccion=ARDUINO-PWM-BRILLO', '?leccio
   assert.equal(r.lesson, null, bad);
   assert.ok(r.requested);
 }
-assert.deepEqual(MANIFEST.map((m) => m.numero), [1, 2, 3, 4, 5]);
+assert.deepEqual(MANIFEST.map((m) => m.numero), [1, 2, 3, 4, 5, 6]);
+assert.equal(resolveLesson('?leccion=arduino-potenciometro-pwm').lesson.id, 'arduino-potenciometro-pwm');
 assert.equal(resolveLesson('?leccion=arduino-boton-flanco').lesson.id, 'arduino-boton-flanco');
 for (const l of LESSONS) {
   assert.match(l.id, ID_PATTERN);
@@ -241,7 +242,7 @@ console.log(JSON.stringify({ ids: MANIFEST.map((m) => m.id), def: DEFAULT_LESSON
         self.assertEqual(sorted(data['ids']), sorted(api))
         self.assertEqual(set(api.values()), {'course-arduino'})
         self.assertEqual(data['ids'], ['arduino-led-serie', 'arduino-protoboard-semaforo', 'arduino-pwm-brillo',
-                                       'arduino-boton-entrada', 'arduino-boton-flanco'])
+                                       'arduino-boton-entrada', 'arduino-boton-flanco', 'arduino-potenciometro-pwm'])
 
     def test_examples_match_fixtures_and_hints_do_not_solve(self):
         node(f"""
@@ -436,10 +437,10 @@ assert.equal(F.analyzeCode(fx('flanco-solucion')).topic, 'comprobar');
 assert.equal(F.chooseTopic({{ code: fx('flanco-al-soltar'), lastChecks: [{{ id: 'respuesta', ok: false, detail: 'reaccionó al soltar' }}] }}).topic, 'soltar');
 assert.equal(F.chooseTopic({{ code: fx('flanco-lento'), lastChecks: [{{ id: 'cuenta', ok: false, detail: 'Alguna pulsación no se detectó' }}] }}).topic, 'lento');
 // Ninguna pista ni ejemplo contiene el antirrebote completo (estado aceptado + espera + cuenta).
-const solved = /millis\(\)[\s\S]*Pulsaciones/;
+const solved = /millis\\(\\)[\\s\\S]*Pulsaciones/;
 for (const t of F.TOPIC_IDS) for (let i = 0; i < 4; i++) assert.doesNotMatch(F.hintText(t, i, {{ errorHelp: '' }}).text, solved);
 for (const ex of Object.values(F.EXAMPLES)) assert.ok(!/Pulsaciones/.test(ex.code));
-for (const t of E.TOPIC_IDS) for (let i = 0; i < 4; i++) assert.doesNotMatch(E.hintText(t, i, {{ delays: [], errorHelp: '' }}).text, /"Pulsado"[\s\S]*"Suelto"/);
+for (const t of E.TOPIC_IDS) for (let i = 0; i < 4; i++) assert.doesNotMatch(E.hintText(t, i, {{ delays: [], errorHelp: '' }}).text, /"Pulsado"[\\s\\S]*"Suelto"/);
 for (const ex of Object.values(E.EXAMPLES)) assert.ok(!/Pulsado|Suelto/.test(ex.code));
 // La evaluación declara su guion: siempre el mismo y aplicado con el modelo, nunca el texto del programa.
 for (const L of [E.default, F.default]) {{
@@ -448,6 +449,138 @@ for (const L of [E.default, F.default]) {{
 }}
 assert.equal(E.default.evaluation.stimulus.script.length, 10);
 assert.ok(F.default.evaluation.stimulus.script.length > 12 * 7);
+""")
+
+
+class PotLessonTests(unittest.TestCase):
+    """Lección 6 (2.4 de la ruta): ADC real de avr8js y PWM de D9 medido, con HEX compilados de verdad."""
+
+    def test_bundle_exports_adc_with_same_version_and_license(self):
+        vendor = ROOT / 'games/laboratorio-arduino/vendor'
+        text = (vendor / 'avr8js-0.21.1.js').read_text()
+        self.assertTrue(text.startswith('/*! avr8js 0.21.1 · MIT License'))
+        for name in ('AVRADC', 'adcConfig', 'CPU', 'AVRTimer', 'AVRUSART', 'AVRIOPort', 'PinState'):
+            self.assertRegex(text, r'export\{[^}]*\b as %s\b' % name)
+        self.assertIn('Permission is hereby granted', (vendor / 'LICENSE-avr8js.txt').read_text())
+
+    def test_adc_extremes_intermediates_and_pwm_follow(self):
+        out = node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+import {{ NanoRunner }} from './games/laboratorio-arduino/src/nano-runner.js';
+import {{ PwmMeter }} from './games/laboratorio-arduino/src/pwm.js';
+import {{ adcValue }} from './games/laboratorio-arduino/src/pot.js';
+// El programa compilado (pot-solucion) lee A0 con analogRead: lo que imprime es lo que convirtió el ADC emulado.
+const volts = [0, 0.004, 0.005, 0.6, 1.25, 2.5, 3.3, 3.75, 4.995, 5, 7, -1];
+const meter = new PwmMeter({{ watch: [9] }});
+const lines = []; let text = '';
+const adc = [];
+const r = new NanoRunner(readFileSync('{FIX}/pot-solucion.hex', 'utf8'), {{
+  onPin: (p, h, t) => meter.edge(p, h, t),
+  onSerial: (b) => {{ if (b === 10) {{ lines.push(text.trim()); text = ''; }} else text += String.fromCharCode(b); }},
+  onAdc: (ch, v, t) => adc.push({{ ch, v }}) }});
+const res = [];
+for (const v of volts) {{
+  r.setAnalog(0, v);
+  r.runFor(260);
+  meter.close(r.timeMs);
+  const start = r.timeMs; r.runFor(100);
+  const w = meter.close(r.timeMs).find((x) => x.pin === 9);
+  res.push({{ v, line: lines.at(-1), last: adc.at(-1).v, duty: w.duty, freq: w.freq }});
+}}
+const expected = [0, 0, 1, 122, 256, 512, 675, 768, 1022, 1023, 1023, 0];
+res.forEach((x, k) => {{
+  assert.equal(x.last, expected[k], `ADC con ${{x.v}} V`);
+  assert.equal(x.line, 'Lectura: ' + expected[k], `línea con ${{x.v}} V`);
+  assert.equal(adcValue(Math.min(5, Math.max(0, x.v))), expected[k]);
+  const want = Math.round(expected[k] * 255 / 1023) / 255;   // map(…, 0, 1023, 0, 255) en enteros
+  assert.ok(Math.abs(x.duty - want) <= 0.01, `D9 con ${{x.v}} V: ${{x.duty}} (esperado ${{want}})`);
+  if (want > 0.01 && want < 0.99) assert.ok(Math.abs(x.freq - 490.2) < 5, x.freq);
+}});
+assert.ok(adc.every((a) => a.ch === 0));
+console.log('ok');
+""")
+        self.assertIn('ok', out)
+
+    def test_pot_solutions_pass_and_failures_explain(self):
+        r = evaluate_button('potenciometro.js', [
+            'pot-solucion', 'pot-solucion-delay', 'pot-sin-escala', 'pot-invertido', 'pot-otro-canal', 'pot-otro-pin',
+            'pot-pin-sin-pwm', 'pot-digital', 'pot-ritmo', 'pot-sin-serial', 'pot-voltios', 'pot-lento',
+            'pot-ejemplo', 'pot-ej-voltios', 'pot-ej-map'])
+        for name in ('pot-solucion', 'pot-solucion-delay'):
+            self.assertTrue(r[name]['passed'], r[name])
+        ok = lambda n: r[n]['checks']
+        self.assertEqual(ok('pot-sin-escala')['lecturas'], True)
+        self.assertFalse(ok('pot-sin-escala')['brillo'])
+        self.assertIn('0–255', r['pot-sin-escala']['details']['brillo'])
+        self.assertIn('invertido', r['pot-invertido']['details']['brillo'])
+        self.assertIn('¿lees el canal A0?', r['pot-otro-canal']['details']['lecturas'])
+        self.assertIn('nunca leyó A0', r['pot-otro-canal']['details']['pwm'])
+        self.assertIn('Hay PWM en D10', r['pot-otro-pin']['details']['pwm'])
+        self.assertIn('D8', r['pot-pin-sin-pwm']['details']['pwm'])
+        self.assertFalse(ok('pot-digital')['pwm'])
+        self.assertEqual(ok('pot-ritmo'), {'pwm': True, 'brillo': True, 'lecturas': True, 'ritmo': False, 'baud': True})
+        self.assertFalse(ok('pot-sin-serial')['baud'])
+        self.assertEqual(ok('pot-voltios')['lecturas'], False)
+        # delay(250): imprime bien y al ritmo, pero el brillo responde tarde a algún cambio del guion.
+        self.assertEqual(ok('pot-lento'), {'pwm': True, 'brillo': False, 'lecturas': True, 'ritmo': True, 'baud': True})
+        self.assertIn('tarda demasiado', r['pot-lento']['details']['brillo'])
+        for name in ('pot-ejemplo', 'pot-ej-voltios', 'pot-ej-map'):
+            self.assertFalse(r[name]['passed'], name)
+        alone = evaluate_button('potenciometro.js', ['pot-solucion'])
+        self.assertLess(alone['pot-solucion']['ms'], 8000)
+
+    def test_pot_evaluator_uses_only_the_measured_trace(self):
+        node("""
+import assert from 'node:assert/strict';
+import { evaluatePot, segments, POT } from './games/laboratorio-arduino/src/lessons/pot-eval.js';
+const segs = segments();
+assert.deepEqual(segs.map((s) => s.reading), [0, 256, 512, 1023, 256]);
+const line = (text, t) => [...text + '\\r\\n'].map((c, k) => ({ byte: c.charCodeAt(0), t: t + k, baud: 9615 }));
+const at = (t) => segs.find((s) => t >= s.t && t < s.end);
+const ideal = ({ lag = 1, dutyOff = 0, readOff = 0, period = 250 } = {}) => {
+  const windows = [];
+  for (let t = 0; t < POT.durationMs; t += 20) {
+    const s = at(Math.max(0, t - lag)) || segs[0];
+    const d = Math.min(1, Math.max(0, s.duty + dutyOff));
+    windows.push({ pin: 9, t0: t, t1: t + 20, duty: d, freq: d > 0 && d < 1 ? 490.2 : null, rises: d > 0 && d < 1 ? 10 : 0, level: d >= 1 });
+  }
+  const serial = [];
+  for (let t = 5; t < POT.durationMs; t += period) serial.push(...line('Lectura: ' + (at(t).reading + readOff), t));
+  return { durationMs: POT.durationMs, windows, serial, adc: [{ channel: 0, value: 0, t: 1 }] };
+};
+assert.equal(evaluatePot(ideal()).passed, true);
+assert.equal(evaluatePot(ideal({ lag: 90 })).passed, true);                       // dentro de 100 ms
+assert.equal(evaluatePot(ideal({ lag: 130 })).checks.find((c) => c.id === 'brillo').ok, false);
+assert.equal(evaluatePot(ideal({ dutyOff: 0.035 })).checks.find((c) => c.id === 'brillo').ok, true);
+assert.equal(evaluatePot(ideal({ dutyOff: 0.06 })).checks.find((c) => c.id === 'brillo').ok, false);
+assert.equal(evaluatePot(ideal({ readOff: 8 })).checks.find((c) => c.id === 'lecturas').ok, true);
+assert.equal(evaluatePot(ideal({ readOff: 9 })).checks.find((c) => c.id === 'lecturas').ok, false);
+assert.equal(evaluatePot(ideal({ period: 280 })).checks.find((c) => c.id === 'ritmo').ok, false);
+assert.equal(evaluatePot({ durationMs: POT.durationMs, windows: [], serial: [], adc: [] }).passed, false);
+""")
+
+    def test_pot_examples_match_fixtures_and_hints_do_not_solve(self):
+        node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+const fx = (n) => readFileSync('{FIX}/' + n + '.ino', 'utf8');
+const P = await import('./games/laboratorio-arduino/src/lessons/potenciometro.js');
+assert.equal(fx('pot-ejemplo'), P.EXAMPLE_CODE);
+for (const [k, e] of Object.entries(P.EXAMPLES)) assert.equal(fx('pot-ej-' + k), e.code);
+assert.equal(P.chooseTopic({{ code: P.EXAMPLE_CODE, untouched: true, step: 2 }}).topic, 'paso-2');
+assert.equal(P.analyzeCode(P.EXAMPLE_CODE).topic, 'analogwrite');
+assert.equal(P.analyzeCode(fx('pot-sin-escala')).topic, 'escala');
+assert.equal(P.analyzeCode(fx('pot-lento')).topic, 'lento');
+assert.equal(P.analyzeCode(fx('pot-solucion')).topic, 'comprobar');
+assert.equal(P.chooseTopic({{ code: fx('pot-invertido'), lastChecks: [{{ id: 'pwm', ok: true }}, {{ id: 'brillo', ok: false, detail: 'Parece invertido' }}] }}).topic, 'invertido');
+assert.equal(P.chooseTopic({{ code: fx('pot-ritmo'), lastChecks: [{{ id: 'ritmo', ok: false }}] }}).topic, 'ritmo');
+assert.equal(P.chooseTopic({{ code: fx('pot-solucion'), completed: true }}).topic, 'superado');
+const solved = /analogRead[\\s\\S]*analogWrite[\\s\\S]*millis/;
+for (const t of P.TOPIC_IDS) for (let i = 0; i < 4; i++) assert.doesNotMatch(P.hintText(t, i, {{ delays: [], errorHelp: '' }}).text, solved);
+for (const ex of Object.values(P.EXAMPLES)) assert.ok(!/analogWrite/.test(ex.code));
+assert.deepEqual(P.default.pins, [9]);
+assert.equal(P.default.evaluation.stimulus.potScript.length, 5);
 """)
 
 
