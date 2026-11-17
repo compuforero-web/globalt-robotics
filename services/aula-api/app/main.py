@@ -35,6 +35,9 @@ LECCIONES = {
     'arduino-potenciometro-pwm': 'course-arduino',
     'arduino-ultrasonico-distancia': 'course-arduino',
     'arduino-ultrasonico-alerta': 'course-arduino',
+    'arduino-l298n-direccion': 'course-arduino',
+    'arduino-l298n-velocidad': 'course-arduino',
+    'arduino-l298n-dos-motores': 'course-arduino',
 }
 
 
