@@ -21,7 +21,7 @@ export function courseCard(course, index) {
       ${course.duration ? `<span class="tag tag--soft">${icon('clock')} ${esc(course.duration)}${isArduino ? ' previstas' : ''}</span>` : ''}
     </div>
     <p class="card__text">${esc(course.description)}</p>
-    ${isArduino ? '<p class="card__text"><strong>Primera lección disponible.</strong> El resto del curso se incorporará por etapas. Accede con una cuenta habilitada.</p>' : ''}
+    ${isArduino ? '<p class="card__text"><strong>3 lecciones disponibles.</strong> El resto del curso se incorporará por etapas. Accede con una cuenta habilitada.</p>' : ''}
     ${topics.length ? `<details class="syllabus">
       <summary>${icon('book')} ${isArduino ? 'Ruta del curso' : 'Temario'} (${topics.length} temas)</summary>
       <ol>${topics.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
@@ -29,7 +29,7 @@ export function courseCard(course, index) {
     <div class="card__actions">
       ${isArduino
         ? `<a class="btn btn--primary" href="aula/" data-aula-link hidden>Entrar al Aula</a>
-          <a class="btn btn--outline" href="${waLink('Hola, quiero solicitar una cuenta para acceder a la primera lección del curso de Arduino en GLOBALT ROBOTICS.')}" target="_blank" rel="noopener">Solicitar acceso</a>`
+          <a class="btn btn--outline" href="${waLink('Hola, quiero solicitar una cuenta para acceder a las lecciones del curso de Arduino en GLOBALT ROBOTICS.')}" target="_blank" rel="noopener">Solicitar acceso</a>`
         : `${link ? `<a class="btn btn--outline" href="${esc(link)}" ${external ? 'target="_blank" rel="noopener"' : ''}>${icon('external')} Material y práctica</a>` : ''}
           <a class="btn btn--wa" href="${waLink(waMsg.course(course.title))}" target="_blank" rel="noopener">Inscribirme</a>`}
     </div>
