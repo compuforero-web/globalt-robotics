@@ -227,7 +227,9 @@ for (const bad of ['?leccion=no-existe', '?leccion=ARDUINO-PWM-BRILLO', '?leccio
   assert.equal(r.lesson, null, bad);
   assert.ok(r.requested);
 }
-assert.deepEqual(MANIFEST.map((m) => m.numero), [1, 2, 3, 4, 5, 6]);
+assert.deepEqual(MANIFEST.map((m) => m.numero), [1, 2, 3, 4, 5, 6, 7, 8]);
+assert.equal(resolveLesson('?leccion=arduino-ultrasonico-distancia').lesson.id, 'arduino-ultrasonico-distancia');
+assert.equal(resolveLesson('?leccion=arduino-ultrasonico-alerta').lesson.id, 'arduino-ultrasonico-alerta');
 assert.equal(resolveLesson('?leccion=arduino-potenciometro-pwm').lesson.id, 'arduino-potenciometro-pwm');
 assert.equal(resolveLesson('?leccion=arduino-boton-flanco').lesson.id, 'arduino-boton-flanco');
 for (const l of LESSONS) {
@@ -242,7 +244,8 @@ console.log(JSON.stringify({ ids: MANIFEST.map((m) => m.id), def: DEFAULT_LESSON
         self.assertEqual(sorted(data['ids']), sorted(api))
         self.assertEqual(set(api.values()), {'course-arduino'})
         self.assertEqual(data['ids'], ['arduino-led-serie', 'arduino-protoboard-semaforo', 'arduino-pwm-brillo',
-                                       'arduino-boton-entrada', 'arduino-boton-flanco', 'arduino-potenciometro-pwm'])
+                                       'arduino-boton-entrada', 'arduino-boton-flanco', 'arduino-potenciometro-pwm',
+                                       'arduino-ultrasonico-distancia', 'arduino-ultrasonico-alerta'])
 
     def test_examples_match_fixtures_and_hints_do_not_solve(self):
         node(f"""
@@ -581,6 +584,313 @@ for (const t of P.TOPIC_IDS) for (let i = 0; i < 4; i++) assert.doesNotMatch(P.h
 for (const ex of Object.values(P.EXAMPLES)) assert.ok(!/analogWrite/.test(ex.code));
 assert.deepEqual(P.default.pins, [9]);
 assert.equal(P.default.evaluation.stimulus.potScript.length, 5);
+""")
+
+
+class UltrasonicLessonTests(unittest.TestCase):
+    """Lecciones 7 y 8 (4.1 y 4.2 de la ruta): modelo HC-SR04 que responde al TRIG real, con HEX compilados de verdad."""
+
+    def test_echo_follows_real_trig_with_cycle_precision(self):
+        out = node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+import {{ NanoRunner }} from './games/laboratorio-arduino/src/nano-runner.js';
+import {{ SonarModel, echoUs, ECHO_DELAY_US, NO_ECHO_US, US_PER_CM }} from './games/laboratorio-arduino/src/sonar.js';
+assert.ok(Math.abs(US_PER_CM - 58.309) < 0.001);
+const hex = readFileSync('{FIX}/ultra-medida-us.hex', 'utf8');
+for (const cm of [2, 10, 35, 80, 150, 400, null]) {{
+  const r = new NanoRunner(hex);
+  const edges = [];   // ciclo exacto en que el modelo cambia el nivel eléctrico de D8
+  const set = r.setInput.bind(r);
+  r.setInput = (pin, high) => {{ if (pin === 8) edges.push({{ c: r.cpu.cycles, high, pinb: r.cpu.data[0x23] & 1 }}); set(pin, high); }};
+  const trig = [];
+  const s = new SonarModel(r, {{ cm, onTrigger: (x) => trig.push(x) }});
+  let inEcho = 0, sampled = 0;
+  // Muestrea el registro PINB (D8 = PB0) mientras corre el programa: lo que lee pulseIn.
+  for (let k = 0; k < 2000; k++) {{ r.runFor(0.1); sampled++; if (r.cpu.data[0x23] & 1) inEcho++; }}
+  // El modelo reafirma el nivel en cada cambio de puerto: solo cuentan las transiciones.
+  const moves = edges.filter((e, i) => i > 0 && e.high !== edges[i - 1].high);
+  const ups = moves.filter((e) => e.high), downs = moves.filter((e) => !e.high);
+  assert.ok(trig.length >= 2 && trig.every((t) => t.accepted && t.widthUs >= 10), JSON.stringify(trig[0]));
+  assert.ok(downs.length === ups.length || downs.length === ups.length - 1);   // puede acabar a mitad de un eco
+  downs.forEach((_, i) => {{
+    const u = ups[i];
+    const fall = trig[i].fall * 16000;
+    const start = fall + ECHO_DELAY_US * 16, width = echoUs(cm) * 16;
+    assert.ok(u.c - start >= 0 && u.c - start <= 6, `subida ${{cm}}: ${{u.c - start}} ciclos`);
+    assert.ok(Math.abs(downs[i].c - u.c - width) <= 6, `ancho ${{cm}}: ${{downs[i].c - u.c - width}} ciclos`);
+  }});
+  if (cm === null) assert.equal(echoUs(cm), NO_ECHO_US);
+  assert.ok(inEcho > 0 && inEcho < sampled);
+  // Sigue estando el ECHO impuesto aunque el programa ponga pull-up: no queda flotante ni en HIGH al acabar.
+  assert.equal(r.cpu.data[0x23] & 1, s.echoHigh ? 1 : 0);
+}}
+console.log('ok');
+""")
+        self.assertIn('ok', out)
+
+    def test_pulsein_accuracy_timeouts_and_no_echo(self):
+        out = node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+import {{ NanoRunner }} from './games/laboratorio-arduino/src/nano-runner.js';
+import {{ SonarModel, echoUs }} from './games/laboratorio-arduino/src/sonar.js';
+// El programa escribe «límite duración espera_µs» para pulseIn sin límite, con 30000 µs y con 5000 µs.
+const hex = readFileSync('{FIX}/ultra-medida-us.hex', 'utf8');
+const res = {{}};
+for (const cm of [2, 10, 35, 80, 150, 300, 400, null]) {{
+  let text = ''; const lines = [];
+  const r = new NanoRunner(hex, {{ onSerial: (b) => {{ if (b === 10) {{ lines.push(text.trim().split(' ').map(Number)); text = ''; }} else text += String.fromCharCode(b); }} }});
+  new SonarModel(r, {{ cm }});
+  r.runFor(500);
+  res[cm] = lines.slice(0, 3);
+  const want = echoUs(cm);
+  const [[, dFree, wFree], [, d30, w30], [, d5, w5]] = lines;
+  // pulseIn del núcleo mide un poco menos (la interrupción del temporizador 0 detiene su bucle de cuenta): ≤ 1 %.
+  assert.ok(dFree <= want + 2 && dFree >= want * 0.99 - 2, `${{cm}} cm: ${{dFree}} frente a ${{want}}`);
+  // El límite cuenta desde la llamada: incluye los 450 µs hasta que sube ECHO.
+  if (want + 450 < 29900) assert.ok(Math.abs(d30 - dFree) <= 8); else assert.equal(d30, 0);
+  if (want + 450 < 4900) assert.ok(Math.abs(d5 - dFree) <= 8); else assert.equal(d5, 0);
+  // Tiempos de espera: con límite nunca bloquea más del límite (+ unos µs).
+  assert.ok(w30 <= 30000 + 100, w30);
+  assert.ok(w5 <= 5000 + 100, w5);
+  if (want >= 5000) assert.ok(w5 >= 4700, w5);
+  if (cm === null) {{
+    assert.ok(wFree > 38000 && wFree < 39000, wFree);      // sin límite: espera al final del pulso de 38 ms
+    assert.ok(w30 > 29500, w30);                           // con 30000 µs: devuelve 0 a los ~30 ms
+  }}
+}}
+const cm = (d) => Math.floor(d / 58);
+assert.deepEqual([2, 10, 35, 80, 150, 300, 400].map((k) => cm(res[k][0][1])), [2, 9, 34, 79, 149, 299, 399]);
+console.log('ok');
+""")
+        self.assertIn('ok', out)
+
+    def test_invalid_trig_busy_distance_changes_and_reset(self):
+        out = node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+import {{ NanoRunner }} from './games/laboratorio-arduino/src/nano-runner.js';
+import {{ SonarModel, echoUs, MIN_TRIG_US, normalizeCm }} from './games/laboratorio-arduino/src/sonar.js';
+import {{ recordFast }} from './games/laboratorio-arduino/src/sim-worker.js';
+const fx = (n) => readFileSync('{FIX}/' + n + '.hex', 'utf8');
+// TRIG demasiado corto (programa real con delayMicroseconds(3)): se ignora y ECHO nunca sube.
+{{
+  const r = new NanoRunner(fx('ultra-trig-corto'));
+  const trig = [], echo = [];
+  const s = new SonarModel(r, {{ cm: 35, onTrigger: (x) => trig.push(x), onEcho: (x) => echo.push(x) }});
+  r.runFor(600);
+  assert.ok(trig.length >= 4 && trig.every((t) => !t.accepted && t.reason === 'corto' && t.widthUs < MIN_TRIG_US));
+  assert.equal(echo.length, 0);
+  assert.equal(s.measures, 0);
+}}
+// TRIG sin pinMode(OUTPUT): solo cambia la resistencia interna, el modelo no ve ningún pulso.
+{{
+  const r = new NanoRunner(fx('ultra-sin-pinmode'));
+  const trig = [];
+  new SonarModel(r, {{ cm: 35, onTrigger: (x) => trig.push(x) }});
+  r.runFor(400);
+  assert.equal(trig.length, 0);
+  assert.ok(['input', 'pullup'].includes(r.pinMode(7)));
+}}
+// Flancos aplicados al modelo (programa que no toca D7): límite de 10 µs exacto, disparo mientras mide y
+// cambio de distancia a mitad de la medida (vale la que había al salir la ráfaga; el cambio, para la siguiente).
+{{
+  const r = new NanoRunner(fx('ultra-fijo'));
+  const trig = [], echo = [];
+  const s = new SonarModel(r, {{ cm: 80, onTrigger: (x) => trig.push(x), onEcho: (x) => echo.push(x) }});
+  const pulse = (us) => {{ s.trigEdge(true); r.runUntilCycle(r.cpu.cycles + us * 16); s.trigEdge(false); }};
+  r.runFor(1);
+  const c0 = r.cpu.cycles; s.trigEdge(true); r.runUntilCycle(c0 + 150); s.trigEdge(false);   // < 10 µs
+  pulse(10);
+  r.runFor(1);
+  s.setDistance(20);            // ya salió la ráfaga a 80 cm
+  pulse(12);                    // llega mientras mide: ignorado
+  r.runFor(20);
+  pulse(12);
+  r.runFor(20);
+  assert.deepEqual(trig.map((t) => t.reason), ['corto', null, 'ocupado', null]);
+  assert.equal(trig[0].widthUs < 10, true);
+  assert.equal(echo.length, 2);
+  assert.equal(echo[0].cm, 80); assert.ok(Math.abs(echo[0].t1 - echo[0].t0 - echoUs(80) / 1000) < 0.001);
+  assert.equal(echo[1].cm, 20); assert.ok(Math.abs(echo[1].t1 - echo[1].t0 - echoUs(20) / 1000) < 0.001);
+  s.setDistance(null); pulse(10); r.runFor(40);
+  assert.equal(echo[2].cm, null); assert.ok(Math.abs(echo[2].t1 - echo[2].t0 - 38) < 0.001);
+  assert.deepEqual([normalizeCm(1), normalizeCm(401), normalizeCm(''), normalizeCm('35')], [2, null, null, 35]);
+}}
+// Reinicio: misma traza bit a bit con el mismo programa y guion; una ejecución nueva empieza con ECHO en LOW
+// y sin eventos pendientes de la anterior aunque se cortara a mitad de un eco.
+{{
+  const L = (await import('./games/laboratorio-arduino/src/lessons/ultrasonico-alerta.js')).default;
+  const a = recordFast(fx('alerta-solucion'), 2000, L.pins, L.evaluation.stimulus);
+  const b = recordFast(fx('alerta-solucion'), 2000, L.pins, L.evaluation.stimulus);
+  assert.equal(JSON.stringify(a), JSON.stringify(b));
+  const r1 = new NanoRunner(fx('ultra-solucion'));
+  const s1 = new SonarModel(r1, {{ cm: 150 }});
+  while (!s1.echoHigh) r1.runFor(0.05);
+  const r2 = new NanoRunner(fx('ultra-solucion'));
+  const echo2 = [];
+  const s2 = new SonarModel(r2, {{ cm: 10, onEcho: (x) => echo2.push(x) }});
+  assert.equal(r2.cpu.data[0x23] & 1, 0);
+  assert.equal(s2.busy, false);
+  r2.runFor(300);
+  assert.ok(echo2.length >= 2 && echo2.every((e) => e.cm === 10));
+}}
+console.log('ok');
+""")
+        self.assertIn('ok', out)
+
+    def test_distancia_solutions_pass_and_failures_explain(self):
+        r = evaluate_button('ultrasonico-distancia.js', [
+            'ultra-solucion', 'ultra-solucion-micros', 'ultra-trig-corto', 'ultra-factor', 'ultra-pines-cambiados',
+            'ultra-sin-pinmode', 'ultra-lento', 'ultra-baud', 'ultra-microsegundos', 'ultra-sin-espera', 'ultra-fijo',
+            'ultra-ejemplo', 'ultra-ej-sonido', 'ultra-ej-disparo'])
+        for name in ('ultra-solucion', 'ultra-solucion-micros'):
+            self.assertTrue(r[name]['passed'], r[name])
+        ok = lambda n: r[n]['checks']
+        d = lambda n, c: r[n]['details'][c]
+        self.assertIn('necesita al menos 10 µs', d('ultra-trig-corto', 'trig'))
+        self.assertIn('Un 0', d('ultra-trig-corto', 'distancia'))
+        self.assertEqual(ok('ultra-factor'), {'trig': True, 'formato': True, 'distancia': False, 'ritmo': True, 'baud': True})
+        self.assertIn('dividir el tiempo entre 58', d('ultra-factor', 'distancia'))
+        self.assertIn('¿están cambiados TRIG y ECHO?', d('ultra-pines-cambiados', 'trig'))
+        self.assertIn('pinMode(7, OUTPUT)', d('ultra-sin-pinmode', 'trig'))
+        self.assertEqual(ok('ultra-lento'), {'trig': True, 'formato': True, 'distancia': True, 'ritmo': False, 'baud': True})
+        self.assertEqual(ok('ultra-baud'), {'trig': True, 'formato': True, 'distancia': True, 'ritmo': True, 'baud': False})
+        self.assertIn('microsegundos', d('ultra-microsegundos', 'distancia'))
+        self.assertFalse(ok('ultra-sin-espera')['trig'])
+        self.assertIn('al menos 60 ms', d('ultra-sin-espera', 'trig'))
+        self.assertTrue(ok('ultra-sin-espera')['distancia'])
+        self.assertIn('no sigue a ninguna medida', d('ultra-fijo', 'distancia'))
+        for name in ('ultra-ejemplo', 'ultra-ej-sonido', 'ultra-ej-disparo'):
+            self.assertFalse(r[name]['passed'], name)
+        self.assertFalse(ok('ultra-ejemplo')['formato'])
+        alone = evaluate_button('ultrasonico-distancia.js', ['ultra-solucion'])
+        self.assertLess(alone['ultra-solucion']['ms'], 8000)
+
+    def test_alerta_solutions_pass_and_failures_explain(self):
+        r = evaluate_button('ultrasonico-alerta.js', [
+            'alerta-solucion', 'alerta-solucion-float', 'alerta-sin-timeout-400', 'alerta-sin-timeout',
+            'alerta-cero-encendido', 'alerta-invertido', 'alerta-sin-pwm', 'alerta-lento', 'alerta-siempre-fuera',
+            'alerta-espera-larga', 'alerta-otro-pin', 'alerta-ejemplo', 'alerta-ej-umbral', 'alerta-ej-escala'])
+        for name in ('alerta-solucion', 'alerta-solucion-float', 'alerta-sin-timeout-400'):
+            self.assertTrue(r[name]['passed'], r[name])
+        ok = lambda n: r[n]['checks']
+        d = lambda n, c: r[n]['details'][c]
+        # Sin tiempo máximo y sin tratar los ~38 000 µs: nunca avisa (y el LED queda apagado, que sí es correcto).
+        self.assertTrue(ok('alerta-sin-timeout')['brillo'])
+        self.assertFalse(ok('alerta-sin-timeout')['fuera'])
+        self.assertIn('38 000 µs', d('alerta-sin-timeout', 'fuera'))
+        self.assertIn('trata ese 0', d('alerta-cero-encendido', 'brillo'))
+        self.assertIn('invertido', d('alerta-invertido', 'brillo'))
+        self.assertIn('solo encendido o apagado', d('alerta-sin-pwm', 'pwm'))
+        self.assertFalse(ok('alerta-lento')['ciclo'])
+        self.assertIn('tarda demasiado', d('alerta-lento', 'brillo'))
+        self.assertIn('solo debe salir cuando no hay eco', d('alerta-siempre-fuera', 'fuera'))
+        self.assertEqual(ok('alerta-espera-larga'), {'trig': True, 'pwm': True, 'brillo': True, 'fuera': False, 'ciclo': True, 'baud': True})
+        self.assertIn('≤ 40 ms', d('alerta-espera-larga', 'fuera'))
+        self.assertIn('Hay PWM en D10', d('alerta-otro-pin', 'pwm'))
+        for name in ('alerta-ejemplo', 'alerta-ej-umbral', 'alerta-ej-escala'):
+            self.assertFalse(r[name]['passed'], name)
+        self.assertIn('pulseIn = 0', d('alerta-ejemplo', 'fuera'))
+        alone = evaluate_button('ultrasonico-alerta.js', ['alerta-solucion'])
+        self.assertLess(alone['alerta-solucion']['ms'], 8000)
+
+    def test_ultra_evaluators_use_only_the_measured_trace(self):
+        node("""
+import assert from 'node:assert/strict';
+import { evaluateDistancia, evaluateAlerta, DIST, ALERTA, segments, alertDuty } from './games/laboratorio-arduino/src/lessons/ultra-eval.js';
+import { echoUs } from './games/laboratorio-arduino/src/sonar.js';
+const line = (text, t) => [...text + '\\r\\n'].map((c, k) => ({ byte: c.charCodeAt(0), t: t + k, baud: 9615 }));
+const sonar = (S, period, width = 12) => {
+  const triggers = [], echoes = [];
+  for (let t = 1; t < S.durationMs; t += period) {
+    const seg = segments(S).find((s) => t >= s.t && t < s.end);
+    triggers.push({ rise: t, fall: t + width / 1000, widthUs: width, accepted: width >= 10, reason: width >= 10 ? null : 'corto' });
+    if (width >= 10) echoes.push({ t0: t + 0.5, t1: t + 0.5 + echoUs(seg.cm) / 1000, us: echoUs(seg.cm), cm: seg.cm });
+  }
+  return { triggers, echoes, distances: [] };
+};
+const dist = ({ period = 120, factor = 1, off = 0, width = 12 } = {}) => {
+  const tr = { durationMs: DIST.durationMs, windows: [], serial: [], sonar: sonar(DIST, period, width) };
+  for (const e of tr.sonar.echoes) tr.serial.push(...line(`Distancia: ${Math.round(e.cm * factor + off)} cm`, e.t1 + 0.2));
+  return tr;
+};
+const id = (r, c) => r.checks.find((x) => x.id === c).ok;
+assert.equal(evaluateDistancia(dist()).passed, true);
+assert.equal(evaluateDistancia(dist({ off: 4 })).passed, false);            // 150 cm ± 5,5 sí, 10 cm ± 1,3 no
+assert.equal(id(evaluateDistancia(dist({ factor: 1.025 })), 'distancia'), true);
+assert.equal(id(evaluateDistancia(dist({ factor: 1.05 })), 'distancia'), false);
+assert.equal(id(evaluateDistancia(dist({ period: 59 })), 'trig'), false);
+assert.equal(id(evaluateDistancia(dist({ period: 230 })), 'ritmo'), false);
+assert.equal(id(evaluateDistancia(dist({ period: 215 })), 'ritmo'), true);
+assert.equal(id(evaluateDistancia(dist({ width: 9.9 })), 'trig'), false);
+assert.equal(evaluateDistancia({ durationMs: DIST.durationMs, windows: [], serial: [] }).passed, false);
+// 4.2: LED ideal según la tabla; sin eco «Fuera de rango» 31 ms después del disparo.
+const alerta = ({ lag = 0, off = 0, wait = 31, always = false, period = 100 } = {}) => {
+  const tr = { durationMs: ALERTA.durationMs, windows: [], serial: [], sonar: sonar(ALERTA, period) };
+  const segs = segments(ALERTA);
+  for (let t = 0; t < ALERTA.durationMs; t += 20) {
+    const s = segs.find((x) => Math.max(0, t - lag) >= x.t && Math.max(0, t - lag) < x.end);
+    const d = Math.min(1, Math.max(0, alertDuty(s.cm) + off));
+    tr.windows.push({ pin: 9, t0: t, t1: t + 20, duty: d, freq: d > 0 && d < 1 ? 490.2 : null, rises: d > 0 && d < 1 ? 9 : 0, level: d >= 1 });
+  }
+  for (const x of tr.sonar.triggers) {
+    const s = segs.find((y) => x.rise >= y.t && x.rise < y.end);
+    if (s.cm === null || always) tr.serial.push(...line('Fuera de rango', x.fall + wait));
+  }
+  return tr;
+};
+assert.equal(evaluateAlerta(alerta()).passed, true);
+assert.equal(evaluateAlerta(alerta({ lag: 240 })).passed, true);
+assert.equal(id(evaluateAlerta(alerta({ lag: 290 })), 'brillo'), false);
+assert.equal(id(evaluateAlerta(alerta({ off: 0.055 })), 'brillo'), true);
+assert.equal(id(evaluateAlerta(alerta({ off: 0.07 })), 'brillo'), false);
+assert.equal(id(evaluateAlerta(alerta({ wait: 39 })), 'fuera'), true);
+assert.equal(id(evaluateAlerta(alerta({ wait: 41 })), 'fuera'), false);
+assert.equal(id(evaluateAlerta(alerta({ always: true })), 'fuera'), false);
+assert.equal(id(evaluateAlerta(alerta({ period: 299 })), 'ciclo'), true);
+assert.equal(id(evaluateAlerta(alerta({ period: 310 })), 'ciclo'), false);
+assert.deepEqual([70, 50, 40, 30, 20, 10, 6, null].map((c) => alertDuty(c)), [0, 0, 0.25, 0.5, 0.75, 1, 1, 0]);
+assert.equal(evaluateAlerta({ durationMs: ALERTA.durationMs, windows: [], serial: [] }).passed, false);
+""")
+
+    def test_ultra_examples_match_fixtures_and_hints_do_not_solve(self):
+        node(f"""
+import assert from 'node:assert/strict';
+import {{ readFileSync }} from 'node:fs';
+const fx = (n) => readFileSync('{FIX}/' + n + '.ino', 'utf8');
+const D = await import('./games/laboratorio-arduino/src/lessons/ultrasonico-distancia.js');
+const A = await import('./games/laboratorio-arduino/src/lessons/ultrasonico-alerta.js');
+assert.equal(fx('ultra-ejemplo'), D.EXAMPLE_CODE);
+for (const [k, e] of Object.entries(D.EXAMPLES)) assert.equal(fx('ultra-ej-' + k), e.code);
+assert.equal(fx('alerta-ejemplo'), A.EXAMPLE_CODE);
+for (const [k, e] of Object.entries(A.EXAMPLES)) assert.equal(fx('alerta-ej-' + k), e.code);
+assert.equal(D.chooseTopic({{ code: D.EXAMPLE_CODE, untouched: true, step: 1 }}).topic, 'paso-1');
+assert.equal(D.analyzeCode(D.EXAMPLE_CODE).topic, 'conversion');
+assert.equal(D.analyzeCode(fx('ultra-trig-corto')).topic, 'corto');
+assert.equal(D.analyzeCode(fx('ultra-lento')).topic, 'ritmo');
+assert.equal(D.analyzeCode(fx('ultra-solucion')).topic, 'comprobar');
+assert.equal(D.chooseTopic({{ code: fx('ultra-factor'), lastChecks: [{{ id: 'distancia', ok: false, detail: 'Es el doble' }}] }}).topic, 'conversion');
+assert.equal(D.chooseTopic({{ code: fx('ultra-sin-espera'), lastChecks: [{{ id: 'trig', ok: false, detail: 'deja al menos 60 ms' }}] }}).topic, 'disparo');
+assert.equal(D.chooseTopic({{ code: fx('ultra-solucion'), completed: true }}).topic, 'superado');
+assert.equal(A.analyzeCode(A.EXAMPLE_CODE).topic, 'pwm');
+assert.equal(A.analyzeCode(fx('alerta-sin-timeout')).topic, 'timeout');
+assert.equal(A.analyzeCode(fx('alerta-lento')).topic, 'ciclo');
+assert.equal(A.analyzeCode(fx('alerta-solucion')).topic, 'comprobar');
+assert.equal(A.chooseTopic({{ code: fx('alerta-cero-encendido'), lastChecks: [{{ id: 'brillo', ok: false, detail: 'Sin eco, pulseIn devuelve 0' }}] }}).topic, 'cero');
+assert.equal(A.chooseTopic({{ code: fx('alerta-espera-larga'), lastChecks: [{{ id: 'fuera', ok: false, detail: 'Pon un tiempo máximo a pulseIn' }}] }}).topic, 'timeout');
+assert.equal(A.chooseTopic({{ code: fx('alerta-solucion'), completed: true }}).topic, 'superado');
+const solvedD = /pulseIn[\\s\\S]*58[\\s\\S]*Distancia|Distancia[\\s\\S]*pulseIn[\\s\\S]*58/;
+const solvedA = /pulseIn[\\s\\S]*analogWrite[\\s\\S]*Fuera de rango|analogWrite[\\s\\S]*pulseIn[\\s\\S]*map\\s*\\(/;
+for (const t of D.TOPIC_IDS) for (let i = 0; i < 4; i++) assert.doesNotMatch(D.hintText(t, i, {{ delays: [], errorHelp: '' }}).text, solvedD);
+for (const t of A.TOPIC_IDS) for (let i = 0; i < 4; i++) assert.doesNotMatch(A.hintText(t, i, {{ delays: [], errorHelp: '' }}).text, solvedA);
+for (const ex of Object.values(D.EXAMPLES)) assert.ok(!/Distancia/.test(ex.code));
+for (const ex of Object.values(A.EXAMPLES)) assert.ok(!/analogWrite|pulseIn/.test(ex.code));
+assert.deepEqual(D.default.pins, [7]);
+assert.deepEqual(A.default.pins, [9, 7]);
+assert.deepEqual(D.default.evaluation.stimulus.sonarScript.map((s) => s.cm), [10, 35, 80, 150]);
+assert.deepEqual(A.default.evaluation.stimulus.sonarScript.map((s) => s.cm), [70, 40, 30, 20, 6, null, 30]);
 """)
 
 

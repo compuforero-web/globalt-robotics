@@ -57,6 +57,7 @@ export class NanoRunner {
     };
     this.pins = new Map();
     this.portListeners = [];   // modelos de entrada que reaccionan a cambios de DDR/PORT (pinMode, pull-up)
+    this.pinListeners = [];    // modelos que reaccionan a los flancos de una salida (p. ej. TRIG del HC-SR04): fn(pin, high)
     const ports = { B: new AVRIOPort(this.cpu, portBConfig), C: new AVRIOPort(this.cpu, portCConfig), D: new AVRIOPort(this.cpu, portDConfig) };
     this.ports = ports;
     for (const [name, port] of Object.entries(ports)) {
@@ -68,6 +69,7 @@ export class NanoRunner {
           if (high !== this.pins.get(pin)) {
             this.pins.set(pin, high);
             onPin(pin, high, this.timeMs);
+            for (const fn of this.pinListeners) fn(pin, high);
           }
         });
       });

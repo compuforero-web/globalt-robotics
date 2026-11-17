@@ -4,10 +4,13 @@
 // ni la traza de evaluación. Todo sale de los flancos del HEX emulado.
 // Las lecciones con pulsador añaden su modelo (button.js): en tiempo real lo mueve el estudiante (mensajes
 // 'input') o un guion; en la evaluación, siempre el guion reproducible de la lección, con precisión de ciclo.
+// Las lecciones del sensor ultrasónico añaden el HC-SR04 (sonar.js): el estudiante mueve el obstáculo ('distance')
+// o lo mueve el guion; el modelo responde a los pulsos reales de TRIG del programa.
 import { NanoRunner, CLOCK_HZ } from './nano-runner.js';
 import { PwmMeter, WINDOW_MS } from './pwm.js';
 import { ButtonModel } from './button.js';
 import { PotModel } from './pot.js';
+import { SonarModel } from './sonar.js';
 
 const SLICE_MS = 16;            // trabajo máximo por porción antes de devolver el control
 const MAX_LAG_MS = 100;         // si el equipo es lento, el tiempo simulado avanza más despacio
@@ -25,6 +28,9 @@ let buttonSent = '';            // último estado del pulsador enviado a la inte
 let pot = null;
 let lastAdc = null;             // última conversión del ADC pedida por el programa { channel, value, t }
 let potSent = '';
+let sonar = null;
+let sonarState = null;          // último disparo y último eco del HC-SR04 (para la interfaz)
+let sonarSent = '';
 
 function changed(w) {
   const prev = lastSent.get(w.pin);
@@ -45,6 +51,11 @@ function flush() {
     const state = { volts: pot.volts, adc: lastAdc && lastAdc.channel === pot.channel ? lastAdc.value : null };
     const key = JSON.stringify(state);
     if (key !== potSent) { potSent = key; postMessage({ type: 'pot', ...state }); }
+  }
+  if (sonar) {
+    const state = { cm: sonar.cm, trigMode: runner.pinMode(sonar.trig), measures: sonar.measures, echoHigh: sonar.echoHigh, ...sonarState };
+    const key = JSON.stringify(state);
+    if (key !== sonarSent) { sonarSent = key; postMessage({ type: 'sonar', ...state }); }
   }
   if (windows.length) { postMessage({ type: 'windows', windows }); windows = []; }
   if (serial.length) { postMessage({ type: 'serial', bytes: serial, baud }); serial = []; }
@@ -127,9 +138,21 @@ export function recordFast(hex, durationMs, watch = [], stimulus = null) {
       onChange: (volts, t) => analog.volts.push({ t, volts }) });
     pot.play(stimulus.potScript || []);
   }
+  if (stimulus?.sonar) {
+    // `sonarScript` = [{ t, cm }] (cm = null: sin obstáculo). La traza registra cada disparo en TRIG tal como lo
+    // generó el programa, cada ECHO que produjo el modelo y cada cambio del obstáculo.
+    const log = { trig: stimulus.sonar.trig, echo: stimulus.sonar.echo, triggers: [], echoes: [], distances: [] };
+    trace.sonar = log;
+    sonar = new SonarModel(runner, { trig: stimulus.sonar.trig, echo: stimulus.sonar.echo, cm: stimulus.sonar.cm ?? null,
+      onTrigger: (x) => { if (log.triggers.length < MAX_TRACE) log.triggers.push(x); },
+      onEcho: (x) => { if (log.echoes.length < MAX_TRACE) log.echoes.push(x); },
+      onDistance: (cm, t) => log.distances.push({ t, cm }) });
+    sonar.play(stimulus.sonarScript || []);
+  }
   advance(durationMs, (ws) => { for (const w of ws) trace.windows.push(w); });
   button = null;
   pot = null;
+  sonar = null;
   return trace;
 }
 
@@ -138,6 +161,7 @@ if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScop
     try {
       if (data.type === 'input') { if (button && runner) { button.press(Boolean(data.closed)); } return; }
       if (data.type === 'analog') { if (pot && runner) pot.set(data.volts); return; }
+      if (data.type === 'distance') { if (sonar && runner) sonar.setDistance(data.cm); return; }
       if (data.type !== 'start') return;
       const watch = Array.isArray(data.watch) ? data.watch : [];
       if (data.mode === 'fast') { postMessage({ type: 'trace', trace: recordFast(data.hex, data.durationMs, watch, data.stimulus || null) }); return; }
@@ -152,6 +176,13 @@ if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScop
       if (data.pot) {
         pot = new PotModel(runner, { channel: data.pot.channel, volts: data.pot.volts ?? 0 });
         if (Array.isArray(data.potScript)) pot.play(data.potScript);
+      }
+      if (data.sonar) {
+        sonarState = null;
+        sonar = new SonarModel(runner, { trig: data.sonar.trig, echo: data.sonar.echo, cm: data.sonar.cm ?? null,
+          onTrigger: (x) => { sonarState = { ...sonarState, trig: x }; },
+          onEcho: (x) => { sonarState = { ...sonarState, echo: x }; } });
+        if (Array.isArray(data.sonarScript)) sonar.play(data.sonarScript);
       }
       postMessage({ type: 'ready' });
       realtime(data.limitMs || Infinity);

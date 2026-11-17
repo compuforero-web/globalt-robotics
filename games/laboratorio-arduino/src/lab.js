@@ -24,6 +24,7 @@ export function startLab(L) {
   const circuit = L.circuit($('#circuit'), {
     onButton: (closed) => simulation.input(closed),
     onPot: (volts) => simulation.analog(volts),
+    onDistance: (cm) => simulation.distance(cm),
     onScript: L.evaluation.stimulus ? () => playScript() : null,
   });
 
@@ -283,8 +284,10 @@ export function startLab(L) {
     watch: L.pins,
     button: L.button || null,
     pot: L.pot || null,
+    sonar: L.sonar || null,
     onButton(state) { circuit.input?.(state); },
     onPot(state) { circuit.potState?.(state); },
+    onSonar(state) { circuit.sonarState?.(state); },
     onWindows(windows) {
       for (const w of windows) { circuit.update(w); if (w.level || w.duty > 0) pinsSeen.add(w.pin); }
     },
@@ -317,7 +320,7 @@ export function startLab(L) {
     clearMonitor();
     circuit.reset();
     pinsSeen = new Set();
-    simulation.start(hex, { potVolts: circuit.potVolts?.() ?? 0, ...options });
+    simulation.start(hex, { potVolts: circuit.potVolts?.() ?? 0, sonarCm: circuit.sonarCm?.() ?? null, ...options });
     $('#sim-state').textContent = 'En ejecución';
     $('#sim-panel').classList.add('is-running');
     updateButtons();
@@ -338,12 +341,13 @@ export function startLab(L) {
     withBusy(async () => {
       const hex = await ensureCompiled();
       if (!hex) return;
-      const { script = null, potScript = null } = L.evaluation.stimulus;
-      startSimulation(hex, { script, potScript });
-      setStatus(`Reproduciendo el guion del reto en tiempo real (${L.evaluation.durationMs / 1000} s): ${potScript ? 'el potenciómetro' : 'el pulsador'} se mueve solo, como en la comprobación.`, 'ok');
+      const { script = null, potScript = null, sonarScript = null } = L.evaluation.stimulus;
+      startSimulation(hex, { script, potScript, sonarScript });
+      const what = sonarScript ? 'el obstáculo' : potScript ? 'el potenciómetro' : 'el pulsador';
+      setStatus(`Reproduciendo el guion del reto en tiempo real (${L.evaluation.durationMs / 1000} s): ${what} se mueve solo, como en la comprobación.`, 'ok');
     });
   }
-  $('#btn-reset').addEventListener('click', () => { if (simulation.hex) { startSimulation(simulation.hex, { script: simulation.script, potScript: simulation.potScript }); setStatus('Microcontrolador reiniciado (como pulsar RESET).'); } });
+  $('#btn-reset').addEventListener('click', () => { if (simulation.hex) { startSimulation(simulation.hex, { script: simulation.script, potScript: simulation.potScript, sonarScript: simulation.sonarScript }); setStatus('Microcontrolador reiniciado (como pulsar RESET).'); } });
   $('#btn-clear').addEventListener('click', clearMonitor);
   $('#btn-save').addEventListener('click', () => { if (save()) setStatus('Código guardado en este navegador.', 'ok'); });
   $('#btn-restore').addEventListener('click', restoreExample);

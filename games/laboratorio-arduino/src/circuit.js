@@ -394,3 +394,170 @@ export function createPotCircuit(root, { onPot = () => false, onScript = null } 
     },
   };
 }
+
+const SONAR_MIN = 2;
+const SONAR_MAX = 400;
+const fmtUs = (us) => `${Math.round(us)} µs`;
+/** Posición del obstáculo en el dibujo (escala logarítmica: 2 cm pegado al sensor, 400 cm al fondo). */
+const wallX = (cm) => 252 + (Math.log(cm / SONAR_MIN) / Math.log(SONAR_MAX / SONAR_MIN)) * 92;
+const gndSym = (x, y) => `<path d="M${x - 7} ${y} H${x + 7} M${x - 4.5} ${y + 3} H${x + 4.5} M${x - 2} ${y + 6} H${x + 2}" class="c-gnd-sym"/>`;
+
+/**
+ * Sensor ultrasónico HC-SR04 (VCC a 5 V, TRIG en D7, ECHO en D8, GND) y obstáculo móvil; con `led`, además un LED
+ * con 220 Ω en D9 y medidor de % y Hz. El control deslizante y la casilla «Sin obstáculo» fijan la distancia del
+ * modelo (`onDistance(cm | null)`). `sonarState(estado)` muestra lo que ocurre en el Worker: el obstáculo vigente,
+ * el último pulso TRIG que generó el programa (con su duración) y el último ECHO que devolvió el módulo.
+ * El resultado que calcula el programa solo aparece en el monitor serie. `onScript()` reproduce el guion del reto.
+ */
+export function createSonarCircuit(root, { onDistance = () => false, onScript = null, led = false, cm = 100 } = {}) {
+  const [GND_X, V5_X] = [50, 98];
+  const [TRIG_X, ECHO_X, LED_X] = [nanoX(7), nanoX(8), nanoX(9)];
+  const PIN_Y = { gnd: 76, echo: 96, trig: 112, vcc: 128 };
+  root.innerHTML = `
+  <svg class="circuit circuit--sonar" viewBox="0 ${led ? 18 : 52} 360 ${led ? 206 : 172}" role="img" aria-labelledby="circuit-title circuit-desc">
+    <title id="circuit-title">Sensor ultrasónico HC-SR04${led ? ' y LED en D9' : ''}</title>
+    <desc id="circuit-desc">Arduino Nano compatible y sensor ultrasónico HC-SR04: VCC a 5 V, TRIG a D7, ECHO a D8 y GND a GND. Delante del sensor hay un obstáculo a una distancia que puedes cambiar.${led ? ' D9 va por una resistencia de 220 ohmios al LED y el cátodo a GND.' : ''}</desc>
+    <rect x="8" y="120" width="150" height="72" rx="7" class="c-pcb"/>
+    <rect x="112" y="142" width="34" height="24" rx="3" class="c-chip"/>
+    <text x="129" y="157" class="c-chip-txt" text-anchor="middle">328P</text>
+    <text x="134" y="184" class="c-label" text-anchor="middle">NANO</text>
+    ${NANO_PINS.map((p) => `<circle cx="${nanoX(p)}" cy="130" r="2.8" class="c-hole ${[7, 8].includes(p) || (led && p === 9) ? 'is-used' : ''}"/>
+      <text x="${nanoX(p)}" y="141" class="c-tiny" text-anchor="middle">${p}</text>`).join('')}
+    ${[[GND_X, 'GND'], [V5_X, '5V']].map(([x, t]) => `<circle cx="${x}" cy="180" r="2.8" class="c-hole is-used"/>
+      <text x="${x}" y="172" class="c-tiny" text-anchor="middle">${t}</text>`).join('')}
+    <path d="M${ECHO_X} 130 V${PIN_Y.echo} H196" class="c-wire c-wire--echo"/>
+    <path d="M${TRIG_X} 130 V${PIN_Y.trig} H196" class="c-wire c-wire--trig"/>
+    <path d="M${V5_X} 180 V204 H180 V${PIN_Y.vcc} H196" class="c-wire c-wire--5v"/>
+    <path d="M196 ${PIN_Y.gnd} H182 V84" class="c-wire c-wire--gnd"/>${gndSym(182, 84)}
+    <path d="M${GND_X} 180 V202" class="c-wire c-wire--gnd"/>${gndSym(GND_X, 202)}
+    <text x="${(ECHO_X + 176) / 2}" y="${PIN_Y.echo - 4}" class="c-tiny" text-anchor="middle">D8 · ECHO</text>
+    <text x="${(TRIG_X + 196) / 2}" y="${PIN_Y.trig - 4}" class="c-tiny" text-anchor="middle">D7 · TRIG</text>
+    <g class="c-sonar">
+      <rect x="196" y="66" width="30" height="84" rx="3" class="c-sonar-pcb"/>
+      ${Object.entries(PIN_Y).map(([k, y]) => `<circle cx="196" cy="${y}" r="2.6" class="c-hole is-used"/>
+        <text x="200" y="${y + 2.5}" class="c-tiny">${k.toUpperCase()}</text>`).join('')}
+      <rect x="226" y="72" width="14" height="30" rx="3" class="c-sonar-can"/><text x="233" y="90" class="c-tiny" text-anchor="middle">T</text>
+      <rect x="226" y="114" width="14" height="30" rx="3" class="c-sonar-can"/><text x="233" y="132" class="c-tiny" text-anchor="middle">R</text>
+      <text x="211" y="62" class="c-small" text-anchor="middle">HC-SR04</text>
+    </g>
+    <path class="c-beam" d="M240 87 H300"/>
+    <path class="c-beam c-beam--back" d="M300 129 H240"/>
+    <g class="c-wall"><rect x="0" y="66" width="8" height="84" class="c-wall-body"/></g>
+    <path class="c-ruler" d="M240 160 H300"/>
+    <text class="c-dist c-small" x="270" y="172" text-anchor="middle">100 cm</text>
+    ${led ? `<path d="M${LED_X} 130 V44 H200" class="c-wire c-wire--sig"/>
+    <g transform="translate(200 36)"><rect width="48" height="16" rx="6" class="c-res"/>
+      <rect x="10" y="0" width="4" height="16" class="c-band1"/><rect x="18" y="0" width="4" height="16" class="c-band1"/>
+      <rect x="26" y="0" width="4" height="16" class="c-band2"/><rect x="38" y="0" width="3" height="16" class="c-band3"/></g>
+    <text x="224" y="30" class="c-small" text-anchor="middle">220 Ω</text>
+    <path d="M248 44 H270" class="c-wire c-wire--sig"/>
+    <g class="c-led" data-pin="9" transform="translate(282 44) rotate(90)">
+      <circle r="22" class="c-glow"/>
+      <path d="M-11 6 V-8 a11 11 0 0 1 22 0 V6 z" class="c-led-body"/>
+      <rect x="-13" y="6" width="26" height="4" rx="2" class="c-led-rim"/>
+    </g>
+    <text x="282" y="30" class="c-tiny" text-anchor="middle">LED (D9)</text>
+    <path d="M293 44 H330 V52" class="c-wire c-wire--gnd"/>${gndSym(330, 52)}` : ''}
+  </svg>
+  ${led ? `<div class="pwm-meter">
+    <span class="pwm-meter__label">D9 medido</span>
+    <span class="pwm-meter__bar" aria-hidden="true"><span class="pwm-meter__fill"></span></span>
+    <span class="pwm-meter__value">0 %</span>
+    <span class="pwm-meter__freq">salida continua</span>
+  </div>` : ''}
+  <div class="sonar-ctl">
+    <label class="sonar-ctl__label" for="sonar-range">Obstáculo</label>
+    <input id="sonar-range" class="sonar-ctl__range" type="range" min="${SONAR_MIN}" max="${SONAR_MAX}" step="1" value="${cm}" aria-describedby="sonar-ctl-help">
+    <output class="sonar-ctl__cm" for="sonar-range"></output>
+    <label class="sonar-ctl__none"><input type="checkbox" class="sonar-ctl__check"> Sin obstáculo (sin eco)</label>
+    <dl class="sonar-ctl__read">
+      <div><dt>Último pulso TRIG (D7)</dt><dd class="sonar-ctl__trig">—</dd></div>
+      <div><dt>Último ECHO del módulo (D8)</dt><dd class="sonar-ctl__echo">—</dd></div>
+    </dl>
+    ${onScript ? '<button type="button" class="btn btn--ghost btn--sm sonar-ctl__script">Reproducir guion del reto</button>' : ''}
+    <p id="sonar-ctl-help" class="sonar-ctl__help muted small">Arrastra el control o usa las flechas (1 cm), Re Pág/Av Pág, Inicio (2 cm) y Fin (400 cm). Funciona con la simulación en marcha; el cambio vale para el siguiente disparo. Lo que calcula tu programa aparece en el monitor serie.</p>
+  </div>
+  ${pinStripHtml()}`;
+  const ledEl = root.querySelector('.c-led');
+  const strip = pinStrip(root);
+  const meterEl = root.querySelector('.pwm-meter');
+  const range = root.querySelector('.sonar-ctl__range');
+  const check = root.querySelector('.sonar-ctl__check');
+  const cmEl = root.querySelector('.sonar-ctl__cm');
+  const trigEl = root.querySelector('.sonar-ctl__trig');
+  const echoEl = root.querySelector('.sonar-ctl__echo');
+  const wall = root.querySelector('.c-wall');
+  const beams = [...root.querySelectorAll('.c-beam')];
+  const ruler = root.querySelector('.c-ruler');
+  const distEl = root.querySelector('.c-dist');
+  const svg = root.querySelector('svg');
+  let dragging = false;
+  let lastUser = -Infinity;   // el eco del Worker no debe devolver el control a una posición anterior
+  let measures = 0;
+  const current = () => (check.checked ? null : Number(range.value));
+  const show = (v) => {
+    const none = v === null;
+    range.disabled = none;
+    cmEl.textContent = none ? 'sin obstáculo' : `${v} cm`;
+    range.setAttribute('aria-valuetext', `${none ? Number(range.value) : v} centímetros${none ? ' (desactivado: sin obstáculo)' : ''}`);
+    const x = none ? 352 : wallX(v);
+    wall.setAttribute('transform', `translate(${x} 0)`);
+    wall.classList.toggle('is-none', none);
+    for (const b of beams) b.setAttribute('d', b.classList.contains('c-beam--back') ? `M${x} 129 H240` : `M240 87 H${x}`);
+    ruler.setAttribute('d', `M240 160 H${none ? 340 : x}`);
+    distEl.setAttribute('x', String((240 + (none ? 340 : x)) / 2));
+    distEl.textContent = none ? 'sin obstáculo' : `${v} cm`;
+    svg.classList.toggle('is-noecho', none);
+  };
+  const changed = () => { lastUser = performance.now(); show(current()); onDistance(current()); };
+  range.addEventListener('input', changed);
+  check.addEventListener('change', changed);
+  range.addEventListener('pointerdown', () => { dragging = true; });
+  for (const ev of ['pointerup', 'pointercancel', 'blur']) range.addEventListener(ev, () => { dragging = false; });
+  root.querySelector('.sonar-ctl__script')?.addEventListener('click', () => onScript());
+  show(current());
+  const showMeter = (w) => {
+    if (!meterEl) return;
+    const pwm = isPwmWindow(w);
+    const duty = pwm ? w.duty : (w.level ? 1 : 0);
+    meterEl.querySelector('.pwm-meter__fill').style.width = `${(duty * 100).toFixed(1)}%`;
+    meterEl.querySelector('.pwm-meter__value').textContent = pct(duty);
+    meterEl.querySelector('.pwm-meter__freq').textContent = pwm && w.freq ? `PWM a ${Math.round(w.freq)} Hz` : 'salida continua';
+  };
+  const ping = () => {
+    svg.classList.remove('is-ping');
+    void svg.getBBox?.();
+    svg.classList.add('is-ping');
+  };
+  return {
+    update(w) {
+      strip.update(w);
+      if (led && w.pin === 9) { applyLed(ledEl, w); showMeter(w); }
+    },
+    /** Estado real del modelo en el Worker: obstáculo, último TRIG y último ECHO (ver sim-worker.js). */
+    sonarState({ cm: v, trigMode, measures: n, trig, echo }) {
+      if (!dragging && performance.now() - lastUser > 400 && v !== current()) {
+        check.checked = v === null;
+        if (v !== null) range.value = String(Math.round(v));
+        show(v === null ? null : Math.round(v));
+      }
+      if (!trig) trigEl.textContent = trigMode === 'output' ? 'sin pulsos todavía' : 'sin pulsos: D7 no está configurado como salida';
+      else if (trig.accepted) trigEl.textContent = `${trig.widthUs.toFixed(1).replace('.', ',')} µs en alto ✓ disparo válido`;
+      else trigEl.textContent = `${trig.widthUs.toFixed(1).replace('.', ',')} µs en alto ✗ ${trig.reason === 'corto' ? 'ignorado: necesita ≥ 10 µs' : 'ignorado: el módulo aún estaba midiendo'}`;
+      echoEl.textContent = !echo ? '—' : echo.cm === null ? `${fmtUs(echo.us)} en alto: sin eco (tiempo máximo del módulo)`
+        : `${fmtUs(echo.us)} en alto (obstáculo a ${String(Math.round(echo.cm * 10) / 10).replace('.', ',')} cm)`;
+      if (n > measures) ping();
+      measures = n;
+    },
+    sonarCm: current,
+    stopped() { svg.classList.remove('is-ping'); },
+    reset() {
+      strip.reset();
+      if (led) this.update({ pin: 9, duty: 0, level: false, rises: 0 });
+      trigEl.textContent = '—';
+      echoEl.textContent = '—';
+      measures = 0;
+      svg.classList.remove('is-ping');
+    },
+  };
+}
