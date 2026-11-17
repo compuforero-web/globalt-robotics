@@ -55,7 +55,7 @@ import L from './games/laboratorio-arduino/src/lessons/evasor-decision.js';
 import { MANIFEST } from './games/laboratorio-arduino/src/lessons/index.js';
 import { PIN_MAPS, pinMapProblems } from './games/laboratorio-arduino/src/motor.js';
 assert.equal(L.numero, 14);
-assert.equal(MANIFEST.at(-1).id, L.id);
+assert.ok(MANIFEST.some(m => m.id === L.id));
 assert.deepEqual(pinMapProblems(PIN_MAPS.robot, {7:'TRIG',8:'ECHO',9:'servo'}), []);
 assert.equal(readFileSync('tests/fixtures/laboratorio/evasor-ejemplo.ino', 'utf8'), L.exampleCode);
 assert.equal(readFileSync('tests/fixtures/laboratorio/evasor-ej-estados.ino', 'utf8'), L.examples.estados.code);

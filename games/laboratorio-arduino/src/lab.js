@@ -25,6 +25,7 @@ export function startLab(L) {
     onButton: (closed) => simulation.input(closed),
     onPot: (volts) => simulation.analog(volts),
     onDistance: (cm) => simulation.distance(cm),
+    onTrack: () => { if (simulation.running) startSimulation(simulation.hex); },
     onScript: L.evaluation.stimulus ? () => playScript() : null,
   });
 
@@ -201,6 +202,7 @@ export function startLab(L) {
     $('#btn-check').disabled = busy || servicePending;
     $('#btn-stop').disabled = !simulation.running;
     $('#btn-reset').disabled = busy || !simulation.hex;
+    circuit.setBusy?.(busy);
   }
   function setService(ready, info = '', pending = false) {
     const el = $('#service');
@@ -287,6 +289,8 @@ export function startLab(L) {
     sonar: L.sonar || null,
     motors: L.motors || null,
     servo: L.servo || null,
+    world: L.world || null,
+    onWorld(state) { circuit.worldState?.(state); },
     onButton(state) { circuit.input?.(state); },
     onPot(state) { circuit.potState?.(state); },
     onSonar(state) { circuit.sonarState?.(state); },
@@ -324,7 +328,7 @@ export function startLab(L) {
     clearMonitor();
     circuit.reset();
     pinsSeen = new Set();
-    simulation.start(hex, { potVolts: circuit.potVolts?.() ?? 0, sonarCm: circuit.sonarCm?.() ?? null, ...options });
+    simulation.start(hex, { worldTrack: circuit.worldTrack?.() ?? null, potVolts: circuit.potVolts?.() ?? 0, sonarCm: circuit.sonarCm?.() ?? null, ...options });
     $('#sim-state').textContent = 'En ejecución';
     $('#sim-panel').classList.add('is-running');
     updateButtons();
@@ -364,12 +368,24 @@ export function startLab(L) {
   }
   $('#btn-check').addEventListener('click', () => withBusy(async () => {
     const code = editor.value;
+    if (L.evaluation.runs) simulation.stop();
     $('#eval-result').innerHTML = '<p class="muted">Compilando y evaluando…</p>';
     const hex = await ensureCompiled();
     if (!hex) { $('#eval-result').innerHTML = '<p class="muted">La evaluación necesita un programa compilado sin errores.</p>'; return; }
     setStatus(`Evaluando: ${L.evaluation.durationMs / 1000} s simulados…`, 'busy');
     try {
-      const result = L.evaluation.evaluate(await recordTrace(hex, L.evaluation.durationMs, { watch: L.pins, stimulus: L.evaluation.stimulus || null }));
+      let result;
+      if (L.evaluation.runs) {
+        const traces = [];
+        for (const [i, run] of L.evaluation.runs.entries()) {
+          const report = (simMs = 0) => setStatus('Evaluando pista ' + (i + 1) + '/' + L.evaluation.runs.length + ': ' + run.title + ' · ' + Math.floor(simMs / 1000) + '/' + L.evaluation.durationMs / 1000 + ' s simulados…', 'busy');
+          report();
+          traces.push(await recordTrace(hex, L.evaluation.durationMs, { watch: L.pins, stimulus: run.stimulus, wallLimitMs: 90000, onProgress: report }));
+        }
+        result = L.evaluation.evaluate(traces);
+      } else {
+        result = L.evaluation.evaluate(await recordTrace(hex, L.evaluation.durationMs, { watch: L.pins, stimulus: L.evaluation.stimulus || null }));
+      }
       progress.recordAttempt(L.id);
       lastEval = { code, checks: result.checks };
       renderChecks(result);

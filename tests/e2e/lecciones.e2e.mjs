@@ -71,7 +71,7 @@ async function pickLesson(p, id) {
   await open(p);
   assert.equal(await p.textContent('.lab-top__course'), 'Electrónica y C++ con Arduino · Lección 1');
   assert.match(await p.textContent('.lesson-picker__box > summary'), /Lección 1 de 13/);
-  assert.equal(await p.locator('.lesson-picker__list a').count(), 14);
+  assert.equal(await p.locator('.lesson-picker__list a').count(), 15);
   assert.equal(await p.getAttribute(`.lesson-picker__list a[data-lesson="${L1}"]`, 'aria-current'), 'page');
   assert.equal(await p.locator('.lesson-picker__prev').count(), 0);   // la lección 1 no tiene previas
 
@@ -127,7 +127,7 @@ async function pickLesson(p, id) {
     await p.goto(`${LAB}?leccion=${bad}`);
     await p.waitForSelector('#unknown-lesson');
     assert.equal(await p.isVisible('.lab__work'), false);
-    assert.equal(await p.locator('.lesson-picker__list a').count(), 14);
+    assert.equal(await p.locator('.lesson-picker__list a').count(), 15);
     assert.match(await p.textContent('#unknown-lesson'), /No hay ninguna lección/);
     assert.equal(await p.locator('#unknown-lesson script').count(), 0);
   }

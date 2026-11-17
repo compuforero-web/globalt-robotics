@@ -64,14 +64,14 @@ const waitRead = (p, ch, orderRe, speedRe, timeout = 6000) => p.waitForFunction(
   const p = await ctx.newPage();
   await open(p, L9);
   assert.match(await p.textContent('.lab-top__course'), /Lección 9/);
-  assert.equal(await p.locator('.lesson-picker__list a').count(), 14);
+  assert.equal(await p.locator('.lesson-picker__list a').count(), 15);
   assert.equal(await p.locator('#circuit .c-motor').count(), 1);
   assert.equal(await p.locator('#circuit .c-jumper').count(), 1);
   const desc = await p.textContent('#circuit-desc');
   for (const re of [/IN1 del L298N a D7/, /IN2 del L298N a D8/, /ENA lleva el puente/, /batería de 7 a 9 voltios/, /GND común/, /no alimenta los motores/]) assert.match(desc, re);
   assert.match(await p.textContent('#circuit svg'), /GND común[\s\S]*batería 7–9 V|batería 7–9 V[\s\S]*GND común/);
   assert.match(await p.textContent('#lesson'), /Por qué el Nano no mueve el motor/);
-  log('lección 9: selector con 14 lecciones; circuito con L298N, puente en ENA, batería del motor y GND común descritos');
+  log('lección 9: selector con 15 lecciones; circuito con L298N, puente en ENA, batería del motor y GND común descritos');
 
   // Programa vacío: nada se mueve (no hay animación preparada).
   await setCode(p, 'void setup() {}\nvoid loop() {}\n');

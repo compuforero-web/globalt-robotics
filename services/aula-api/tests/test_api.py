@@ -313,7 +313,7 @@ def test_borradores_aislados_por_leccion():
                                                       'arduino-boton-entrada', 'arduino-boton-flanco', 'arduino-potenciometro-pwm',
                                                       'arduino-ultrasonico-distancia', 'arduino-ultrasonico-alerta',
                                                       'arduino-l298n-direccion', 'arduino-l298n-velocidad', 'arduino-l298n-dos-motores',
-                                                      'arduino-servo-posiciones', 'arduino-servo-barrido', 'arduino-evasor-decision')}
+                                                      'arduino-servo-posiciones', 'arduino-servo-barrido', 'arduino-evasor-decision', 'arduino-evasor-pista')}
     with cliente() as c, cliente() as otro:
         h = inscrito(c, 'borr.lecciones@example.com')
         ho = inscrito(otro, 'borr.lecciones.otro@example.com')
