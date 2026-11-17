@@ -21,7 +21,7 @@ export function courseCard(course, index) {
       ${course.duration ? `<span class="tag tag--soft">${icon('clock')} ${esc(course.duration)}${isArduino ? ' previstas' : ''}</span>` : ''}
     </div>
     <p class="card__text">${esc(course.description)}</p>
-    ${isArduino ? '<p class="card__text"><strong>3 lecciones disponibles.</strong> El resto del curso se incorporará por etapas. Accede con una cuenta habilitada.</p>' : ''}
+    ${isArduino ? '<p class="card__text"><strong>5 lecciones disponibles.</strong> El resto del curso se incorporará por etapas. Accede con una cuenta habilitada.</p>' : ''}
     ${topics.length ? `<details class="syllabus">
       <summary>${icon('book')} ${isArduino ? 'Ruta del curso' : 'Temario'} (${topics.length} temas)</summary>
       <ol>${topics.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
