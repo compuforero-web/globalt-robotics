@@ -32,6 +32,7 @@ LECCIONES = {
     'arduino-pwm-brillo': 'course-arduino',
     'arduino-boton-entrada': 'course-arduino',
     'arduino-boton-flanco': 'course-arduino',
+    'arduino-potenciometro-pwm': 'course-arduino',
 }
 
 

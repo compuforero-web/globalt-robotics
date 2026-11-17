@@ -6,19 +6,23 @@ const WATCHDOG_MS = 4000;     // sin señales del Worker durante este tiempo →
 const MAX_RUN_MS = 10 * 60 * 1000;
 
 export class Simulation {
-  constructor({ onWindows, onSerial, onStatus, onStop, onButton = () => {}, watch = [], button = null }) {
-    Object.assign(this, { onWindows, onSerial, onStatus, onStop, onButton, watch, button });
+  constructor({ onWindows, onSerial, onStatus, onStop, onButton = () => {}, onPot = () => {}, watch = [], button = null, pot = null }) {
+    Object.assign(this, { onWindows, onSerial, onStatus, onStop, onButton, onPot, watch, button, pot });
     this.worker = null;
     this.hex = null;
   }
 
   get running() { return Boolean(this.worker); }
 
-  /** `script` (opcional) = guion [{ t, closed }] que mueve el pulsador desde t = 0. */
-  start(hex, { script = null } = {}) {
+  /**
+   * `script` (opcional) = guion [{ t, closed }] que mueve el pulsador desde t = 0; `potScript` = [{ t, volts }]
+   * para el potenciómetro; `potVolts` = posición inicial del potenciómetro.
+   */
+  start(hex, { script = null, potScript = null, potVolts = 0 } = {}) {
     this.stop(null);
     this.hex = hex;
     this.script = script;
+    this.potScript = potScript;
     const worker = new Worker(WORKER_URL, { type: 'module' });
     this.worker = worker;
     let lastSignal = performance.now();
@@ -32,11 +36,20 @@ export class Simulation {
       else if (data.type === 'serial') this.onSerial(data.bytes, data.baud);
       else if (data.type === 'status') this.onStatus(data.simMs);
       else if (data.type === 'button') this.onButton(data);
+      else if (data.type === 'pot') this.onPot(data);
       else if (data.type === 'limit') this.stop('Simulación pausada tras 10 minutos simulados.');
       else if (data.type === 'error') this.stop('No se pudo cargar el programa: ' + data.message);
     };
     worker.onerror = (event) => { event.preventDefault?.(); this.stop('La simulación no pudo iniciarse en este navegador.'); };
-    worker.postMessage({ type: 'start', mode: 'realtime', hex, limitMs: MAX_RUN_MS, watch: this.watch, button: this.button, script });
+    const pot = this.pot ? { ...this.pot, volts: potScript?.[0]?.t === 0 ? potScript[0].volts : potVolts } : null;
+    worker.postMessage({ type: 'start', mode: 'realtime', hex, limitMs: MAX_RUN_MS, watch: this.watch, button: this.button, script, pot, potScript });
+  }
+
+  /** El estudiante mueve el potenciómetro a `volts` (0–5 V). */
+  analog(volts) {
+    if (!this.worker || !this.pot) return false;
+    this.worker.postMessage({ type: 'analog', volts: Number(volts) });
+    return true;
   }
 
   /** El estudiante pulsa (true) o suelta (false) el pulsador del circuito. */
@@ -55,7 +68,7 @@ export class Simulation {
   }
 
   /** Reinicia el microcontrolador con el mismo programa (como el botón RESET). */
-  reset() { if (this.hex) this.start(this.hex, { script: this.script }); }
+  reset(potVolts = 0) { if (this.hex) this.start(this.hex, { script: this.script, potScript: this.potScript, potVolts }); }
 }
 
 /** Ejecuta el programa en modo rápido durante `durationMs` simulados y devuelve la traza. */

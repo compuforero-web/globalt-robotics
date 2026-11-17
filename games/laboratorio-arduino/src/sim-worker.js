@@ -7,6 +7,7 @@
 import { NanoRunner, CLOCK_HZ } from './nano-runner.js';
 import { PwmMeter, WINDOW_MS } from './pwm.js';
 import { ButtonModel } from './button.js';
+import { PotModel } from './pot.js';
 
 const SLICE_MS = 16;            // trabajo máximo por porción antes de devolver el control
 const MAX_LAG_MS = 100;         // si el equipo es lento, el tiempo simulado avanza más despacio
@@ -21,6 +22,9 @@ let baud = 0;
 const lastSent = new Map();     // pin → última ventana enviada (no se repiten estados iguales)
 let button = null;
 let buttonSent = '';            // último estado del pulsador enviado a la interfaz
+let pot = null;
+let lastAdc = null;             // última conversión del ADC pedida por el programa { channel, value, t }
+let potSent = '';
 
 function changed(w) {
   const prev = lastSent.get(w.pin);
@@ -36,6 +40,11 @@ function flush() {
     const state = { closed: button.closed, mode: button.mode, level: floating ? null : button.level };
     const key = JSON.stringify(state);
     if (key !== buttonSent) { buttonSent = key; postMessage({ type: 'button', ...state }); }
+  }
+  if (pot) {
+    const state = { volts: pot.volts, adc: lastAdc && lastAdc.channel === pot.channel ? lastAdc.value : null };
+    const key = JSON.stringify(state);
+    if (key !== potSent) { potSent = key; postMessage({ type: 'pot', ...state }); }
   }
   if (windows.length) { postMessage({ type: 'windows', windows }); windows = []; }
   if (serial.length) { postMessage({ type: 'serial', bytes: serial, baud }); serial = []; }
@@ -88,7 +97,7 @@ function attachButton(config, script, record = {}) {
  * La traza añade `input` = { pin, contact: [{ t, closed }], modes: [{ t, mode }] } con lo que ocurrió en el pin.
  */
 export function recordFast(hex, durationMs, watch = [], stimulus = null) {
-  const trace = { pins: [], serial: [], windows: [], durationMs, truncatedPins: [] };
+  const trace = { pins: [], serial: [], windows: [], durationMs, truncatedPins: [], adc: [] };
   const perPin = new Map();
   meter = new PwmMeter({ watch });
   runner = new NanoRunner(hex, {
@@ -100,6 +109,7 @@ export function recordFast(hex, durationMs, watch = [], stimulus = null) {
       if (trace.pins.length < MAX_TRACE) trace.pins.push({ pin, high, t });
     },
     onSerial: (byte, t, b) => { if (trace.serial.length < MAX_TRACE) trace.serial.push({ byte, t, baud: b }); },
+    onAdc: (channel, value, t) => { if (trace.adc.length < MAX_TRACE) trace.adc.push({ channel, value, t }); },
   });
   if (stimulus?.button) {
     const input = { pin: stimulus.button.pin, contact: [], modes: [] };
@@ -109,8 +119,17 @@ export function recordFast(hex, durationMs, watch = [], stimulus = null) {
       onMode: (mode, t) => { if (input.modes.length < MAX_TRACE) input.modes.push({ t, mode }); },
     });
   }
+  if (stimulus?.pot) {
+    // `potScript` = [{ t, volts }]: posición del potenciómetro en cada momento (la traza la registra).
+    const analog = { channel: stimulus.pot.channel, volts: [] };
+    trace.analog = analog;
+    pot = new PotModel(runner, { channel: stimulus.pot.channel, volts: stimulus.pot.volts ?? 0,
+      onChange: (volts, t) => analog.volts.push({ t, volts }) });
+    pot.play(stimulus.potScript || []);
+  }
   advance(durationMs, (ws) => { for (const w of ws) trace.windows.push(w); });
   button = null;
+  pot = null;
   return trace;
 }
 
@@ -118,6 +137,7 @@ if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScop
   self.onmessage = ({ data }) => {
     try {
       if (data.type === 'input') { if (button && runner) { button.press(Boolean(data.closed)); } return; }
+      if (data.type === 'analog') { if (pot && runner) pot.set(data.volts); return; }
       if (data.type !== 'start') return;
       const watch = Array.isArray(data.watch) ? data.watch : [];
       if (data.mode === 'fast') { postMessage({ type: 'trace', trace: recordFast(data.hex, data.durationMs, watch, data.stimulus || null) }); return; }
@@ -125,9 +145,14 @@ if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScop
       runner = new NanoRunner(data.hex, {
         onPin: (pin, high, t) => meter.edge(pin, high, t),
         onSerial: (byte, _t, b) => { serial.push(byte); baud = b; },
+        onAdc: (channel, value, t) => { lastAdc = { channel, value, t }; },
       });
       // Con guion, el pulsador sigue el guion del reto (el estudiante puede pulsar además).
       button = attachButton(data.button || null, data.script || null);
+      if (data.pot) {
+        pot = new PotModel(runner, { channel: data.pot.channel, volts: data.pot.volts ?? 0 });
+        if (Array.isArray(data.potScript)) pot.play(data.potScript);
+      }
       postMessage({ type: 'ready' });
       realtime(data.limitMs || Infinity);
     } catch (error) {

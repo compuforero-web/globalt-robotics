@@ -2,7 +2,7 @@
 // Ejecuta el HEX que produjo el compilador; no interpreta el texto del programa.
 import {
   CPU, avrInstruction, AVRTimer, timer0Config, timer1Config, timer2Config,
-  AVRIOPort, portBConfig, portCConfig, portDConfig, PinState, AVRUSART, usart0Config,
+  AVRIOPort, portBConfig, portCConfig, portDConfig, PinState, AVRUSART, usart0Config, AVRADC, adcConfig,
 } from '../vendor/avr8js-0.21.1.js';
 
 export const CLOCK_HZ = 16_000_000;
@@ -41,11 +41,20 @@ const PORT_PINS = { B: [8, 9, 10, 11, 12, 13], C: [14, 15, 16, 17, 18, 19], D: [
  * reciben los cambios observados en el hardware simulado.
  */
 export class NanoRunner {
-  constructor(hexText, { onPin = () => {}, onSerial = () => {} } = {}) {
+  constructor(hexText, { onPin = () => {}, onSerial = () => {}, onAdc = () => {} } = {}) {
     this.cpu = new CPU(parseIntelHex(hexText));
     this.timers = [timer0Config, timer1Config, timer2Config].map((c) => new AVRTimer(this.cpu, c));
     this.usart = new AVRUSART(this.cpu, usart0Config, CLOCK_HZ);
     this.usart.onByteTransmit = (byte) => onSerial(byte, this.timeMs, this.usart.baudRate);
+    // ADC de 10 bits (A0–A7). Referencia AVcc = 5 V; cada canal lee la tensión que le fija un componente
+    // (channelValues). `onAdc(canal, valor, t)` informa de cada conversión que pide el programa (analogRead).
+    this.adc = new AVRADC(this.cpu, adcConfig);
+    this.adc.channelValues.fill(0);
+    const complete = this.adc.completeADCRead.bind(this.adc);
+    this.adc.completeADCRead = (value) => {
+      complete(value);
+      onAdc(this.cpu.data[adcConfig.ADMUX] & 0x0f, value, this.timeMs);
+    };
     this.pins = new Map();
     this.portListeners = [];   // modelos de entrada que reaccionan a cambios de DDR/PORT (pinMode, pull-up)
     const ports = { B: new AVRIOPort(this.cpu, portBConfig), C: new AVRIOPort(this.cpu, portCConfig), D: new AVRIOPort(this.cpu, portDConfig) };
@@ -92,6 +101,11 @@ export class NanoRunner {
   setInput(pin, high) {
     const { port, bit } = this.locate(pin);
     port.setPin(bit, Boolean(high));
+  }
+
+  /** Tensión (0–5 V) que un componente externo aplica al canal analógico `channel` (0 = A0). */
+  setAnalog(channel, volts) {
+    this.adc.channelValues[channel] = Math.min(5, Math.max(0, Number(volts) || 0));
   }
 
   /** Programa `fn` en el ciclo de reloj `cycle` (absoluto): se ejecuta entre dos instrucciones, con precisión de ciclo. */
