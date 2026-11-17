@@ -45,7 +45,11 @@ await a.waitForSelector('#mis-cursos .curso');
 const labExiste = (await a.request.head(new URL('../games/laboratorio-arduino/index.html', URL_AULA).href)).ok();
 const textoCurso = await a.textContent('#mis-cursos');
 assert.match(textoCurso, /Electrónica y C\+\+ con Arduino/);
-if (labExiste) assert.equal(await a.locator('#mis-cursos a', { hasText: 'Abrir laboratorio' }).count(), 1);
+// Con laboratorio publicado, la tarjeta es el panel de progreso: «Continuar» y las 15 lecciones «Sin comenzar».
+if (labExiste) {
+  assert.equal(await a.locator('#mis-cursos a', { hasText: 'Continuar' }).count(), 1);
+  assert.equal(await a.locator('#mis-cursos .leccion[data-estado="sin-comenzar"]').count(), 15);
+}
 else assert.match(textoCurso, /Laboratorio pendiente de publicación/);
 assert.match(await a.textContent('#catalogo'), /Ya estás inscrito/);
 log('inscripción visible; laboratorio', labExiste ? 'enlazado' : 'marcado como pendiente (no existe en este servidor)');

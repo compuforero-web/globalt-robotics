@@ -47,8 +47,9 @@ const ruta = (leccionId) => `/borradores/${encodeURIComponent(leccionId)}`;
  * lección: solo guardado local), 'error' (reintentar) o 'lista'.
  */
 export async function conectar(leccionId) {
+  let usuario;
   try {
-    await llamar('/sesion');
+    ({ usuario } = await llamar('/sesion'));
   } catch (e) {
     if (e.status === 401) return { estado: 'sin-sesion' };
     if (e.status === -1 || e.status === 404) return { estado: 'sin-aula' };   // el aula no está publicada aquí
@@ -56,7 +57,7 @@ export async function conectar(leccionId) {
   }
   try {
     const { borrador } = await llamar(ruta(leccionId));
-    return { estado: 'lista', borrador };
+    return { estado: 'lista', borrador, usuario };
   } catch (e) {
     if (e.status === 403) return { estado: 'sin-inscripcion', mensaje: e.message };
     if (e.status === 401) return { estado: 'sin-sesion' };
@@ -71,3 +72,21 @@ export async function guardar(leccionId, codigo, versionBase) {
   const { borrador } = await llamar(ruta(leccionId), { metodo: 'PUT', datos: { codigo, version_base: versionBase } });
   return borrador;
 }
+
+// ---------- Progreso del curso (declarativo; ver progreso-cuenta.js) ----------
+/** Sesión actual ({ usuario }); renueva el token CSRF en memoria. */
+export const sesion = () => llamar('/sesion');
+
+/**
+ * Progreso del curso en la cuenta. Devuelve el objeto «progreso» del curso, o null si la API de este servidor
+ * todavía no lo ofrece (versión anterior): en ese caso el laboratorio sigue con el registro de este navegador.
+ */
+export async function progresoCurso(cursoId = 'course-arduino') {
+  const { cursos } = await llamar('/mis-cursos');
+  const curso = (cursos || []).find((c) => c.id === cursoId);
+  if (!curso) throw new CuentaError(403, 'Inscríbete en el curso desde el aula.');
+  return curso.progreso && Array.isArray(curso.progreso.lecciones) ? curso.progreso : null;
+}
+
+/** Registra avance de una lección (la identidad la decide la sesión del servidor). */
+export const registrarProgreso = (datos) => llamar('/mis-cursos', { metodo: 'POST', datos });

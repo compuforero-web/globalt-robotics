@@ -86,7 +86,9 @@
           <button id="btn-check" type="button" class="btn btn--orange btn--sm">Comprobar reto</button>
         </div>
         <div id="eval-result" aria-live="polite"><p class="muted">La comprobación ejecuta tu programa 5 segundos simulados y mide el LED y el monitor serie.</p></div>
-        <p class="progress-note"><span id="progress-state"></span><br><small class="muted">El resultado del reto se registra solo en este navegador. Tu cuenta del aula guarda tu código, no los resultados de la evaluación.</small></p>
+        <p class="progress-note"><span id="progress-state"></span><br><small id="progress-where" class="muted">El resultado del reto se registra solo en este navegador. Entra en el aula para guardar tu avance en tu cuenta.</small></p>
+        <p class="progress-sync"><span id="progreso-cuenta" role="status" aria-live="polite" hidden></span>
+          <button id="btn-progreso-reintentar" type="button" class="btn btn--ghost btn--sm" hidden>Reintentar</button></p>
       </div>
     </section>
   </main>

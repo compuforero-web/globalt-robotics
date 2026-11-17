@@ -70,7 +70,7 @@ async function pickLesson(p, id) {
   const p = await ctx.newPage();
   await open(p);
   assert.equal(await p.textContent('.lab-top__course'), 'Electrónica y C++ con Arduino · Lección 1');
-  assert.match(await p.textContent('.lesson-picker__box > summary'), /Lección 1 de 13/);
+  assert.match(await p.textContent('.lesson-picker__box > summary'), /Lección 1 de 15/);
   assert.equal(await p.locator('.lesson-picker__list a').count(), 15);
   assert.equal(await p.getAttribute(`.lesson-picker__list a[data-lesson="${L1}"]`, 'aria-current'), 'page');
   assert.equal(await p.locator('.lesson-picker__prev').count(), 0);   // la lección 1 no tiene previas
@@ -339,7 +339,7 @@ if (SITIO) {
   // Lección desconocida con sesión: ninguna llamada a borradores.
   const calls = [];
   pa.on('request', (r) => { if (r.url().includes('/borradores/')) calls.push(r.url()); });
-  await pa.goto(`${LABA}?leccion=arduino-evasor-decision`);
+  await pa.goto(`${LABA}?leccion=arduino-leccion-inexistente`);
   await pa.waitForSelector('#unknown-lesson');
   await pa.waitForTimeout(500);
   assert.deepEqual(calls, []);
@@ -357,7 +357,7 @@ if (SITIO) {
   if (SHOTS) await pc.locator('#editor-zone').screenshot({ path: `${SHOTS}/api-anterior.png` });
   log('API sin la lección: aviso claro y guardado local');
 
-  // Aprobar es local: la cuenta solo guarda código.
+  // Con sesión, superar el evaluador se registra en la cuenta (declarativo); el borrador sigue guardando solo código.
   await openA(L3);
   await pa.click('#btn-usar-local').catch(() => {});
   await setCode(pa, RESPIRA);
@@ -365,8 +365,9 @@ if (SITIO) {
   await pa.waitForFunction(() => /Guardado en tu cuenta/.test(document.querySelector('#cuenta-estado').textContent));
   const b3 = await remote(ctxA, L3);
   assert.deepEqual(Object.keys(b3).sort(), ['actualizado_en', 'codigo', 'version']);
-  assert.match(await pa.textContent('.progress-note'), /solo en este navegador/);
-  log('reto superado: el resultado queda en el navegador; la cuenta guarda solo el código');
+  assert.match(await pa.textContent('.progress-note'), /registro declarativo/);
+  await pa.waitForFunction(() => /Avance guardado en tu cuenta/.test(document.querySelector('#progreso-cuenta').textContent));
+  log('reto superado con sesión: registrado en la cuenta como declarativo; el borrador guarda solo el código');
   await ctxA.close();
   await ctxB.close();
 }

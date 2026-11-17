@@ -176,6 +176,12 @@
 .eval__list .fail > span:first-child { color: var(--red); }
 .eval__list small { color: var(--muted); }
 .progress-note { margin: 12px 0 0; font-size: .88rem; }
+.progress-note .pending { color: #fbbf24; }
+.progress-sync { margin: 6px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: .85rem; color: var(--muted, #94a3b8); }
+.progress-sync:not(:has(:not([hidden]))) { display: none; }
+#progreso-cuenta[data-kind="ok"] { color: #4ade80; }
+#progreso-cuenta[data-kind="warn"] { color: #fbbf24; }
+#progreso-cuenta[data-kind="error"] { color: #f87171; }
 
 /* Guía Chispa: forma parte del flujo, nunca flota sobre el editor ni el circuito */
 .guide__panel { display: flex; gap: 12px; align-items: flex-start; background: linear-gradient(135deg, rgba(56, 189, 248, .1), rgba(249, 115, 22, .06)); border: 1px solid rgba(56, 189, 248, .3); border-radius: var(--radius); padding: 12px; }
