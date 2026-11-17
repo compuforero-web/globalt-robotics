@@ -17,6 +17,8 @@ const ARDUINO_PUBLIC_LESSONS = [
   'Sentido de giro con L298N',
   'Velocidad de un motor con PWM',
   'Dos motores y maniobras',
+  'Posiciones del servo',
+  'Barrido del servo sin bloquear',
 ];
 
 export function courseCard(course, index) {
