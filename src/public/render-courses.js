@@ -19,6 +19,8 @@ const ARDUINO_PUBLIC_LESSONS = [
   'Dos motores y maniobras',
   'Posiciones del servo',
   'Barrido del servo sin bloquear',
+  'Evasor: decidir ante un obstáculo',
+  'Evasor: recorrer tres pistas',
 ];
 
 export function courseCard(course, index) {
@@ -38,7 +40,7 @@ export function courseCard(course, index) {
       ${course.duration ? `<span class="tag tag--soft">${icon('clock')} ${esc(course.duration)}${isArduino ? ' previstas' : ''}</span>` : ''}
     </div>
     <p class="card__text">${esc(course.description)}</p>
-    ${isArduino ? `<p class="card__text"><strong>${ARDUINO_PUBLIC_LESSONS.length} lecciones disponibles.</strong> El curso seguirá ampliándose por etapas. Accede con una cuenta habilitada.</p>
+    ${isArduino ? `<p class="card__text"><strong>${ARDUINO_PUBLIC_LESSONS.length} lecciones disponibles.</strong> Desde el LED hasta un robot evasor programado por ti. Accede con una cuenta habilitada.</p>
     <details class="syllabus">
       <summary>${icon('book')} Qué puedes practicar ahora</summary>
       <ol>${ARDUINO_PUBLIC_LESSONS.map((title) => `<li>${esc(title)}</li>`).join('')}</ol>
