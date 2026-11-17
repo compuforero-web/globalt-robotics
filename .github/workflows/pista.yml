@@ -19,7 +19,7 @@ permissions:
   contents: read
 jobs:
   pista:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -75,7 +75,7 @@ jobs:
         if: always()
         run: docker rm -f globalt-pista-compilador || true
   aula:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
       postgres:
