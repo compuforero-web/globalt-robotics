@@ -189,7 +189,8 @@ Seis temas, **15 lecciones obligatorias + 1 opcional**. Cada lección conserva e
 **6.1 `arduino-evasor-decision` — Decidir ante un obstáculo (banco de pruebas)**
 - Previos: 4.2, 5.3.
 - Objetivo: lazo leer → decidir → actuar; máquina de estados simple.
-- Componentes: HC-SR04 (D7/D8) + L298N como en 5.3; robot en banco (ruedas al aire).
+- Componentes: HC-SR04 (TRIG D7, ECHO D8) + L298N (IN1 D2, IN2 D4, IN3 D10, IN4 D11, ENA D5, ENB D6); robot en banco (ruedas al aire).
+- Integración: se utiliza este mapa propio para evitar que motores y sensor compartan D7/D8. Las lecciones 5.1–5.3 conservan su mapa de aprendizaje; ver [INTEGRACION_PINES_ARDUINO.md](INTEGRACION_PINES_ARDUINO.md).
 - Práctica: imprimir estado y distancia en cada ciclo.
 - Reto: avanzar si > 25 cm; si no, parar, retroceder 0,4 s y girar hasta ver > 40 cm.
 - Evidencia (guion de distancias en el tiempo, sin movimiento): tras caer < 25 cm, motores parados en ≤ 150 ms; retroceso 0,3–0,5 s; giro hasta que el guion supera 40 cm; vuelve a avanzar en ≤ 150 ms.
