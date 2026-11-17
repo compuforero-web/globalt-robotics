@@ -308,6 +308,36 @@ def test_borrador_no_sobrescribe_version_mas_reciente():
         assert uno.get(RUTA_B).json()['borrador']['codigo'] == 'v2'
 
 
+def test_borradores_aislados_por_leccion():
+    rutas = {l: '/api/aula/borradores/' + l for l in ('arduino-led-serie', 'arduino-protoboard-semaforo', 'arduino-pwm-brillo')}
+    with cliente() as c, cliente() as otro:
+        h = inscrito(c, 'borr.lecciones@example.com')
+        ho = inscrito(otro, 'borr.lecciones.otro@example.com')
+        for leccion, ruta in rutas.items():
+            assert c.get(ruta).json() == {'borrador': None}
+            assert c.put(ruta, json={'codigo': '// ' + leccion}, headers=h).json()['borrador']['version'] == 1
+        # Guardar una lección no toca las demás; cada una lleva su propia versión.
+        assert c.put(rutas['arduino-pwm-brillo'], json={'codigo': '// pwm v2', 'version_base': 1}, headers=h).status_code == 200
+        primera = c.get(rutas['arduino-led-serie']).json()['borrador']
+        assert (primera['codigo'], primera['version']) == ('// arduino-led-serie', 1)
+        assert c.get(rutas['arduino-protoboard-semaforo']).json()['borrador']['codigo'] == '// arduino-protoboard-semaforo'
+        assert c.get(rutas['arduino-pwm-brillo']).json()['borrador']['version'] == 2
+        # Conflicto por lección: una versión vieja de la lección 3 no sobrescribe.
+        r = c.put(rutas['arduino-pwm-brillo'], json={'codigo': 'viejo', 'version_base': 1}, headers=h)
+        assert r.status_code == 409 and r.json()['borrador']['codigo'] == '// pwm v2'
+        # Otro estudiante no ve nada de estas lecciones.
+        for ruta in rutas.values():
+            assert otro.get(ruta).json() == {'borrador': None}
+        assert otro.put(rutas['arduino-protoboard-semaforo'], json={'codigo': '// mío'}, headers=ho).status_code == 200
+        assert c.get(rutas['arduino-protoboard-semaforo']).json()['borrador']['codigo'] == '// arduino-protoboard-semaforo'
+        # Un identificador desconocido no crea filas.
+        antes = sql("SELECT count(*) FROM borradores")[0][0]
+        for desconocida in ('arduino-servo-posiciones', 'ARDUINO-PWM-BRILLO', 'arduino-pwm-brillo-v2'):
+            assert c.put('/api/aula/borradores/' + desconocida, json={'codigo': 'x'}, headers=h).status_code == 404
+            assert c.get('/api/aula/borradores/' + desconocida).status_code == 404
+        assert sql("SELECT count(*) FROM borradores")[0][0] == antes
+
+
 # ---------- Compilación a través del servicio existente (compilador falso por socket Unix) ----------
 import json as _json
 import socketserver

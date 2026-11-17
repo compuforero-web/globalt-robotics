@@ -1,6 +1,7 @@
 // Lección piloto «Electrónica y C++ con Arduino»: LED intermitente y monitor serie. Contenido original de GLOBALT.
 // La lección se recorre en pasos breves. Leer un paso o pulsar «Siguiente» nunca aprueba el reto:
 // solo lo aprueba la evaluación medida en la simulación (challenge.js).
+import { exampleHtml, question, goTo, challengeBox, renderLesson, SCOPE_COMMON } from './lessons/view.js';
 export const LESSON = {
   id: 'arduino-led-serie',
   course: 'Electrónica y C++ con Arduino',
@@ -81,25 +82,7 @@ void loop() {
   },
 };
 
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-
-function example(id) {
-  const ex = EXAMPLES[id];
-  return `<figure class="example">
-    <figcaption><span class="tag tag--example">Ejemplo</span> ${esc(ex.title)} <span class="muted small">· no es la solución del reto</span></figcaption>
-    <pre class="lesson-code"><code>${esc(ex.code)}</code></pre>
-    <div class="example__actions">
-      <button type="button" class="btn btn--ghost btn--sm" data-example="${id}" data-act="copy">Copiar</button>
-      <button type="button" class="btn btn--outline btn--sm" data-example="${id}" data-act="try">Probar en el editor…</button>
-    </div>
-  </figure>`;
-}
-
-function question(q, a) {
-  return `<details class="think"><summary><span class="tag tag--think">Piensa</span> ${q}</summary><p>${a}</p></details>`;
-}
-
-const goTo = (target, label) => `<button type="button" class="btn btn--ghost btn--sm step__go" data-goto="${target}">${label}</button>`;
+const example = (id) => exampleHtml(EXAMPLES, id);
 
 /** Pasos de la lección. `short` aparece en la barra de pasos. */
 export const STEPS = [
@@ -188,11 +171,7 @@ export const STEPS = [
     short: 'Reto',
     title: 'Resolver el reto',
     html: `
-      <div class="challenge-box">
-        <p class="challenge-box__head"><span class="tag tag--challenge">Reto</span> ${CHALLENGE.title}</p>
-        <p>${CHALLENGE.summary}</p>
-        <ul class="criteria">${CHALLENGE.criteria.map((c) => `<li>${c}</li>`).join('')}</ul>
-      </div>
+      ${challengeBox(CHALLENGE)}
       <p>Aquí no hay solución escrita: los pasos anteriores te dan las piezas. Un camino posible:</p>
       <ol>
         <li>Ajusta los tiempos de encendido y apagado y comprueba el ritmo.</li>
@@ -204,30 +183,15 @@ export const STEPS = [
   },
 ];
 
+export const GOAL = 'programar un Arduino Nano para que encienda y apague un LED con un ritmo exacto y te cuente por el monitor serie qué está haciendo.';
+
+export const SCOPE = [
+  ...SCOPE_COMMON,
+  'Funciona: pines digitales (pinMode, digitalWrite, digitalRead de salidas), temporizadores (delay, millis, micros) y Serial (print, println, write).',
+  'Todavía no: entradas externas (botones, sensores), analogRead, servos, librerías adicionales ni lectura desde el monitor serie.',
+  'El circuito de esta lección es fijo: LED con resistencia en D13. Los demás pines se muestran como indicadores.',
+];
+
 export function lessonHtml() {
-  const nav = STEPS.map((s, i) => `<li><button type="button" class="steps__btn" data-step="${i}" aria-controls="step-${s.id}">
-      <span class="steps__n" aria-hidden="true">${i + 1}</span><span class="steps__label">${s.short}</span><span class="steps__seen" hidden><span class="sr-only"> (visto)</span><span aria-hidden="true">✓</span></span></button></li>`).join('');
-  const sections = STEPS.map((s, i) => `<section class="step" id="step-${s.id}" aria-labelledby="step-${s.id}-t" hidden>
-      <p class="step__count">Paso ${i + 1} de ${STEPS.length}</p>
-      <h3 id="step-${s.id}-t" class="step__title" tabindex="-1">${s.title}</h3>
-      ${s.html}
-    </section>`).join('');
-  return `
-  <p class="lesson-goal"><strong>Objetivo:</strong> programar un Arduino Nano para que encienda y apague un LED con un ritmo exacto y te cuente por el monitor serie qué está haciendo.</p>
-  <nav class="steps" aria-label="Pasos de la lección"><ol>${nav}</ol></nav>
-  ${sections}
-  <div class="step-nav">
-    <button type="button" class="btn btn--ghost btn--sm" data-nav="prev">← Anterior</button>
-    <button type="button" class="btn btn--primary btn--sm" data-nav="next">Siguiente →</button>
-  </div>
-  <details class="lesson-block scope">
-    <summary>Alcance del simulador</summary>
-    <ul>
-      <li>Tu código se compila de verdad con avr-gcc y el núcleo Arduino AVR para Nano (ATmega328P a 16&nbsp;MHz).</li>
-      <li>El archivo resultante se ejecuta instrucción por instrucción en un ATmega328P emulado (avr8js) dentro de tu navegador.</li>
-      <li>Funciona: pines digitales (pinMode, digitalWrite, digitalRead de salidas), temporizadores (delay, millis, micros) y Serial (print, println, write).</li>
-      <li>Todavía no: entradas externas (botones, sensores), analogRead, servos, librerías adicionales ni lectura desde el monitor serie.</li>
-      <li>El circuito de esta lección es fijo: LED con resistencia en D13. Los demás pines se muestran como indicadores.</li>
-    </ul>
-  </details>`;
+  return renderLesson({ goal: GOAL, steps: STEPS, scope: SCOPE });
 }

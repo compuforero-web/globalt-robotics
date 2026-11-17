@@ -22,8 +22,15 @@ RUTA_COOKIE = '/api/aula'
 MAX_CUERPO = 16 * 1024
 METODOS_SEGUROS = {'GET', 'HEAD', 'OPTIONS'}
 MAX_CODIGO = 12000   # caracteres; el cuerpo completo sigue limitado a MAX_CUERPO
-# Lecciones con borrador en la cuenta y el curso en el que hay que estar inscrito.
-LECCIONES = {'arduino-led-serie': 'course-arduino'}
+# Lecciones con borrador en la cuenta y el curso en el que hay que estar inscrito. Los identificadores son
+# definitivos y coinciden con el manifiesto del laboratorio (games/laboratorio-arduino/src/lessons/index.js;
+# lo comprueba tests/test_laboratorio.py). Añadir una lección no requiere migración: la tabla borradores
+# ya usa (usuario_id, leccion_id) como clave.
+LECCIONES = {
+    'arduino-led-serie': 'course-arduino',
+    'arduino-protoboard-semaforo': 'course-arduino',
+    'arduino-pwm-brillo': 'course-arduino',
+}
 
 
 def crear_app(config=None):

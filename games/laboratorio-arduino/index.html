@@ -30,6 +30,7 @@
       <p class="lab__kicker">Primera lección</p>
       <a class="btn btn--outline btn--sm lab__jump" href="#editor-zone">Ir al editor</a>
       <h2 class="lab__lesson-title">Tu primer LED intermitente y mensajes al monitor serie</h2>
+      <nav id="lesson-picker" class="lesson-picker" aria-label="Lecciones del curso" hidden></nav>
       <div id="lesson"></div>
     </aside>
 
@@ -85,7 +86,7 @@
           <button id="btn-check" type="button" class="btn btn--orange btn--sm">Comprobar reto</button>
         </div>
         <div id="eval-result" aria-live="polite"><p class="muted">La comprobación ejecuta tu programa 5 segundos simulados y mide el LED y el monitor serie.</p></div>
-        <p class="progress-note"><span id="progress-state"></span><br><small class="muted">Tu progreso se guarda solo en este navegador: no es una cuenta ni una inscripción.</small></p>
+        <p class="progress-note"><span id="progress-state"></span><br><small class="muted">El resultado del reto se registra solo en este navegador. Tu cuenta del aula guarda tu código, no los resultados de la evaluación.</small></p>
       </div>
     </section>
   </main>
@@ -97,6 +98,18 @@
       <div class="example-dialog__actions">
         <button value="cancel" class="btn btn--ghost btn--sm" autofocus>Cancelar</button>
         <button value="replace" class="btn btn--primary btn--sm">Reemplazar y probar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="switch-dialog" class="example-dialog" aria-labelledby="switch-dialog-title" aria-describedby="switch-dialog-desc">
+    <form method="dialog">
+      <h2 id="switch-dialog-title">Cambiar de lección</h2>
+      <p id="switch-dialog-desc"></p>
+      <div class="example-dialog__actions">
+        <button value="cancel" class="btn btn--ghost btn--sm" autofocus>Seguir aquí</button>
+        <button value="discard" class="btn btn--outline btn--sm">Descartar y cambiar</button>
+        <button value="save" class="btn btn--primary btn--sm">Guardar y cambiar</button>
       </div>
     </form>
   </dialog>
