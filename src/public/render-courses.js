@@ -12,6 +12,8 @@ const ARDUINO_PUBLIC_LESSONS = [
   'Lectura de un pulsador',
   'Pulsaciones y antirrebote',
   'Potenciómetro y control de brillo',
+  'Medir distancia con el sensor ultrasónico',
+  'Alertas de cercanía y ausencia de eco',
 ];
 
 export function courseCard(course, index) {
