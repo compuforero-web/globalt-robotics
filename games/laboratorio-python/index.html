@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#070b14">
+  <meta name="description" content="Python desde Cero de GLOBALT Robotics: cinco prácticas para escribir y ejecutar Python real en el navegador, con entrada de datos, errores explicados y retos comprobados.">
+  <title>Python desde Cero · Laboratorio · GLOBALT ROBOTICS</title>
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../styles/base.css">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="src/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#zona-editor">Ir al editor</a>
+  <header class="py-top">
+    <a class="py-top__home" href="../../index.html"><img src="../../assets/img/logo.svg" alt="" width="28" height="28"> GLOBALT ROBOTICS</a>
+    <div class="py-top__titulo">
+      <span id="curso-practica" class="py-top__curso">Python desde Cero</span>
+      <h1>Laboratorio Python</h1>
+    </div>
+    <span id="interprete" class="pill" data-tipo="cargando" role="status" aria-live="polite">Cargando Python…</span>
+  </header>
+
+  <nav id="practicas" class="practicas" aria-label="Prácticas del curso"></nav>
+
+  <main class="py">
+    <article id="leccion" class="py__leccion" aria-labelledby="titulo-practica">
+      <p id="kicker" class="py__kicker">Práctica</p>
+      <h2 id="titulo-practica">Python desde Cero</h2>
+      <p id="objetivo" class="py__objetivo"></p>
+      <div id="secciones"></div>
+      <section class="ejemplo" aria-labelledby="titulo-ejemplo">
+        <h3 id="titulo-ejemplo">Ejemplo</h3>
+        <pre id="codigo-ejemplo" class="codigo"></pre>
+        <button id="btn-ejemplo" type="button" class="btn btn--ghost btn--sm">Ejecutar ejemplo en la consola</button>
+        <small class="muted">No cambia tu código.</small>
+      </section>
+      <section class="reto" aria-labelledby="titulo-reto">
+        <h3 id="titulo-reto">Reto</h3>
+        <div id="enunciado"></div>
+        <div class="pistas">
+          <button id="btn-pista" type="button" class="btn btn--ghost btn--sm">Pedir pista</button>
+          <ol id="lista-pistas" class="pistas__lista" aria-live="polite"></ol>
+        </div>
+      </section>
+    </article>
+
+    <section class="py__trabajo" aria-label="Editor, entrada y consola">
+      <div id="zona-editor" class="panel" tabindex="-1">
+        <div class="panel__cab">
+          <div id="pestanas" class="pestanas" role="tablist" aria-label="Archivos de la práctica"></div>
+          <span id="guardado" class="guardado" aria-live="polite"></span>
+        </div>
+        <div id="editor"></div>
+        <p class="nota-guardado">Tu código y tu entrada se guardan automáticamente <strong>solo en este navegador</strong>, por separado en cada práctica. No se envían a ningún servidor ni a tu cuenta: en otro navegador, equipo o en modo privado no aparecerán.</p>
+        <div class="acciones">
+          <button id="btn-ejecutar" type="button" class="btn btn--primary btn--sm" disabled>▶ Ejecutar</button>
+          <button id="btn-detener" type="button" class="btn btn--danger btn--sm" disabled>■ Detener</button>
+          <button id="btn-comprobar" type="button" class="btn btn--orange btn--sm" disabled>Comprobar reto</button>
+          <button id="btn-restaurar" type="button" class="btn btn--ghost btn--sm">Restaurar código inicial</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <label class="panel__titulo" for="entrada">Entrada <small class="muted">(una línea por cada <code>input()</code>, en orden)</small></label>
+        <textarea id="entrada" class="entrada" rows="4" spellcheck="false" autocapitalize="off"></textarea>
+      </div>
+
+      <div class="panel">
+        <div class="panel__cab">
+          <h3 class="panel__titulo">Consola</h3>
+          <button id="btn-limpiar" type="button" class="btn btn--ghost btn--sm">Limpiar</button>
+        </div>
+        <pre id="consola" class="consola" tabindex="0" aria-label="Salida del programa" aria-live="polite"></pre>
+        <div id="error" class="error-py" hidden role="alert"></div>
+        <div id="archivos-virtuales" class="virtuales" hidden></div>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel__titulo">Resultado del reto</h3>
+        <div id="resultado" aria-live="polite"><p class="muted">Pulsa «Comprobar reto»: tu programa se ejecuta con varios casos de entrada y se compara su salida.</p></div>
+        <p id="estado-reto" class="estado-reto"></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="py-pie">
+    <p>Python se ejecuta en tu navegador con <a href="vendor/pyodide-314.0.7/PROCEDENCIA.md">Pyodide 314.0.7 (CPython 3.14.2)</a>, dentro de un proceso aparte que se puede detener. La primera carga descarga unos 13,5 MB; después se usa la caché del navegador.</p>
+  </footer>
+</body>
+</html>
