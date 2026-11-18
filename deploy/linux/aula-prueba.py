@@ -70,6 +70,13 @@ csrf = d['csrf']
 assert pedir('POST', '/api/aula/inscripciones', {'curso_id': 'course-arduino'})[0] == 403, 'sin CSRF'
 assert pedir('POST', '/api/aula/inscripciones', {'curso_id': 'course-arduino'}, csrf)[0] in (200, 201)
 assert [c['id'] for c in pedir('GET', '/api/aula/mis-cursos')[1]['cursos']] == ['course-arduino']
+# Misma ruta de producción que usarán las tarjetas. Solo modifica la cuenta temporal de esta prueba.
+e, catalogo = pedir('GET', '/api/aula/cursos')
+assert e == 200 and {'course-web', 'course-python', 'course-arduino', 'course-scratch'} <= {
+    curso['id'] for curso in catalogo['cursos']}, 'catálogo incompleto'
+assert pedir('POST', '/api/aula/inscripciones', {'curso_id': 'course-web'}, csrf)[0] == 201
+assert pedir('POST', '/api/aula/inscripciones', {'curso_id': 'course-web'}, csrf)[0] == 200
+assert {c['id'] for c in pedir('GET', '/api/aula/mis-cursos')[1]['cursos']} == {'course-arduino', 'course-web'}
 B = '/api/aula/borradores/arduino-led-serie'
 assert pedir('GET', B)[1] == {'borrador': None}
 codigo = 'void setup() { pinMode(13, OUTPUT); }\nvoid loop() { digitalWrite(13, HIGH); delay(200); digitalWrite(13, LOW); delay(800); }\n'

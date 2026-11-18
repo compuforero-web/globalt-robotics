@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../styles/base.css">
   <link rel="stylesheet" href="aula.css">
-  <script type="module" src="src/main.js"></script>
+  <script type="module" src="src/main.js?v=inscripciones-1"></script>
 </head>
 <body>
   <header class="aula-top">
@@ -23,6 +23,7 @@
 
   <main class="aula">
     <p class="aviso" role="note"><strong>Versión de prueba.</strong> Usa solo datos ficticios. Todavía no se admiten cuentas de menores ni datos personales reales.</p>
+    <p id="eleccion" class="nota" hidden></p>
     <p id="estado" class="estado" role="status" aria-live="polite">Conectando con el aula…</p>
 
     <section id="vista-acceso" class="tarjeta" hidden aria-labelledby="titulo-acceso">
@@ -55,7 +56,7 @@
       <div id="mis-cursos" class="lista"></div>
       <h2>Cursos disponibles</h2>
       <div id="catalogo" class="lista"></div>
-      <p class="nota">Tu cuenta guarda tus inscripciones, tu código y tu avance en el laboratorio (última lección, paso y retos superados) para continuar desde cualquier navegador. Los retos se comprueban en tu navegador: el avance es un registro declarativo, no una evaluación verificada ni un certificado.</p>
+      <p class="nota">Tu cuenta reúne tus inscripciones. En Arduino también conserva tu código, la última lección, el paso y los retos superados. Los retos se comprueban en tu navegador: el avance es un registro declarativo, no una evaluación verificada ni un certificado.</p>
     </section>
   </main>
 </body>
