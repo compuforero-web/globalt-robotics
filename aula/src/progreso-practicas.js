@@ -103,9 +103,10 @@ function pintar(panel, pc, def, curso, clave, envio) {
       + (envio && envio.estado !== 'al-dia' ? ' ' + ({ 'otra-cuenta': 'La sesión cambió: no se envió nada.',
         'no-disponible': 'Este servidor aún no guarda el avance de este curso.' }[envio.estado] || 'No se pudo enviar ahora; pulsa Reintentar.') : '') }),
     nodo('button', { type: 'button', class: 'btn btn--ghost btn--sm', texto: 'Reintentar', onclick: async (ev) => {
-      ev.currentTarget.disabled = true;
+      const boton = ev.currentTarget;
+      boton.disabled = true;
       panel.dataset.estado = 'cargando';
-      try { await rellenar(panel, curso.id, curso, () => {}); } catch { panel.dataset.estado = 'listo'; }
+      try { await rellenar(panel, curso.id, curso, () => {}); } catch { panel.dataset.estado = 'listo'; boton.disabled = false; }
     } }));
 
   panel.dataset.estado = 'listo';
