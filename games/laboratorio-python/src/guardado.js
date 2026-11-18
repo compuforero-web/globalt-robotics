@@ -1,6 +1,20 @@
 // Borradores del Laboratorio Python: SOLO en el almacenamiento de este navegador (localStorage), separados por
 // práctica. No se envían a ningún servidor ni a la cuenta del aula. Otro navegador o el modo privado no los ven.
-const CLAVE = 'globalt.laboratorio.python.v1';
+// Invitado: 'globalt.laboratorio.python.v1' (como siempre). Con cuenta del aula: un espacio propio de esa cuenta
+// (configurar), para que en un equipo compartido cada estudiante vea solo sus borradores.
+export const CLAVE_INVITADO = 'globalt.laboratorio.python.v1';
+let CLAVE = CLAVE_INVITADO;
+
+/** Espacio de borradores: '' (invitado) o el sufijo de la cuenta (progreso-cuenta.js → espacioBorradores). */
+export function configurar(espacio = '') { CLAVE = CLAVE_INVITADO + espacio; }
+
+/** Borrador de invitado de una práctica (solo lectura; para ofrecer copiar el código a la cuenta). */
+export function leerInvitado(id) {
+  try {
+    const p = JSON.parse(localStorage.getItem(CLAVE_INVITADO) || '{}')?.practicas?.[id];
+    return p && typeof p === 'object' ? p : {};
+  } catch { return {}; }
+}
 const MAX = 32 * 1024;   // caracteres por archivo
 
 function leerTodo() {

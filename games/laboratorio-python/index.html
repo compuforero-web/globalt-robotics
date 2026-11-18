@@ -57,6 +57,12 @@
         </div>
         <div id="editor"></div>
         <p class="nota-guardado">Tu código y tu entrada se guardan automáticamente <strong>solo en este navegador</strong>, por separado en cada práctica. No se envían a ningún servidor ni a tu cuenta: en otro navegador, equipo o en modo privado no aparecerán.</p>
+        <div id="cuenta" class="cuenta" aria-label="Borrador y avance" hidden>
+          <p id="cuenta-borrador"></p><p id="cuenta-avance" role="status"></p>
+          <button id="cuenta-reintentar" type="button" class="btn btn--ghost btn--sm" hidden>Reintentar</button>
+          <button id="cuenta-recargar" type="button" class="btn btn--ghost btn--sm" hidden>Recargar</button>
+          <button id="copiar-invitado" type="button" class="btn btn--ghost btn--sm" hidden>Copiar mi borrador de invitado</button>
+        </div>
         <div class="acciones">
           <button id="btn-ejecutar" type="button" class="btn btn--primary btn--sm" disabled>▶ Ejecutar</button>
           <button id="btn-detener" type="button" class="btn btn--danger btn--sm" disabled>■ Detener</button>

@@ -3,8 +3,18 @@ import { criteria, documentFor } from './preview.js';
 
 const el = id => document.getElementById(id);
 const files = {html:'HTML',css:'CSS',js:'JavaScript'};
-const prefix = 'globalt.taller-web.v1.';
+const CURSO = 'course-web';
 let lesson, draft, activeFile, activeFrame, revision = 0;
+const apiId = item => 'web-' + item.id;   // espacio de nombres de la API (ver progreso-cuenta.js)
+// Cuenta del aula (si existe en este sitio). Sin ella, o si falla, el taller sigue en modo invitado como siempre.
+const cuenta = await import('./progreso-cuenta.js')
+  .then(m => m.conectarLaboratorio(CURSO, {alCambiar: () => { if (lesson) { route(); pintarCuenta(); } }}))
+  .catch(() => null);
+const conCuenta = () => Boolean(cuenta && cuenta.modo !== 'invitado');
+// Borradores SOLO en este navegador: invitado en 'globalt.taller-web.v1.<id>' (como antes); con cuenta, en un
+// espacio propio de la cuenta. El historial de invitado nunca se atribuye a la cuenta.
+const guestPrefix = 'globalt.taller-web.v1.';
+const prefix = 'globalt.taller-web.v1' + (cuenta?.espacio || '') + '.';
 const memory = new Map();
 function read(item) {
   if (memory.has(item.id)) return memory.get(item.id);
@@ -17,7 +27,7 @@ function read(item) {
 }
 function save() {
   try { localStorage.setItem(prefix + lesson.id, JSON.stringify(draft)); }
-  catch { el('guardado').textContent = 'El navegador no pudo guardar. Descarga tu página para conservarla.'; }
+  catch { el('guardado').hidden = false; el('guardado').textContent = 'El navegador no pudo guardar. Descarga tu página para conservarla.'; }
 }
 function button(text, action) {
   const node = document.createElement('button');
@@ -25,14 +35,39 @@ function button(text, action) {
   node.onclick = action;
   return node;
 }
+// Guest: reto marcado en el borrador local. Con cuenta: estado de la cuenta (servidor + pendiente de enviar).
+const isDone = item => conCuenta() ? cuenta.estado(apiId(item)) === 'completada' : read(item).done;
 function route() {
   el('ruta').replaceChildren(...lessons.map(item => {
-    const node = button((read(item).done ? '✓ ' : '') + item.name, () => {location.hash=item.id;});
+    const node = button((isDone(item) ? '✓ ' : '') + item.name, () => {location.hash=item.id;});
     if (item === lesson) node.setAttribute('aria-current','step');
+    node.dataset.estado = conCuenta() ? cuenta.estado(apiId(item)) : (isDone(item) ? 'completada' : 'sin-comenzar');
     return node;
   }));
-  el('avance').textContent = lessons.filter(item=>read(item).done).length + ' de 5 retos completados.';
-  el('siguiente').hidden = !draft.done || lesson === lessons.at(-1);
+  el('avance').textContent = lessons.filter(isDone).length + ' de 5 retos completados' + (conCuenta() ? ' en tu cuenta.' : '.');
+  el('siguiente').hidden = !isDone(lesson) || lesson === lessons.at(-1);
+}
+function pintarCuenta() {
+  if (!cuenta || cuenta.inicio === 'sin-aula') return;
+  const a = cuenta.aviso();
+  el('cuenta').hidden = false;
+  el('cuenta').dataset.tipo = a.tipo;
+  el('cuenta-borrador').textContent = a.borrador;
+  el('cuenta-avance').textContent = a.avance;
+  el('cuenta-reintentar').hidden = !a.reintentar || a.recargar;
+  el('cuenta-recargar').hidden = !a.recargar;
+  el('guardado').hidden = true;
+}
+// Con cuenta y sin borrador propio de esta práctica: ofrecer copiar (solo el código) el borrador de invitado.
+function guestDraft(item) {
+  if (!conCuenta()) return null;
+  try {
+    const saved = JSON.parse(localStorage.getItem(guestPrefix + item.id));
+    if (!saved || localStorage.getItem(prefix + item.id) !== null) return null;
+    const code = {};
+    for (const key of Object.keys(files)) code[key] = typeof saved[key] === 'string' ? saved[key] : item[key];
+    return Object.keys(files).some(key => code[key] !== item[key]) ? code : null;
+  } catch { return null; }
 }
 function selectFile(key) {
   activeFile = key;
@@ -113,7 +148,15 @@ async function grade() {
       return li;
     }));
     el('estado').textContent=passed?'Reto completado.':'Todavía queda algo por ajustar.';
-    if(passed){draft.done=true;save();route();}
+    if(passed && !conCuenta()){draft.done=true;save();route();}
+    else if(passed){
+      // Con cuenta: solo ahora (evaluador aprobado) se registra la finalización, comprobando antes la sesión.
+      const r=await cuenta.completar(apiId(lesson));
+      if(revision===attempt) el('estado').textContent={registrado:'Reto completado y guardado en tu cuenta.',
+        pendiente:'Reto completado. Sin conexión: queda pendiente en este navegador, solo para tu cuenta.',
+        'no-registrado':'Reto completado, pero no se guardó en ninguna cuenta (la sesión cambió).'}[r]||'Reto completado.';
+      route();pintarCuenta();
+    }
   } catch(error){if(revision===attempt) el('estado').textContent=error.message;}
   finally{el('evaluar').disabled=false;}
 }
@@ -132,6 +175,8 @@ function openLesson() {
   el('guia').querySelector('details').open=false;
   selectFile(lesson.file || 'html');
   route();
+  cuenta?.visitar(apiId(lesson));   // con cuenta: registra la visita (sin completar)
+  el('copiar-invitado').hidden = !guestDraft(lesson);
   if (Object.keys(files).some(key => draft[key] !== lesson[key])) {
     revision++;
     activeFrame = null;
@@ -154,5 +199,13 @@ el('descarga').onclick=()=>{
   const link=document.createElement('a');link.href=url;link.download='index.html';link.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
+el('copiar-invitado').onclick=()=>{
+  const code=guestDraft(lesson);
+  if(!code || !confirm('¿Copiar al espacio de tu cuenta el código que se escribió en este navegador sin cuenta? Solo se copia el código: los retos de invitado no se suman a tu cuenta.')) return;
+  Object.assign(draft,code);save();openLesson();
+};
+el('cuenta-reintentar').onclick=()=>cuenta?.sincronizar();
+el('cuenta-recargar').onclick=()=>location.reload();
 window.addEventListener('hashchange',openLesson);
 openLesson();
+pintarCuenta();

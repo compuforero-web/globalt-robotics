@@ -68,7 +68,8 @@ class ProgresoStaticTests(unittest.TestCase):
         codigo = (API / 'app/main.py').read_text()
         self.assertIn("@app.post('/api/aula/mis-cursos')", codigo)
         self.assertRegex(codigo, r"def registrar_progreso\(datos: Progreso, sesion=Depends\(con_csrf\)")
-        self.assertIn('leccion_permitida(datos.leccion_id, sesion, conexion)', codigo)
+        # Arduino y, con su propio catálogo, las prácticas Web/Python (tests/test_progreso_practicas.py).
+        self.assertRegex(codigo, r'leccion_permitida\(datos\.leccion_id, sesion, conexion[,)]')
         modelo = codigo[codigo.index('class Progreso'):codigo.index('class Inscripcion')]
         self.assertIn("extra='forbid'", modelo)
         self.assertEqual(re.findall(r'^    (\w+):', modelo, re.M), ['leccion_id', 'paso', 'vistos', 'visto_en', 'completada'])
