@@ -17,7 +17,15 @@ for (const width of [1280,380]) {
     const ctx=await browser.newContext({viewport:{width,height:900},hasTouch:width===380});
     const p=await ctx.newPage();
     await p.goto(origin);
-    await p.getByRole('link',{name:'Practicar en el laboratorio web'}).click();
+    if (width === 380) {
+      await p.evaluate(async () => {
+        const { SEED } = await import('/src/data/seed.js');
+        const courses = SEED.courses.map(course => course.id === 'course-web' ? {...course, id:'web-anterior'} : course);
+        localStorage.setItem('globalt_v1_courses', JSON.stringify(courses));
+      });
+      await p.reload();
+    }
+    await p.getByRole('link',{name:'Material y práctica · Abrir laboratorio web'}).click();
     const input=p.locator('#codigo');
     async function edit(file,source) {
       await p.locator('[data-file="'+file+'"]').click();

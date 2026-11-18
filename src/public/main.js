@@ -4,7 +4,7 @@ import * as db from '../services/db.js';
 import { $, $$ } from '../utils/dom.js';
 import { setWhatsAppNumber, waMsg } from '../utils/whatsapp.js';
 import { renderGames } from './render-games.js';
-import { renderCourses } from './render-courses.js';
+import { renderCourses } from './render-courses.js?v=lab-web-2';
 import { renderVideos } from './render-videos.js';
 import { renderWorkshops, renderBanner } from './render-workshops.js';
 import { setupChips, setupSearch } from './filters.js';

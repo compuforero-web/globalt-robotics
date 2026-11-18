@@ -26,6 +26,8 @@ const ARDUINO_PUBLIC_LESSONS = [
 export function courseCard(course, index) {
   const topics = Array.isArray(course.topics) ? course.topics : [];
   const isArduino = course.id === 'course-arduino';
+  const isWeb = course.id === 'course-web' || (normalize(course.category) === 'web' &&
+    normalize(course.title).trim() === 'desarrollo web (html, css y js)');
   const link = safeUrl(course.link);
   const external = /^https?:/i.test(link);
   const search = normalize(`${course.title} ${course.description} ${course.category} ${topics.join(' ')}${isArduino ? ` ${ARDUINO_PUBLIC_LESSONS.join(' ')}` : ''}`);
@@ -48,13 +50,14 @@ export function courseCard(course, index) {
     ${topics.length ? `<details class="syllabus">
       <summary>${icon('book')} ${isArduino ? 'Ruta completa prevista' : 'Temario'} (${topics.length} temas)</summary>
       <ol>${topics.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
+      ${isWeb && link ? `<a href="${esc(link)}" ${external ? 'target="_blank" rel="noopener"' : ''}>Lectura complementaria</a>` : ''}
     </details>` : ''}
     <div class="card__actions">
-      ${course.id === 'course-web' ? '<a class="btn btn--primary" href="games/laboratorio-web/">Practicar en el laboratorio web</a>' : ''}
+      ${isWeb ? '<a class="btn btn--primary" href="games/laboratorio-web/">Material y práctica · Abrir laboratorio web</a>' : ''}
       ${isArduino
         ? `<a class="btn btn--primary" href="aula/" data-aula-link hidden>Entrar al Aula</a>
           <a class="btn btn--outline" href="${waLink('Hola, quiero solicitar una cuenta para acceder a las lecciones del curso de Arduino en GLOBALT ROBOTICS.')}" target="_blank" rel="noopener">Solicitar acceso</a>`
-        : `${link ? `<a class="btn btn--outline" href="${esc(link)}" ${external ? 'target="_blank" rel="noopener"' : ''}>${icon('external')} Material y práctica</a>` : ''}
+        : `${link && !isWeb ? `<a class="btn btn--outline" href="${esc(link)}" ${external ? 'target="_blank" rel="noopener"' : ''}>${icon('external')} Material y práctica</a>` : ''}
           <a class="btn btn--wa" href="${waLink(waMsg.course(course.title))}" target="_blank" rel="noopener">Inscribirme</a>`}
     </div>
   </article>`;

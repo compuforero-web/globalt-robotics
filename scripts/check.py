@@ -11,7 +11,7 @@ for source in [*root.rglob('*.js'), *root.rglob('*.mjs')]:
     count += 1
     text = source.read_text()
     for name in re.findall(r'''(?:from\s*|import\s*)['"](\.[^'"]+)['"]''', text):
-        assert (source.parent / name).is_file(), (source, name)
+        assert (source.parent / name.split('?')[0]).is_file(), (source, name)
 for source in root.rglob('*.json'):
     json.loads(source.read_text())
 for source in root.rglob('*.html'):
