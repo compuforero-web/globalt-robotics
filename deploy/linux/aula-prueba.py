@@ -3,7 +3,7 @@
 
 Uso: AULA_PRUEBA_CLAVE=... python3 aula-prueba.py <base> <correo> <registro_abierto: si|no> [tunel]
 Con «tunel» se envían las cabeceras que añadiría Cloudflare (HTTPS y IP del visitante) a 127.0.0.1:8096.
-Solo biblioteca estándar. Comprueba cookies Secure/HttpOnly, CSRF, inscripción, borrador y compilación real.
+Solo biblioteca estándar. Comprueba cookies Secure/HttpOnly, CSRF, inscripción, borrador, progreso y compilación real.
 """
 import json
 import os
@@ -78,10 +78,23 @@ assert pedir('GET', '/api/aula/compilador/salud')[0] == 200, 'compilador vía au
 assert pedir('POST', '/api/aula/compilar', {'codigo': codigo})[0] == 403, 'compilar sin CSRF'
 e, d = pedir('POST', '/api/aula/compilar', {'codigo': codigo}, csrf)
 assert e == 200 and d['ok'] is True and d['hex'].startswith(':'), ('compilación real', e, str(d)[:200])
+# Progreso declarativo: guardar código y compilar no completan; solo «completada» lo hace; sin CSRF se rechaza.
+P = '/api/aula/mis-cursos'
+progreso = lambda: next(c for c in pedir('GET', P)[1]['cursos'] if c['id'] == 'course-arduino')['progreso']
+assert progreso() == {'evaluacion': 'navegador', 'ultima': None, 'lecciones': []}, 'progreso vacío'
+assert pedir('POST', P, {'leccion_id': 'arduino-led-serie', 'paso': 1})[0] == 403, 'progreso sin CSRF'
+assert pedir('POST', P, {'leccion_id': 'arduino-led-serie', 'paso': 1, 'usuario_id': 1}, csrf)[0] == 422
+e, d = pedir('POST', P, {'leccion_id': 'arduino-led-serie', 'paso': 2, 'vistos': [0, 1]}, csrf)
+assert e == 200 and d['progreso']['estado'] == 'en-curso', ('visita', e, d)
+e, d = pedir('POST', P, {'leccion_id': 'arduino-led-serie', 'paso': 2, 'completada': True}, csrf)
+assert e == 200 and d['progreso']['estado'] == 'completada', ('reto superado', e, d)
 assert pedir('DELETE', '/api/aula/sesion', None, csrf)[0] == 204 and not cookie
 assert pedir('GET', B)[0] == 401
+assert pedir('GET', P)[0] == 401
 e, d = pedir('POST', '/api/aula/sesion', {'correo': correo, 'clave': clave}); assert e == 200
 assert pedir('GET', B)[1]['borrador']['codigo'] == codigo, 'recuperar borrador'
+p = progreso()
+assert p['ultima'] == 'arduino-led-serie' and p['lecciones'][0]['estado'] == 'completada' and p['lecciones'][0]['paso'] == 2, p
 pedir('DELETE', '/api/aula/sesion', None, d['csrf'])
 print('Prueba funcional del aula: salud, registro ' + ('abierto' if registro == 'si' else 'cerrado')
-      + ', cookies Secure/HttpOnly, origen, CSRF, inscripción, borrador y compilación real: OK')
+      + ', cookies Secure/HttpOnly, origen, CSRF, inscripción, borrador, progreso y compilación real: OK')

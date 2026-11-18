@@ -1,6 +1,6 @@
 """API del aula: registro, sesión de servidor y cursos del estudiante. Prefijo: /api/aula."""
 from contextlib import asynccontextmanager
-from datetime import timedelta
+from datetime import datetime, timedelta
 import re
 import threading
 import unicodedata
@@ -12,7 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from psycopg.errors import UniqueViolation
 from psycopg_pool import ConnectionPool
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StrictBool, StrictInt, field_validator
 
 from . import compilador, seguridad
 from .config import cargar
@@ -22,6 +22,8 @@ RUTA_COOKIE = '/api/aula'
 MAX_CUERPO = 16 * 1024
 METODOS_SEGUROS = {'GET', 'HEAD', 'OPTIONS'}
 MAX_CODIGO = 12000   # caracteres; el cuerpo completo sigue limitado a MAX_CUERPO
+MAX_PASO = 30        # pasos 0..30 de una lección (cabe en la máscara INTEGER de progreso_lecciones)
+MARGEN_VISITA_DIAS = 30   # una visita pendiente más antigua se registra con esta antigüedad máxima
 # Lecciones con borrador en la cuenta y el curso en el que hay que estar inscrito. Los identificadores son
 # definitivos y coinciden con el manifiesto del laboratorio (games/laboratorio-arduino/src/lessons/index.js;
 # lo comprueba tests/test_laboratorio.py). Añadir una lección no requiere migración: la tabla borradores
@@ -218,7 +220,9 @@ def crear_app(config=None):
             'SELECT c.id, c.titulo, c.ruta_laboratorio, i.creada_en FROM inscripciones i '
             'JOIN cursos c ON c.id = i.curso_id WHERE i.usuario_id = %s ORDER BY i.creada_en',
             (sesion['usuario_id'],)).fetchall()
-        return {'cursos': [{'id': f[0], 'titulo': f[1], 'laboratorio': f[2], 'inscrito_en': f[3].isoformat()} for f in filas]}
+        progreso = progreso_por_curso(conexion, sesion['usuario_id'])
+        return {'cursos': [{'id': f[0], 'titulo': f[1], 'laboratorio': f[2], 'inscrito_en': f[3].isoformat(),
+                            'progreso': progreso.get(f[0], vacio(f[0]))} for f in filas]}
 
     @app.post('/api/aula/inscripciones')
     def inscribir(datos: Inscripcion, respuesta: Response, sesion=Depends(con_csrf), conexion=Depends(bd)):
@@ -272,6 +276,61 @@ def crear_app(config=None):
                                  'borrador': borrador_publico(leer_borrador(conexion, usuario, leccion_id))},
                                 status_code=409)
         return {'borrador': borrador_publico(fila)}
+
+    # ---------- Progreso del curso (DECLARATIVO: la evaluación ocurre en el navegador) ----------
+    # Ruta dentro de la lista cerrada del nginx público (/api/aula/mis-cursos): no requiere cambiar la
+    # infraestructura. La identidad sale siempre de la sesión; el cuerpo nunca indica el usuario.
+    # Los datos se fusionan (pasos vistos = unión, reto superado = permanente, paso = visita más reciente),
+    # así que repetir o reenviar una petición pendiente no cambia el resultado ni retrocede el progreso.
+    # El servidor no puede verificar que el reto se superó: no usar para certificados, notas ni permisos.
+    COLUMNAS = 'leccion_id, paso, pasos_vistos, visto_en, completada_en, superada_en'
+
+    def leccion_publica(fila):
+        leccion, paso, mascara, visto, completada, superada = fila
+        return {'leccion_id': leccion, 'estado': 'completada' if completada else 'en-curso', 'paso': paso,
+                'vistos': [n for n in range(31) if mascara >> n & 1], 'visto_en': visto.isoformat(),
+                'completada_en': completada.isoformat() if completada else None,
+                'superada_en': superada.isoformat() if superada else None}
+
+    def vacio(curso):
+        if curso not in set(LECCIONES.values()):
+            return None
+        return {'evaluacion': 'navegador', 'ultima': None, 'lecciones': []}
+
+    def progreso_por_curso(conexion, usuario_id):
+        filas = conexion.execute(f'SELECT {COLUMNAS} FROM progreso_lecciones WHERE usuario_id = %s '
+                                 'ORDER BY visto_en DESC, leccion_id', (usuario_id,)).fetchall()
+        cursos = {}
+        for fila in filas:
+            curso = LECCIONES.get(fila[0])
+            if not curso:   # lección retirada del manifiesto: se conserva en la base pero no se muestra
+                continue
+            datos = cursos.setdefault(curso, vacio(curso))
+            datos['ultima'] = datos['ultima'] or fila[0]   # filas ordenadas por visita más reciente
+            datos['lecciones'].append(leccion_publica(fila))
+        return cursos
+
+    @app.post('/api/aula/mis-cursos')
+    def registrar_progreso(datos: Progreso, sesion=Depends(con_csrf), conexion=Depends(bd)):
+        leccion_permitida(datos.leccion_id, sesion, conexion)
+        mascara = 0
+        for paso in {*datos.vistos, datos.paso}:
+            mascara |= 1 << paso
+        fila = conexion.execute(
+            'WITH v AS (SELECT LEAST(now(), GREATEST(now() - %(margen)s, COALESCE(%(visto)s::timestamptz, now()))) AS t) '
+            'INSERT INTO progreso_lecciones AS p (usuario_id, leccion_id, paso, pasos_vistos, visto_en, completada_en, superada_en) '
+            'SELECT %(u)s, %(l)s, %(paso)s, %(m)s, v.t, CASE WHEN %(c)s THEN v.t END, CASE WHEN %(c)s THEN v.t END FROM v '
+            'ON CONFLICT (usuario_id, leccion_id) DO UPDATE SET '
+            '  paso = CASE WHEN EXCLUDED.visto_en >= p.visto_en THEN EXCLUDED.paso ELSE p.paso END, '
+            '  visto_en = GREATEST(p.visto_en, EXCLUDED.visto_en), '
+            '  pasos_vistos = p.pasos_vistos | EXCLUDED.pasos_vistos, '
+            '  completada_en = LEAST(p.completada_en, EXCLUDED.completada_en), '
+            '  superada_en = GREATEST(p.superada_en, EXCLUDED.superada_en), '
+            '  actualizado_en = now() '
+            f'RETURNING {COLUMNAS}',
+            {'margen': timedelta(days=MARGEN_VISITA_DIAS), 'visto': datos.visto_en, 'u': sesion['usuario_id'],
+             'l': datos.leccion_id, 'paso': datos.paso, 'm': mascara, 'c': datos.completada}).fetchone()
+        return {'progreso': leccion_publica(fila), 'evaluacion': 'navegador'}
 
     # ---------- Compilación con el servicio existente (sesión, CSRF, inscripción y límites) ----------
     CURSO_ARDUINO = 'course-arduino'
@@ -421,6 +480,30 @@ class Compilacion(BaseModel):
     def sin_nulos(cls, valor):
         if '\x00' in valor:
             raise ValueError('carácter nulo')
+        return valor
+
+
+class Progreso(BaseModel):
+    """Avance declarado por el laboratorio. «completada» solo se envía tras superar el evaluador del navegador."""
+    model_config = ConfigDict(extra='forbid')   # sin usuario_id ni fechas de finalización: las decide el servidor
+    leccion_id: str = Field(pattern=r'^[a-z0-9-]{3,60}$')
+    paso: StrictInt = Field(ge=0, le=MAX_PASO)
+    vistos: list[StrictInt] = Field(default_factory=list, max_length=MAX_PASO + 1)
+    visto_en: datetime | None = None   # momento de la visita en el navegador (se acota a [ahora - 30 días, ahora])
+    completada: StrictBool = False
+
+    @field_validator('vistos')
+    @classmethod
+    def pasos_validos(cls, valor):
+        if any(not 0 <= n <= MAX_PASO for n in valor):
+            raise ValueError('paso fuera de rango')
+        return valor
+
+    @field_validator('visto_en')
+    @classmethod
+    def con_zona(cls, valor):
+        if valor is not None and valor.tzinfo is None:
+            raise ValueError('fecha sin zona horaria')
         return valor
 
 

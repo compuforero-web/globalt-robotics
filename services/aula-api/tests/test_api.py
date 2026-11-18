@@ -32,7 +32,8 @@ def config(**cambios):
 def base_limpia():
     with psycopg.connect(URL, autocommit=True) as c:
         c.execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
-    assert migraciones.aplicar(URL) == ['0001_inicial.sql', '0002_borradores.sql', '0003_compilaciones.sql']
+    assert migraciones.aplicar(URL) == ['0001_inicial.sql', '0002_borradores.sql', '0003_compilaciones.sql',
+                                       '0004_progreso.sql']
     assert migraciones.aplicar(URL) == []          # reproducible e idempotente
 
 
@@ -418,6 +419,148 @@ class _Falso(BaseHTTPRequestHandler):
 
 class _ServidorUnix(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
     daemon_threads = True
+
+
+# ---------- Progreso del curso (declarativo) ----------
+RUTA_P = '/api/aula/mis-cursos'
+
+
+def progreso(c):
+    curso = next(x for x in c.get(RUTA_P).json()['cursos'] if x['id'] == 'course-arduino')
+    return curso['progreso']
+
+
+def leccion(c, leccion_id):
+    return next((x for x in progreso(c)['lecciones'] if x['leccion_id'] == leccion_id), None)
+
+
+def test_progreso_vacio_y_formato():
+    with cliente() as c:
+        inscrito(c, 'prog.vacio@example.com')
+        assert progreso(c) == {'evaluacion': 'navegador', 'ultima': None, 'lecciones': []}
+        # El catálogo y los demás campos de «mis cursos» no cambian.
+        curso = c.get(RUTA_P).json()['cursos'][0]
+        assert set(curso) == {'id', 'titulo', 'laboratorio', 'inscrito_en', 'progreso'}
+
+
+def test_progreso_requiere_sesion_csrf_origen_inscripcion_y_validacion():
+    cuerpo = {'leccion_id': 'arduino-led-serie', 'paso': 1}
+    with cliente() as c:
+        assert c.post(RUTA_P, json=cuerpo).status_code == 401
+        h = {'X-CSRF-Token': registrar(c, 'prog.sin@example.com').json()['csrf']}
+        assert c.post(RUTA_P, json=cuerpo, headers=h).status_code == 403                     # sin inscripción
+        c.post('/api/aula/inscripciones', json={'curso_id': 'course-arduino'}, headers=h)
+        assert c.post(RUTA_P, json=cuerpo).status_code == 403                                # sin CSRF
+        assert c.post(RUTA_P, json=cuerpo, headers={**h, 'Origin': 'https://atacante.example'}).status_code == 403
+        assert c.post(RUTA_P, json=cuerpo, headers={**h, 'Origin': ''}).status_code == 403
+        assert c.post(RUTA_P, json={**cuerpo, 'leccion_id': 'otra-leccion'}, headers=h).status_code == 404
+        id_c = sql("SELECT id FROM usuarios WHERE correo = 'prog.sin@example.com'")[0][0]
+        for malo in ({**cuerpo, 'usuario_id': id_c}, {**cuerpo, 'completada_en': '2026-01-01T00:00:00Z'},
+                     {**cuerpo, 'paso': 31}, {**cuerpo, 'paso': -1}, {**cuerpo, 'paso': '2'}, {**cuerpo, 'paso': 1.5},
+                     {**cuerpo, 'vistos': [0, 31]}, {**cuerpo, 'vistos': list(range(32))}, {**cuerpo, 'vistos': ['1']},
+                     {**cuerpo, 'completada': 'true'}, {**cuerpo, 'completada': 1},
+                     {**cuerpo, 'visto_en': '2026-01-01T00:00:00'}, {**cuerpo, 'visto_en': 'ayer'},
+                     {**cuerpo, 'leccion_id': 'ARDUINO'}, {'paso': 1}):
+            assert c.post(RUTA_P, json=malo, headers=h).status_code == 422, malo
+        r = c.post(RUTA_P, content=b'{"leccion_id":"' + b'a' * 20000 + b'"}', headers={**h, 'Content-Type': 'application/json'})
+        assert r.status_code == 413
+        assert c.post(RUTA_P, content=b'leccion_id=arduino-led-serie', headers={**h, 'Content-Type': 'text/plain'}).status_code == 415
+        assert progreso(c)['lecciones'] == []                                                 # nada se registró
+        assert c.post(RUTA_P, json=cuerpo, headers=h).status_code == 200
+
+
+def test_progreso_aislado_entre_estudiantes_y_lecciones():
+    with cliente() as a, cliente() as b:
+        ha, hb = inscrito(a, 'prog.a@example.com'), inscrito(b, 'prog.b@example.com')
+        r = a.post(RUTA_P, json={'leccion_id': 'arduino-pwm-brillo', 'paso': 2, 'vistos': [0, 1], 'completada': True}, headers=ha)
+        assert r.status_code == 200 and r.json()['evaluacion'] == 'navegador'
+        assert r.json()['progreso']['estado'] == 'completada' and r.json()['progreso']['vistos'] == [0, 1, 2]
+        assert progreso(b)['lecciones'] == [] and progreso(b)['ultima'] is None
+        # El CSRF de A no sirve con la sesión de B (p. ej., navegador compartido tras cambiar de cuenta).
+        assert b.post(RUTA_P, json={'leccion_id': 'arduino-led-serie', 'paso': 0, 'completada': True}, headers=ha).status_code == 403
+        assert progreso(b)['lecciones'] == []
+        assert b.post(RUTA_P, json={'leccion_id': 'arduino-led-serie', 'paso': 3}, headers=hb).status_code == 200
+        # Una lección no toca las demás.
+        assert [x['leccion_id'] for x in progreso(a)['lecciones']] == ['arduino-pwm-brillo']
+        assert leccion(b, 'arduino-led-serie')['estado'] == 'en-curso'
+        assert leccion(b, 'arduino-pwm-brillo') is None
+        assert a.post(RUTA_P, json={'leccion_id': 'arduino-led-serie', 'paso': 1}, headers=ha).status_code == 200
+        assert leccion(a, 'arduino-led-serie')['estado'] == 'en-curso'
+        assert leccion(a, 'arduino-pwm-brillo')['estado'] == 'completada'
+        assert leccion(b, 'arduino-led-serie')['paso'] == 3
+    assert sql("SELECT count(*) FROM progreso_lecciones p JOIN usuarios u ON u.id = p.usuario_id "
+               "WHERE u.correo LIKE 'prog._@example.com'")[0][0] == 3
+
+
+def test_progreso_leer_guardar_compilar_o_visitar_no_completa(socket_falso):
+    with cliente(compilador_socket=socket_falso) as c:
+        h = inscrito(c, 'prog.nocompleta@example.com')
+        assert c.get(RUTA_B).status_code == 200
+        assert c.put(RUTA_B, json={'codigo': 'void loop() {}'}, headers=h).status_code == 200
+        assert c.post(RUTA_C, json=PROG, headers=h).status_code == 200
+        assert progreso(c)['lecciones'] == []        # borradores y compilaciones no registran progreso
+        for paso in range(6):                        # recorrer todos los pasos (incluidas las pistas) no completa
+            assert c.post(RUTA_P, json={'leccion_id': 'arduino-led-serie', 'paso': paso, 'vistos': list(range(paso + 1))},
+                          headers=h).json()['progreso']['estado'] == 'en-curso'
+        datos = leccion(c, 'arduino-led-serie')
+        assert datos['completada_en'] is None and datos['superada_en'] is None and datos['vistos'] == [0, 1, 2, 3, 4, 5]
+
+
+def test_progreso_idempotente_permanente_y_sin_retroceso():
+    L = 'arduino-servo-barrido'
+    with cliente() as c:
+        h = inscrito(c, 'prog.fusion@example.com')
+        primero = c.post(RUTA_P, json={'leccion_id': L, 'paso': 2, 'vistos': [0, 1, 2], 'completada': True}, headers=h).json()['progreso']
+        # Reenviar lo mismo (reintento tras fallo de red) no cambia nada.
+        for _ in range(3):
+            repetido = c.post(RUTA_P, json={'leccion_id': L, 'paso': 2, 'vistos': [0, 1, 2], 'completada': True}, headers=h).json()['progreso']
+            assert repetido['completada_en'] == primero['completada_en'] and repetido['vistos'] == [0, 1, 2]
+        # Una visita posterior sin «completada» no borra el reto superado; los pasos vistos se unen.
+        r = c.post(RUTA_P, json={'leccion_id': L, 'paso': 4, 'vistos': [4]}, headers=h).json()['progreso']
+        assert r['estado'] == 'completada' and r['completada_en'] == primero['completada_en'] and r['vistos'] == [0, 1, 2, 4] and r['paso'] == 4
+        # Un avance pendiente antiguo (enviado tarde) suma pasos vistos pero no hace retroceder el paso actual.
+        r = c.post(RUTA_P, json={'leccion_id': L, 'paso': 3, 'vistos': [3], 'visto_en': '2026-01-01T00:00:00Z'}, headers=h).json()['progreso']
+        assert r['paso'] == 4 and r['vistos'] == [0, 1, 2, 3, 4]
+        # Fechas en el futuro se acotan a «ahora»; muy antiguas, a 30 días.
+        r = c.post(RUTA_P, json={'leccion_id': 'arduino-led-serie', 'paso': 1, 'visto_en': '2099-01-01T00:00:00+00:00'}, headers=h).json()['progreso']
+        assert r['visto_en'] < '2099'
+        r = c.post(RUTA_P, json={'leccion_id': 'arduino-led-serie', 'paso': 0, 'visto_en': '2000-01-01T00:00:00Z'}, headers=h).json()['progreso']
+        assert r['paso'] == 1 and r['visto_en'] < '2099'
+        # Superar de nuevo actualiza «superada_en» pero conserva la primera finalización.
+        r = c.post(RUTA_P, json={'leccion_id': L, 'paso': 4, 'completada': True}, headers=h).json()['progreso']
+        assert r['completada_en'] == primero['completada_en'] and r['superada_en'] >= primero['superada_en']
+        assert sql("SELECT count(*) FROM progreso_lecciones p JOIN usuarios u ON u.id = p.usuario_id "
+                   "WHERE u.correo = 'prog.fusion@example.com'")[0][0] == 2
+
+
+def test_progreso_ultima_leccion_y_recuperacion_en_otro_navegador():
+    with cliente() as uno:
+        h = inscrito(uno, 'prog.otro@example.com')
+        uno.post(RUTA_P, json={'leccion_id': 'arduino-led-serie', 'paso': 5, 'completada': True}, headers=h)
+        uno.post(RUTA_P, json={'leccion_id': 'arduino-evasor-pista', 'paso': 2, 'vistos': [0, 1]}, headers=h)
+        assert uno.delete('/api/aula/sesion', headers=h).status_code == 204
+        assert uno.get(RUTA_P).status_code == 401
+        assert uno.post(RUTA_P, json={'leccion_id': 'arduino-led-serie', 'paso': 0}, headers=h).status_code == 401
+    with cliente() as otro:                          # otro navegador, nueva instancia
+        h2 = entrar(otro, 'prog.otro@example.com')
+        p = progreso(otro)
+        assert p['ultima'] == 'arduino-evasor-pista'
+        assert {x['leccion_id']: x['estado'] for x in p['lecciones']} == {'arduino-evasor-pista': 'en-curso', 'arduino-led-serie': 'completada'}
+        assert leccion(otro, 'arduino-evasor-pista')['paso'] == 2 and leccion(otro, 'arduino-evasor-pista')['vistos'] == [0, 1, 2]
+        otro.post(RUTA_P, json={'leccion_id': 'arduino-led-serie', 'paso': 1}, headers=h2)
+        assert progreso(otro)['ultima'] == 'arduino-led-serie'
+
+
+def test_progreso_se_borra_con_la_cuenta_y_ignora_lecciones_retiradas():
+    with cliente() as c:
+        h = inscrito(c, 'prog.borrar@example.com')
+        c.post(RUTA_P, json={'leccion_id': 'arduino-led-serie', 'paso': 0}, headers=h)
+        uid = sql("SELECT id FROM usuarios WHERE correo = 'prog.borrar@example.com'")[0][0]
+        sql("INSERT INTO progreso_lecciones (usuario_id, leccion_id) VALUES (%s, 'leccion-retirada')", uid)
+        assert [x['leccion_id'] for x in progreso(c)['lecciones']] == ['arduino-led-serie']
+        assert progreso(c)['ultima'] == 'arduino-led-serie'
+    sql("DELETE FROM usuarios WHERE id = %s", uid)
+    assert sql('SELECT count(*) FROM progreso_lecciones WHERE usuario_id = %s', uid)[0][0] == 0
 
 
 @pytest.fixture()

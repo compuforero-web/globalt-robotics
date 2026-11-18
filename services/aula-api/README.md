@@ -16,7 +16,8 @@ FastAPI + PostgreSQL. Registro de estudiantes, sesión de servidor revocable e i
 | `GET /sesion` | sí | — | `{usuario, csrf}` |
 | `DELETE /sesion` | sí | sí | Revoca la sesión en el servidor. 204 |
 | `GET /cursos` | — | — | Catálogo activo |
-| `GET /mis-cursos` | sí | — | Cursos del estudiante de la sesión |
+| `GET /mis-cursos` | sí | — | Cursos del estudiante de la sesión. Los cursos con lecciones incluyen `progreso: {evaluacion: 'navegador', ultima, lecciones: [{leccion_id, estado, paso, vistos, visto_en, completada_en, superada_en}]}` |
+| `POST /mis-cursos` `{leccion_id, paso, vistos?, visto_en?, completada?}` | sí | sí | Registra avance **declarativo** de una lección (403 sin inscripción · 404 lección desconocida · 422 campos extra o fuera de rango). Fusiona: pasos vistos = unión, reto superado permanente, paso = visita más reciente; repetir es idempotente |
 | `POST /inscripciones` `{curso_id}` | sí | sí | 201 nueva · 200 ya existía · 404 curso inexistente |
 | `GET /borradores/{leccion}` | sí | — | `{borrador: {codigo, version, actualizado_en} \| null}` del estudiante de la sesión. 403 sin inscripción · 404 lección desconocida |
 | `PUT /borradores/{leccion}` `{codigo, version_base}` | sí | sí | Guarda el borrador (≤ 12 000 caracteres, cuerpo ≤ 16 KB). `version_base` = versión conocida (`null` si no había copia); si otro navegador guardó antes responde 409 con la versión actual y no sobrescribe |
@@ -26,7 +27,7 @@ FastAPI + PostgreSQL. Registro de estudiantes, sesión de servidor revocable e i
 
 Compilación (migración `0003_compilaciones.sql`): la API usa el servicio `services/compilador-arduino` ya instalado por su socket Unix (`AULA_COMPILADOR_SOCKET`; carpeta montada en solo lectura y grupo del socket). No crea otro compilador ni cambia su aislamiento. Límites (variables `AULA_COMPILAR_*`): 1 compilación del aula a la vez (deja turno a los laboratorios), 4 en espera hasta 8 s, 45 s de respuesta, y por estudiante (no por sesión) 1 en curso, 6 por minuto y 60 por hora. Solo se registra la hora de cada compilación; ni el código ni los resultados. Compilar o superar el reto en el navegador no queda registrado como aprobación en el servidor.
 
-Borradores (migración `0002_borradores.sql`): un borrador por estudiante y lección (`arduino-led-serie`, curso `course-arduino`). La identidad sale siempre de la sesión; no hay parámetros de usuario. Guardar código no aprueba retos: el progreso del reto sigue siendo local del navegador y no es un certificado. En el laboratorio, el guardado local sigue siendo el respaldo: si la cuenta y el navegador tienen versiones distintas, el estudiante elige cuál usar y la otra queda en `backupCode` del almacenamiento local.
+Borradores (migración `0002_borradores.sql`): un borrador por estudiante y lección (`arduino-led-serie`, curso `course-arduino`). La identidad sale siempre de la sesión; no hay parámetros de usuario. Guardar código no aprueba retos ni registra progreso. En el laboratorio, el guardado local sigue siendo el respaldo: si la cuenta y el navegador tienen versiones distintas, el estudiante elige cuál usar y la otra queda en `backupCode` del almacenamiento local.
 
 - Cookie `aula_sesion`: aleatoria (256 bits), `HttpOnly`, `SameSite=Strict`, `Path=/api/aula`, `Secure` salvo `AULA_COOKIE_SEGURA=false` (solo desarrollo HTTP). En la base solo se guarda su SHA-256.
 - Caducidad: 120 min de inactividad y 168 h como máximo (configurable). El cierre revoca en el servidor.
@@ -55,3 +56,5 @@ AULA_TEST_DATABASE_URL=postgresql://aula:solo-pruebas@127.0.0.1:55432/aula_test 
 ```
 
 ¡La base de pruebas se vacía! Prueba de navegador (desde la raíz, con el Compose levantado): `AULA_REINICIO=1 node tests/e2e/aula.e2e.mjs`. Borrador en la cuenta: `AULA_SITIO=http://127.0.0.1:8180 node tests/e2e/aula-borrador.e2e.mjs`. Recorrido completo con compilación real (necesita el compilador): `AULA_SITIO=… node tests/e2e/aula-compilar.e2e.mjs` (`AULA_PARAR_COMPILADOR=1` también detiene y rearranca el compilador; solo en pruebas). Cada una registra 3 cuentas; respeta `AULA_MAX_REGISTROS_IP`.
+
+Progreso (migración `0004_progreso.sql`, ver `docs/AULA_PROGRESO.md`): última lección visitada, paso y retos superados por estudiante y lección. **Es declarativo**: el evaluador del reto se ejecuta en el navegador y el servidor no puede verificarlo; no usar para certificados, notas ni permisos. Va por `/api/aula/mis-cursos` porque el nginx público solo deja pasar una lista cerrada de rutas.

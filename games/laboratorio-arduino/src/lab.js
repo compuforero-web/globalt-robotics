@@ -8,6 +8,7 @@ import { Simulation, recordTrace } from './simulation.js';
 import { createGuide } from './guide.js';
 import * as progress from './progress.js';
 import * as cuenta from './cuenta.js';
+import * as progresoCuenta from './progreso-cuenta.js';
 import { MANIFEST, lessonHref } from './lessons/index.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -167,6 +168,7 @@ export function startLab(L) {
     if (result.estado === 'error') { account.failed = true; accountState('No se pudo conectar con tu cuenta. Tu código sigue guardado en este navegador.', 'error', { retry: true }); return; }
     account.active = true;
     account.failed = false;
+    if (!curso.activo) await startAccountProgress(result.usuario).catch(() => {});
     const remote = result.borrador;
     const hasLocal = typeof progress.getLesson(L.id).code === 'string' || isDirty();
     if (!remote) { accountState('Tu cuenta aún no tiene copia de este código: pulsa Guardar para crearla.'); return; }
@@ -179,9 +181,151 @@ export function startLab(L) {
   $('#btn-cuenta-reintentar').addEventListener('click', retryAccount);
   addEventListener('online', () => { if (account.failed) retryAccount(); });
 
+  // ---------- Progreso del curso en la cuenta (declarativo: el reto se evalúa en este navegador) ----------
+  // Con cuenta activa, el panel muestra SOLO el progreso de esa cuenta (servidor + su cola pendiente) y no
+  // escribe en el registro local sin cuenta; ese registro anterior nunca se sube ni se atribuye a una cuenta.
+  const curso = { activo: false, clave: null, servidor: null, mapa: new Map(), timer: 0, enviando: null, otraVez: false };
+  let stepTouched = false;   // el estudiante ya cambió de paso en esta visita
+
+  function progressSync(text, kind = '', retry = false) {
+    const el = $('#progreso-cuenta');
+    el.textContent = text;
+    el.dataset.kind = kind;
+    el.hidden = !text;
+    $('#btn-progreso-reintentar').hidden = !retry;
+  }
+  function progressWhere() {
+    $('#progress-where').textContent = curso.activo
+      ? 'Con tu sesión del aula, el resultado se guarda en tu cuenta como registro declarativo: lo calcula este navegador, no lo verifica el servidor y no es un certificado ni una nota.'
+      : 'El resultado del reto se registra solo en este navegador. Entra en el aula para guardar tu avance en tu cuenta.';
+  }
+  const completed = (id) => (curso.activo ? curso.mapa.get(id)?.estado === 'completada' : Boolean(progress.getLesson(id).completedAt));
+  function refreshAccountProgress() {
+    curso.mapa = progresoCuenta.combinar(curso.servidor, progresoCuenta.pendientes(curso.clave));
+    renderProgress();
+    renderPicker(L, completed);
+    progressWhere();
+  }
+  function stopAccountProgress(text, kind = 'warn') {
+    if (!curso.activo) return;
+    curso.activo = false;
+    clearTimeout(curso.timer);
+    refreshAccountProgress();
+    progressSync(text, kind);
+  }
+
+  /** Envía la cola de ESTA cuenta (si la sesión sigue siendo suya). */
+  async function syncProgress() {
+    if (!curso.clave) return;
+    clearTimeout(curso.timer);
+    if (curso.enviando) { curso.otraVez = true; return curso.enviando; }
+    if (!Object.keys(progresoCuenta.pendientes(curso.clave)).length) return;
+    curso.enviando = (async () => {
+      let r;
+      for (let i = 0; i < 4; i++) {
+        curso.otraVez = false;
+        r = await progresoCuenta.enviar(curso.clave, { sesion: cuenta.sesion, registrar: cuenta.registrarProgreso });
+        for (const p of r.enviados) {
+          const lista = (curso.servidor ||= { lecciones: [] }).lecciones.filter((x) => x.leccion_id !== p.leccion_id);
+          curso.servidor.lecciones = [...lista, p];
+        }
+        if (!(r.estado === 'pendiente' || (r.estado === 'al-dia' && curso.otraVez))) break;
+      }
+      return r;
+    })();
+    const r = await curso.enviando.finally(() => { curso.enviando = null; });
+    if (curso.activo) refreshAccountProgress();
+    if (r.estado === 'al-dia') progressSync('Avance guardado en tu cuenta.', 'ok');
+    else if (r.estado === 'pendiente') curso.timer = setTimeout(syncProgress, 1500);
+    else if (r.estado === 'error') progressSync('No se pudo guardar tu avance en la cuenta. Queda pendiente en este navegador, solo para tu cuenta.', 'error', true);
+    else if (r.estado === 'sin-sesion') stopAccountProgress('Tu sesión terminó. Tu avance pendiente se enviará a tu cuenta cuando vuelvas a entrar en el aula.');
+    else if (r.estado === 'no-disponible') stopAccountProgress('Tu cuenta todavía no guarda el progreso en este servidor: se registra solo en este navegador.');
+    else stopAccountProgress('La sesión del aula cambió en este navegador: no se envió nada. Recarga la página para continuar con tu cuenta.');
+  }
+  const scheduleSync = (ms = 1500) => { clearTimeout(curso.timer); curso.timer = setTimeout(syncProgress, ms); };
+
+  function noteVisit() {
+    if (!curso.activo) return;
+    progresoCuenta.anotar(curso.clave, L.id, { paso: step, vistos: [...seen] });
+    refreshAccountProgress();
+    scheduleSync();
+  }
+
+  /** Reto superado con cuenta activa: solo se anota si la sesión sigue siendo de esta cuenta (o si no hay red). */
+  async function noteCompletion() {
+    let quien;
+    try {
+      const { usuario } = await cuenta.sesion();
+      quien = (await progresoCuenta.claveCuenta(usuario?.correo)) === curso.clave ? 'misma' : 'otra';
+    } catch (e) {
+      quien = e.status === 401 ? 'sin-sesion' : (e.status === 403 ? 'otra' : 'sin-red');   // red, proxy o servidor: queda pendiente
+    }
+    if (!curso.activo) return 'inactiva';
+    if (quien === 'sin-sesion') { stopAccountProgress('Tu sesión terminó y el reto no se guardó en ninguna cuenta. Entra de nuevo en el aula, recarga y vuelve a comprobar el reto.'); return quien; }
+    if (quien === 'otra') { stopAccountProgress('La sesión del aula cambió en este navegador: el reto no se guardó en ninguna cuenta. Recarga la página.'); return quien; }
+    progresoCuenta.anotar(curso.clave, L.id, { paso: step, vistos: [...seen], completada: true });
+    refreshAccountProgress();
+    if (quien === 'misma') await syncProgress();
+    else progressSync('Sin conexión: el reto superado queda pendiente en este navegador, solo para tu cuenta.', 'error', true);
+    return quien;
+  }
+
+  async function startAccountProgress(usuario) {
+    const clave = await progresoCuenta.claveCuenta(usuario?.correo);
+    if (!clave) return;
+    let servidor;
+    try {
+      servidor = await cuenta.progresoCurso();
+    } catch (error) {
+      if (error.status === 401 || error.status === 403 || error.status === -1) return;
+      servidor = undefined;   // red o servidor: se sigue con la cola de la cuenta y se reintenta
+    }
+    if (servidor === null) {
+      progressSync('Tu cuenta todavía no guarda el progreso en este servidor: se registra solo en este navegador.', 'warn');
+      return;
+    }
+    Object.assign(curso, { activo: true, clave, servidor: servidor || null });
+    curso.mapa = progresoCuenta.combinar(curso.servidor, progresoCuenta.pendientes(clave));
+    // El paso y los pasos vistos vienen de la cuenta (no del registro local, que puede ser de otra persona).
+    const mio = curso.mapa.get(L.id);
+    seen.clear();
+    for (const n of mio?.vistos || []) if (n < L.steps.length) seen.add(n);
+    showStep(stepTouched ? step : Math.min(mio?.paso ?? 0, L.steps.length - 1));   // anota la visita
+    if (servidor === undefined) progressSync('No se pudo cargar tu progreso de la cuenta. Tu avance queda pendiente en este navegador, solo para tu cuenta.', 'error', true);
+    else syncProgress();
+  }
+  $('#btn-progreso-reintentar').addEventListener('click', async () => {
+    if (!curso.clave) return;
+    if (curso.activo && !curso.servidor) {
+      try { curso.servidor = await cuenta.progresoCurso(); } catch { /* se informa abajo */ }
+    }
+    syncProgress();
+  });
+  const flushPending = () => { if (curso.clave && Object.keys(progresoCuenta.pendientes(curso.clave)).length) syncProgress(); };
+  addEventListener('online', flushPending);
+  // Al ocultar la página (cambio de pestaña o de lección) no se espera al envío diferido; lo no enviado queda en la cola.
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && curso.activo) flushPending(); });
+  // Otra pestaña del aula cerró la sesión o entró con otra cuenta: esta página deja de registrar para la anterior.
+  progresoCuenta.escucharSesion((tipo) => {
+    if (tipo === 'sesion-cerrada' || tipo === 'sesion-iniciada') {
+      stopAccountProgress('La sesión del aula cambió en este navegador. Esta página ya no registra avance en la cuenta anterior; recárgala para continuar.');
+    }
+  });
+
   function renderProgress() {
-    const lesson = progress.getLesson(L.id);
     const box = $('#progress-state');
+    if (curso.activo) {
+      const mio = curso.mapa.get(L.id);
+      const pend = mio?.pendiente ? ' <span class="pending">(pendiente de sincronizar)</span>' : '';
+      if (mio?.estado === 'completada') {
+        const date = new Date(mio.completadaEn).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' });
+        box.innerHTML = `<strong class="ok">Reto superado</strong> el ${esc(date)} · registrado en tu cuenta${pend}.`;
+      } else {
+        box.innerHTML = `Reto pendiente en tu cuenta${pend}.`;
+      }
+      return;
+    }
+    const lesson = progress.getLesson(L.id);
     if (lesson.completedAt) {
       const date = new Date(lesson.completedAt).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' });
       box.innerHTML = `<strong class="ok">Reto superado</strong> el ${esc(date)}${lesson.attempts ? ` · ${lesson.attempts} intento(s) de evaluación` : ''}.`;
@@ -386,13 +530,20 @@ export function startLab(L) {
       } else {
         result = L.evaluation.evaluate(await recordTrace(hex, L.evaluation.durationMs, { watch: L.pins, stimulus: L.evaluation.stimulus || null }));
       }
-      progress.recordAttempt(L.id);
+      const enCuenta = curso.activo;
+      if (!enCuenta) progress.recordAttempt(L.id);
       lastEval = { code, checks: result.checks };
       renderChecks(result);
       if (result.passed) {
-        progress.markCompleted(L.id, code);
+        // Solo aquí (evaluador superado) se registra una finalización: en la cuenta si hay sesión, si no en el navegador.
+        if (!enCuenta) progress.markCompleted(L.id, code);
         if (editor.value === code) save();
-        setStatus('Reto superado y guardado en este navegador.', 'ok');
+        if (!enCuenta) setStatus('Reto superado y guardado en este navegador.', 'ok');
+        else {
+          const quien = await noteCompletion();
+          setStatus(quien === 'misma' || quien === 'sin-red' ? 'Reto superado y registrado en tu cuenta (resultado declarado por este navegador).'
+            : 'Reto superado. No se registró en ninguna cuenta: revisa el aviso de la sesión.', quien === 'misma' ? 'ok' : 'warn');
+        }
         guide.notify('eval-pass');
       } else {
         setStatus('El reto aún no se cumple.', 'warn');
@@ -422,7 +573,8 @@ export function startLab(L) {
     lessonRoot.querySelector('[data-nav="prev"]').disabled = step === 0;
     const next = lessonRoot.querySelector('[data-nav="next"]');
     next.textContent = step === L.steps.length - 1 ? 'Repasar desde el paso 1' : 'Siguiente →';
-    progress.saveSteps(L.id, step, [...seen]);
+    if (curso.activo) noteVisit();
+    else progress.saveSteps(L.id, step, [...seen]);
     if (focus) lessonRoot.querySelector(`#step-${L.steps[step].id}-t`).focus();
   }
 
@@ -500,6 +652,7 @@ export function startLab(L) {
   lessonRoot.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
+    if (btn.dataset.step || btn.dataset.nav) stepTouched = true;
     if (btn.dataset.step) showStep(Number(btn.dataset.step), { focus: true });
     else if (btn.dataset.nav === 'prev') showStep(step - 1, { focus: true });
     else if (btn.dataset.nav === 'next') showStep(step === L.steps.length - 1 ? 0 : step + 1, { focus: true });
@@ -525,12 +678,12 @@ export function startLab(L) {
       step,
       compileError: lastCompileError?.code === code ? lastCompileError : null,
       lastChecks: lastEval?.code === code ? lastEval.checks : null,
-      completed: Boolean(progress.getLesson(L.id).completedAt),
+      completed: completed(L.id),
     };
   }
 
   // ---------- Cambio de lección (cada lección guarda su propio código; nunca se mezclan) ----------
-  renderPicker(L);
+  renderPicker(L, completed);
   function askSwitch(target) {
     const dialog = $('#switch-dialog');
     $('#switch-dialog-desc').textContent = `Tienes cambios sin guardar en «${L.titulo}». Cada lección guarda su propio código: si cambias a «${target.titulo}» sin guardar, estos cambios se pierden.`;
@@ -580,6 +733,7 @@ export function startLab(L) {
   });
   updateDirty();
   renderProgress();
+  progressWhere();
   updateButtons();
   showStep(step);
   renderRecover();
@@ -608,15 +762,14 @@ function renderHeader(L) {
 
 /**
  * Lista de lecciones con la actual marcada y las previas recomendadas (no bloquean).
- * «Superado» sale solo del registro local de este navegador.
+ * «Superado» sale del progreso de la cuenta con sesión activa, o si no, del registro local de este navegador.
  */
-function renderPicker(current) {
-  const done = (id) => Boolean(progress.getLesson(id).completedAt);
+function renderPicker(current, done = (id) => Boolean(progress.getLesson(id).completedAt)) {
   const items = MANIFEST.map((m) => {
     const here = current && m.id === current.id;
     return `<li><a href="${lessonHref(m.id)}" data-lesson="${esc(m.id)}"${here ? ' aria-current="page"' : ''}>
       <span class="lesson-picker__n">${m.numero}</span><span class="lesson-picker__t">${esc(m.corto)}<small>${esc(m.tema)}</small></span>
-      ${done(m.id) ? '<span class="lesson-picker__ok">Superado<span class="sr-only"> en este navegador</span></span>' : ''}</a></li>`;
+      ${done(m.id) ? '<span class="lesson-picker__ok">Superado</span>' : ''}</a></li>`;
   }).join('');
   const pending = current ? current.previas.filter((id) => !done(id)).map((id) => MANIFEST.find((m) => m.id === id)).filter(Boolean) : [];
   const box = $('#lesson-picker');
