@@ -5,7 +5,9 @@ on:
       - 'aula/**'
       - 'src/public/render-courses.js'
       - 'services/aula-api/migrations/**'
+      - 'services/aula-api/**'
       - 'tests/e2e/inscripcion-catalogo.e2e.mjs'
+      - 'tests/e2e/cuenta-prueba.mjs'
       - '.github/workflows/inscripcion.yml'
 permissions:
   contents: read
@@ -37,19 +39,54 @@ jobs:
         run: |
           python -m pip install -r services/aula-api/requirements.lock pytest==8.3.5 httpx==0.28.1
           python -m pytest -q services/aula-api/tests
-      - name: Probar registro e inscripción desde las tarjetas
+      - name: Probar desde «Inscribirme» hasta verificar el correo, confirmar el curso y retomar la práctica
         env:
           PYTHONPATH: services/aula-api
           AULA_DATABASE_URL: postgresql://aula_ci:solo-pruebas-ci@127.0.0.1:5432/aula_ci
+          AULA_SITIO: http://127.0.0.1:8182
           AULA_ORIGENES: http://127.0.0.1:8182
+          AULA_URL_PUBLICA: http://127.0.0.1:8182
           AULA_COOKIE_SEGURA: 'false'
           AULA_REGISTRO_ABIERTO: 'true'
+          # Correo SOLO al buzón SMTP de pruebas local (guarda .eml; nunca reenvía) y textos de PRUEBA.
+          AULA_CORREO_MODO: smtp
+          AULA_SMTP_HOST: 127.0.0.1
+          AULA_SMTP_PUERTO: '1025'
+          AULA_SMTP_TLS: ninguno
+          AULA_CORREO_REMITENTE: aula-ci@example.com
+          AULA_PERMITIR_TEXTOS_PRUEBA: 'true'
         run: |
+          set -euo pipefail
           npm install --prefix "$RUNNER_TEMP/inscripcion" --no-save --ignore-scripts playwright@1.56.1
           export NODE_PATH="$RUNNER_TEMP/inscripcion/node_modules"
           "$NODE_PATH/.bin/playwright" install --with-deps chromium
+          export AULA_BUZON="$RUNNER_TEMP/buzon"
+          REGISTROS="$RUNNER_TEMP/replica"
+          mkdir -p "$AULA_BUZON" "$REGISTROS"
+          PIDS=()
+          trap 'kill "${PIDS[@]}" 2>/dev/null || true' EXIT
+          # Falla con diagnóstico si un servicio de la réplica muere o no responde a tiempo.
+          esperar() {   # nombre, pid, registro, comprobación
+            local nombre=$1 pid=$2 log=$3; shift 3
+            for _ in $(seq 1 30); do
+              if ! kill -0 "$pid" 2>/dev/null; then
+                echo "::error title=Réplica del aula::$nombre terminó al arrancar"; cat "$log"; exit 1
+              fi
+              if "$@" >/dev/null 2>&1; then echo "$nombre: listo"; return 0; fi
+              sleep 1
+            done
+            echo "::error title=Réplica del aula::$nombre no respondió en 30 s"; cat "$log"; exit 1
+          }
+          # Base temporal limpia (las pruebas anteriores la dejan modificada), migraciones y textos de prueba vigentes.
+          python -c 'import os, psycopg; psycopg.connect(os.environ["AULA_DATABASE_URL"], autocommit=True).execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public")'
           python -m app.migraciones
-          python - <<'PYTEST' &
+          python -m app.documentos cargar-prueba
+          python -m app.documentos estado || { echo '::error title=Réplica del aula::el registro no queda abierto (documentos o correo)'; exit 1; }
+          python services/aula-api/dev/buzon_pruebas.py "$AULA_BUZON" 127.0.0.1 1025 > "$REGISTROS/buzon.log" 2>&1 &
+          PIDS+=($!)
+          esperar 'Buzón SMTP de pruebas' "${PIDS[-1]}" "$REGISTROS/buzon.log" \
+            python -c 'import socket; socket.create_connection(("127.0.0.1", 1025), 1).close()'
+          python - > "$REGISTROS/sitio.log" 2>&1 <<'PYTEST' &
           import uvicorn
           from fastapi.staticfiles import StaticFiles
           from app.main import crear_app
@@ -57,6 +94,8 @@ jobs:
           app.mount('/', StaticFiles(directory='.', html=True))
           uvicorn.run(app, host='127.0.0.1', port=8182)
           PYTEST
-          trap 'kill $!' EXIT
-          for n in {1..20}; do curl -fsS http://127.0.0.1:8182/api/aula/salud && break; sleep 1; done
-          node tests/e2e/inscripcion-catalogo.e2e.mjs
+          PIDS+=($!)
+          esperar 'Sitio y API (8182)' "${PIDS[-1]}" "$REGISTROS/sitio.log" curl -fsS "$AULA_SITIO/api/aula/salud"
+          curl -fsS "$AULA_SITIO/api/aula/config" | python -c 'import json,sys; c=json.load(sys.stdin); assert c["registro_abierto"] and set(c["documentos"]) == {"terminos","datos"}, c' \
+            || { echo '::error title=Réplica del aula::/api/aula/config no anuncia el registro abierto con ambos documentos'; cat "$REGISTROS/sitio.log"; exit 1; }
+          node tests/e2e/inscripcion-catalogo.e2e.mjs || { echo '::group::Registro del sitio'; cat "$REGISTROS/sitio.log"; echo '::endgroup::'; exit 1; }
