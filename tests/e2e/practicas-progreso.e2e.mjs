@@ -61,23 +61,17 @@ async function salirAula(p) {
   await p.click('#btn-salir');
   await p.waitForSelector('#vista-acceso:not([hidden])');
 }
-/** Monta panelPracticas(curso) en la página del aula (así lo conectará «Mis cursos» al integrar). */
+// Lee el panel real tras volver a entrar al aula.
 async function panel(p, curso) {
-  return p.evaluate(async (curso) => {
-    const { panelPracticas } = await import('/aula/src/progreso-practicas.js');
-    document.querySelector('#panel-prueba')?.remove();
-    const caja = document.createElement('section');
-    caja.id = 'panel-prueba';
-    document.querySelector('#mis-cursos').before(caja);
-    const el = panelPracticas(curso);
-    caja.append(el);
-    const t0 = Date.now();
-    while (el.dataset.estado === 'cargando' && Date.now() - t0 < 15000) await new Promise((r) => setTimeout(r, 100));
+  await p.goto(AULA);
+  const tarjeta = p.locator('#mis-cursos [data-curso="' + curso + '"][data-estado="listo"]');
+  await tarjeta.waitFor();
+  return tarjeta.evaluate(el => {
     return { estado: el.dataset.estado, texto: el.textContent,
       filas: Object.fromEntries([...el.querySelectorAll('.leccion')].map((l) => [l.dataset.leccion, l.dataset.estado])),
       enlaces: [...el.querySelectorAll('.leccion a')].map((a) => a.getAttribute('href')),
       continuar: el.querySelector('.btn-continuar')?.getAttribute('href') };
-  }, curso);
+  });
 }
 const colas = (p) => p.evaluate((pre) => Object.keys(localStorage).filter((k) => k.startsWith(pre)), COLA);
 const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
@@ -264,8 +258,7 @@ await editarWeb(labC, 'html', ESTRUCTURA);
 assert.equal(await comprobarWeb(labC), 'Reto completado.');
 assert.equal((await api(ctxC, 'POST', '/mis-cursos', { leccion_id: 'web-estructura', paso: 0 })).status, 403);   // sin CSRF/inscripción
 assert.deepEqual((await api(ctxC, 'GET', '/mis-cursos')).json.cursos, []);
-pw = await panel(aulaC, 'course-web');
-assert.equal(pw.estado, 'error');
+assert.equal(await aulaC.locator('#mis-cursos [data-curso="course-web"]').count(), 0);
 log('sin inscripción: invitado explícito; la cuenta no recibe nada');
 
 // 11. Móvil (Pixel 7): Beto en su teléfono, sin desbordes, y aprueba un reto.

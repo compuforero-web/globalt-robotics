@@ -47,7 +47,7 @@ console.log(JSON.stringify({{ web: lessons.map((l) => l.id), py: PRACTICAS.map((
         texto = (ROOT / 'aula/src/progreso-practicas.js').read_text()
         self.assertNotRegex(texto, r'localStorage|sessionStorage|indexedDB|document\.cookie')
         self.assertIn('export function panelPracticas(curso', texto)
-        self.assertNotIn('progreso-practicas', (ROOT / 'aula/src/main.js').read_text())   # lo conecta la integración
+        self.assertIn('panelPracticas(curso)', (ROOT / 'aula/src/main.js').read_text())
 
     def test_finalizacion_solo_tras_aprobar_el_evaluador(self):
         web = (ROOT / 'games/laboratorio-web/main.js').read_text()
@@ -64,7 +64,7 @@ console.log(JSON.stringify({{ web: lessons.map((l) => l.id), py: PRACTICAS.map((
 
     def test_arduino_y_migraciones_intactas(self):
         cambios = subprocess.run(['git', 'diff', '--name-only', 'origin/main', '--', 'games/laboratorio-arduino',
-                                  'services/aula-api/migrations', 'aula/src/main.js', 'aula/index.html'],
+                                  'services/aula-api/migrations'],
                                  cwd=ROOT, capture_output=True, text=True).stdout.strip()
         self.assertEqual(cambios, '')
 

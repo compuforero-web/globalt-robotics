@@ -33,7 +33,7 @@ def base_limpia():
     with psycopg.connect(URL, autocommit=True) as c:
         c.execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
     assert migraciones.aplicar(URL) == ['0001_inicial.sql', '0002_borradores.sql', '0003_compilaciones.sql',
-                                       '0004_progreso.sql']
+                                       '0004_progreso.sql', '0005_catalogo.sql']
     assert migraciones.aplicar(URL) == []          # reproducible e idempotente
 
 
@@ -192,6 +192,21 @@ def test_inscripcion_sin_duplicados_y_curso_inexistente():
         assert cursos[0]['laboratorio'] == 'games/laboratorio-arduino/index.html'
     assert sql("SELECT count(*) FROM inscripciones i JOIN usuarios u ON u.id = i.usuario_id "
                "WHERE u.correo = 'inscribe@example.com'")[0][0] == 1
+
+
+def test_inscribir_catalogo_publico_completo():
+    from pathlib import Path
+    import json
+    catalogo = Path(__file__).resolve().parents[3] / 'data/catalogo-inicial.json'
+    esperados = {c['id'] for c in json.loads(catalogo.read_text())['courses']}
+    with cliente() as c:
+        recibidos = {curso['id'] for curso in c.get('/api/aula/cursos').json()['cursos']}
+        assert esperados <= recibidos
+        token = registrar(c, 'catalogo@example.com').json()['csrf']
+        for curso_id in esperados:
+            assert c.post('/api/aula/inscripciones', json={'curso_id': curso_id},
+                          headers={'X-CSRF-Token': token}).status_code == 201
+        assert {curso['id'] for curso in c.get('/api/aula/mis-cursos').json()['cursos']} == esperados
 
 
 def test_separacion_entre_estudiantes():
