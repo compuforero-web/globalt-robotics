@@ -52,3 +52,9 @@ nav button{font-size:.88rem}
 pre{max-width:100%;overflow:auto;padding:.75rem;background:#0c171c;color:var(--accent);border-radius:.45rem}
 article,section{min-width:0}
 
+.cuenta{margin:.8rem 0;padding:.6rem .7rem;border:1px solid var(--line);border-left:3px solid var(--muted);border-radius:.5rem;font-size:.84rem;color:var(--muted)}
+.cuenta p{margin:0 0 .4rem}
+.cuenta[data-tipo=ok]{border-left-color:#64ab84}
+.cuenta[data-tipo=error],.cuenta[data-tipo=aviso]{border-left-color:#ffbd73}
+.cuenta button{font-size:.84rem;margin:.2rem .3rem 0 0}
+@media(max-width:1050px){.cuenta{width:100%}}

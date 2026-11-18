@@ -13,14 +13,59 @@ const LIMITE_CASO_MS = 6000;
 const MAX_CONSOLA = 40000;
 
 const { practica: P, pedida } = resolverPractica(location.search);
+// Cuenta del aula (progreso de course-python). Sin aula, sin sesión o si falla: modo invitado como siempre.
+// El historial de invitado (borradores y retos marcados sin cuenta) nunca se atribuye a la cuenta.
+let refrescarCuenta = () => {};
+const cuenta = await import('../../laboratorio-web/progreso-cuenta.js')
+  .then((m) => m.conectarLaboratorio('course-python', { alCambiar: () => refrescarCuenta() }))
+  .catch(() => null);
+const conCuenta = () => Boolean(cuenta && cuenta.modo !== 'invitado');
+guardado.configurar(conCuenta() ? cuenta.espacio : '');
+const hecho = (id) => (conCuenta() ? cuenta.estado(id) === 'completada' : guardado.superado(id));
 pintarNavegacion(P);
+pintarCuenta();
+refrescarCuenta = () => { pintarNavegacion(P); pintarCuenta(); if (P) pintarEstadoReto(); };
+
+function pintarCuenta() {
+  if (!cuenta || cuenta.inicio === 'sin-aula') return;
+  const a = cuenta.aviso();
+  $('#cuenta').hidden = false;
+  $('#cuenta').dataset.tipo = a.tipo;
+  $('#cuenta-borrador').textContent = a.borrador;
+  $('#cuenta-avance').textContent = a.avance;
+  $('#cuenta-reintentar').hidden = !a.reintentar || Boolean(a.recargar);
+  $('#cuenta-recargar').hidden = !a.recargar;
+  if (conCuenta()) $('.nota-guardado').textContent = 'Tu código y tu entrada se guardan automáticamente solo en este navegador, en un espacio separado para tu cuenta, por separado en cada práctica. No se envían al servidor: en otro navegador no aparecerán. Tu avance (práctica visitada y reto superado) sí se guarda en tu cuenta.';
+}
+$('#cuenta-reintentar').addEventListener('click', () => cuenta?.sincronizar());
+$('#cuenta-recargar').addEventListener('click', () => location.reload());
+
+function pintarEstadoReto() {
+  if (conCuenta()) {
+    const e = cuenta.estado(P.id);
+    const pendiente = cuenta.mapa().get(P.id)?.pendiente;
+    $('#estado-reto').innerHTML = e === 'completada'
+      ? `<strong class="ok">Reto superado</strong> · ${pendiente ? 'pendiente de enviar a tu cuenta (guardado en este navegador solo para tu cuenta).' : 'guardado en tu cuenta.'}`
+      : cuenta.modo === 'detenido' ? 'Reto pendiente. Esta página ya no registra avance en ninguna cuenta.'
+        : 'Reto pendiente (al superarlo se guardará en tu cuenta).';
+    return;
+  }
+  const s = guardado.leer(P.id).superado_en;
+  $('#estado-reto').innerHTML = s
+    ? `<strong class="ok">Reto superado</strong> el ${esc(new Date(s).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }))} · registrado solo en este navegador.`
+    : 'Reto pendiente (el resultado se registra solo en este navegador).';
+}
 if (!P) desconocida(pedida);
 else iniciar(P);
 
 function pintarNavegacion(actual) {
   $('#practicas').innerHTML = `<ol>${PRACTICAS.map((p) => `<li><a href="?practica=${esc(p.id)}"${actual?.id === p.id ? ' aria-current="page"' : ''}>
     <span class="practicas__n">${p.numero}</span><span class="practicas__t">${esc(p.corto)}</span>
-    ${guardado.superado(p.id) ? '<span class="practicas__ok" title="Reto superado en este navegador">✓<span class="sr-only"> superado en este navegador</span></span>' : ''}</a></li>`).join('')}</ol>`;
+    ${hecho(p.id) ? (conCuenta() ? '<span class="practicas__ok" title="Reto superado (tu cuenta)">✓<span class="sr-only"> superado en tu cuenta</span></span>'
+      : '<span class="practicas__ok" title="Reto superado en este navegador">✓<span class="sr-only"> superado en este navegador</span></span>') : ''}</a></li>`).join('')}</ol>`;
+  for (const [i, li] of [...$('#practicas').querySelectorAll('li')].entries()) {
+    li.dataset.estado = conCuenta() ? cuenta.estado(PRACTICAS[i].id) : (hecho(PRACTICAS[i].id) ? 'completada' : 'sin-comenzar');
+  }
 }
 
 function desconocida(id) {
@@ -44,8 +89,21 @@ function iniciar(P) {
   $('#codigo-ejemplo').textContent = P.ejemplo.codigo;
   $('#enunciado').innerHTML = P.reto.enunciado;
 
-  // ---------- Archivos y borrador (solo este navegador) ----------
+  cuenta?.visitar(P.id);   // con cuenta: registra la visita (no completa)
+
+  // ---------- Archivos y borrador (solo este navegador; con cuenta, en el espacio de la cuenta) ----------
   const borrador = guardado.leer(P.id);
+  const invitado = conCuenta() && !borrador.guardado_en ? guardado.leerInvitado(P.id) : {};
+  if (invitado.archivos && P.archivos.some((a) => typeof invitado.archivos[a.nombre] === 'string' && invitado.archivos[a.nombre] !== a.inicial)) {
+    $('#copiar-invitado').hidden = false;
+    $('#copiar-invitado').addEventListener('click', () => {
+      if (!confirm('¿Copiar al espacio de tu cuenta el código que se escribió en este navegador sin cuenta? Solo se copia el código y la entrada: los retos de invitado no se suman a tu cuenta.')) return;
+      const copia = {};
+      for (const a of P.archivos) copia[a.nombre] = typeof invitado.archivos[a.nombre] === 'string' ? invitado.archivos[a.nombre] : a.inicial;
+      guardado.guardar(P.id, copia, typeof invitado.entrada === 'string' ? invitado.entrada : P.entrada);
+      location.reload();
+    });
+  }
   const archivos = {};
   for (const a of P.archivos) archivos[a.nombre] = typeof borrador.archivos?.[a.nombre] === 'string' ? borrador.archivos[a.nombre] : a.inicial;
   let activo = P.principal;
@@ -229,12 +287,6 @@ function iniciar(P) {
   });
 
   // ---------- Comprobación del reto ----------
-  function pintarEstadoReto() {
-    const s = guardado.leer(P.id).superado_en;
-    $('#estado-reto').innerHTML = s
-      ? `<strong class="ok">Reto superado</strong> el ${esc(new Date(s).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }))} · registrado solo en este navegador.`
-      : 'Reto pendiente (el resultado se registra solo en este navegador).';
-  }
   pintarEstadoReto();
 
   $('#btn-comprobar').addEventListener('click', async () => {
@@ -271,7 +323,13 @@ function iniciar(P) {
     pintar(superado
       ? '<p class="casos__fin ok"><strong>¡Reto superado!</strong> Todos los casos son correctos.</p>'
       : `<p class="casos__fin">${filas.filter((f) => f.ok).length} de ${P.casos.length} casos correctos. Revisa los marcados con ✗.</p>`);
-    if (superado) { guardado.marcarSuperado(P.id); pintarEstadoReto(); pintarNavegacion(P); }
+    if (superado && !conCuenta()) { guardado.marcarSuperado(P.id); pintarEstadoReto(); pintarNavegacion(P); }
+    else if (superado) {
+      // Con cuenta: SOLO aquí (todos los casos aprobados) se registra la finalización, comprobando la sesión.
+      const r = await cuenta.completar(P.id);
+      if (r === 'no-registrado') caja.insertAdjacentHTML('beforeend', '<p class="casos__fin">La sesión del aula cambió: este reto no se guardó en ninguna cuenta.</p>');
+      refrescarCuenta();
+    }
     ocupado = false;
     actualizarBotones();
   });

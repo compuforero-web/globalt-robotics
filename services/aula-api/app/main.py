@@ -45,6 +45,23 @@ LECCIONES = {
     'arduino-evasor-decision': 'course-arduino',
     'arduino-evasor-pista': 'course-arduino',
 }
+# Prácticas de Desarrollo Web y Python: SOLO progreso (sin borradores en la cuenta ni compilación). Cada curso
+# tiene su espacio de nombres: «web-» + identificador del taller (games/laboratorio-web/lessons.js) y los de
+# «Python desde Cero», que ya empiezan por «python-» (games/laboratorio-python/src/practicas.js). Lo comprueba
+# tests/test_progreso_practicas.py. Los cursos los crea la migración 0005 (catálogo); sin ellos no hay inscripción.
+PRACTICAS = {
+    'web-estructura': 'course-web',
+    'web-rejilla': 'course-web',
+    'web-adaptable': 'course-web',
+    'web-eventos': 'course-web',
+    'web-publicacion': 'course-web',
+    'python-variables': 'course-python',
+    'python-condicionales': 'course-python',
+    'python-funciones': 'course-python',
+    'python-archivos': 'course-python',
+    'python-asistente': 'course-python',
+}
+CON_PROGRESO = {**LECCIONES, **PRACTICAS}   # lección o práctica → curso, para el progreso
 
 
 def crear_app(config=None):
@@ -235,13 +252,14 @@ def crear_app(config=None):
         return {'curso_id': datos.curso_id, 'nueva': bool(nueva)}
 
     # ---------- Borradores de código (identidad siempre desde la sesión) ----------
-    def leccion_permitida(leccion_id, sesion, conexion):
-        curso = LECCIONES.get(leccion_id)
+    def leccion_permitida(leccion_id, sesion, conexion, catalogo=LECCIONES,
+                          aviso='Inscríbete en el curso desde el aula para guardar tu código.'):
+        curso = catalogo.get(leccion_id)
         if not curso:
             raise HTTPException(404, 'Lección no disponible.')
         if not conexion.execute('SELECT 1 FROM inscripciones WHERE usuario_id = %s AND curso_id = %s',
                                 (sesion['usuario_id'], curso)).fetchone():
-            raise HTTPException(403, 'Inscríbete en el curso desde el aula para guardar tu código.')
+            raise HTTPException(403, aviso)
 
     def borrador_publico(fila):
         return {'codigo': fila[0], 'version': fila[1], 'actualizado_en': fila[2].isoformat()} if fila else None
@@ -293,7 +311,7 @@ def crear_app(config=None):
                 'superada_en': superada.isoformat() if superada else None}
 
     def vacio(curso):
-        if curso not in set(LECCIONES.values()):
+        if curso not in set(CON_PROGRESO.values()):
             return None
         return {'evaluacion': 'navegador', 'ultima': None, 'lecciones': []}
 
@@ -302,7 +320,7 @@ def crear_app(config=None):
                                  'ORDER BY visto_en DESC, leccion_id', (usuario_id,)).fetchall()
         cursos = {}
         for fila in filas:
-            curso = LECCIONES.get(fila[0])
+            curso = CON_PROGRESO.get(fila[0])
             if not curso:   # lección retirada del manifiesto: se conserva en la base pero no se muestra
                 continue
             datos = cursos.setdefault(curso, vacio(curso))
@@ -312,7 +330,9 @@ def crear_app(config=None):
 
     @app.post('/api/aula/mis-cursos')
     def registrar_progreso(datos: Progreso, sesion=Depends(con_csrf), conexion=Depends(bd)):
-        leccion_permitida(datos.leccion_id, sesion, conexion)
+        # Lecciones de Arduino y prácticas de Web/Python; cada una exige inscripción en SU curso.
+        leccion_permitida(datos.leccion_id, sesion, conexion, CON_PROGRESO,
+                          'Inscríbete en el curso desde el aula para guardar tu avance.')
         mascara = 0
         for paso in {*datos.vistos, datos.paso}:
             mascara |= 1 << paso

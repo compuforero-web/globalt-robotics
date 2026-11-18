@@ -8,7 +8,10 @@
 <body>
 <header><a href="../../#programacion">← GLOBALT ROBOTICS</a><span>Desarrollo Web</span></header>
 <main>
-  <aside aria-label="Ruta de prácticas"><h2>Tu recorrido</h2><nav id="ruta" aria-label="Lecciones"></nav><p id="avance"></p><p id="guardado" role="status">Tus borradores se guardan en este navegador.</p></aside>
+  <aside aria-label="Ruta de prácticas"><h2>Tu recorrido</h2><nav id="ruta" aria-label="Lecciones"></nav><p id="avance"></p><p id="guardado" role="status">Tus borradores se guardan en este navegador.</p>
+    <section id="cuenta" class="cuenta" aria-label="Borrador y avance" hidden><p id="cuenta-borrador"></p><p id="cuenta-avance" role="status"></p>
+      <button id="cuenta-reintentar" type="button" hidden>Reintentar</button><button id="cuenta-recargar" type="button" hidden>Recargar</button>
+      <button id="copiar-invitado" type="button" hidden>Copiar mi borrador de invitado</button></section></aside>
   <article>
     <p id="tema"></p><h1 id="titulo"></h1><p id="objetivo"></p>
     <details id="guia" open><summary>Guía de la práctica</summary><ol id="pasos"></ol><details><summary>Ver una pista</summary><p id="pista"></p><pre><code id="muestra"></code></pre></details></details>
