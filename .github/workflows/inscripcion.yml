@@ -1,0 +1,62 @@
+name: Inscripción en el catálogo
+on:
+  pull_request:
+    paths:
+      - 'aula/**'
+      - 'src/public/render-courses.js'
+      - 'services/aula-api/migrations/**'
+      - 'tests/e2e/inscripcion-catalogo.e2e.mjs'
+      - '.github/workflows/inscripcion.yml'
+permissions:
+  contents: read
+jobs:
+  aula:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16.6-alpine@sha256:1d04b9ba1d4996401f2552b51beda8187f175c0645c091e4781134fc9c9a3eef
+        env:
+          POSTGRES_DB: aula_ci
+          POSTGRES_USER: aula_ci
+          POSTGRES_PASSWORD: solo-pruebas-ci
+        ports:
+          - 5432:5432
+        options: --health-cmd "pg_isready -U aula_ci" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Dependencias y pruebas reales de cuentas y borradores
+        env:
+          AULA_TEST_DATABASE_URL: postgresql://aula_ci:solo-pruebas-ci@127.0.0.1:5432/aula_ci
+          PYTHONPATH: services/aula-api
+        run: |
+          python -m pip install -r services/aula-api/requirements.lock pytest==8.3.5 httpx==0.28.1
+          python -m pytest -q services/aula-api/tests
+      - name: Probar registro e inscripción desde las tarjetas
+        env:
+          PYTHONPATH: services/aula-api
+          AULA_DATABASE_URL: postgresql://aula_ci:solo-pruebas-ci@127.0.0.1:5432/aula_ci
+          AULA_ORIGENES: http://127.0.0.1:8182
+          AULA_COOKIE_SEGURA: 'false'
+          AULA_REGISTRO_ABIERTO: 'true'
+        run: |
+          npm install --prefix "$RUNNER_TEMP/inscripcion" --no-save --ignore-scripts playwright@1.56.1
+          export NODE_PATH="$RUNNER_TEMP/inscripcion/node_modules"
+          "$NODE_PATH/.bin/playwright" install --with-deps chromium
+          python -m app.migraciones
+          python - <<'PYTEST' &
+          import uvicorn
+          from fastapi.staticfiles import StaticFiles
+          from app.main import crear_app
+          app = crear_app()
+          app.mount('/', StaticFiles(directory='.', html=True))
+          uvicorn.run(app, host='127.0.0.1', port=8182)
+          PYTEST
+          trap 'kill $!' EXIT
+          for n in {1..20}; do curl -fsS http://127.0.0.1:8182/api/aula/salud && break; sleep 1; done
+          node tests/e2e/inscripcion-catalogo.e2e.mjs

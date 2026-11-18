@@ -1,6 +1,6 @@
 import { esc, safeUrl, normalize } from '../utils/dom.js';
 import { icon } from '../ui/icons.js';
-import { waLink, waMsg } from '../utils/whatsapp.js';
+import { SEED } from '../data/seed.js';
 
 const LEVEL_CLASS = { 'Básico': 'lvl-basic', 'Intermedio': 'lvl-mid', 'Avanzado': 'lvl-final' };
 
@@ -25,11 +25,12 @@ const ARDUINO_PUBLIC_LESSONS = [
 
 export function courseCard(course, index) {
   const topics = Array.isArray(course.topics) ? course.topics : [];
-  const isArduino = course.id === 'course-arduino';
-  const isWeb = course.id === 'course-web' || (normalize(course.category) === 'web' &&
-    normalize(course.title).trim() === 'desarrollo web (html, css y js)');
-  const isPython = course.id === 'course-python' || (normalize(course.category) === 'python' &&
-    normalize(course.title).trim() === 'python desde cero');
+  const original = SEED.courses.find(c => c.id === course.id) ||
+    SEED.courses.find(c => normalize(c.category) === normalize(course.category) &&
+      normalize(c.title).trim() === normalize(course.title).trim());
+  const isArduino = original?.id === 'course-arduino';
+  const isWeb = original?.id === 'course-web';
+  const isPython = original?.id === 'course-python';
   const lab = isWeb ? {path: 'games/laboratorio-web/', name: 'web'}
     : isPython ? {path: 'games/laboratorio-python/', name: 'Python'} : null;
   const link = safeUrl(course.link);
@@ -46,7 +47,7 @@ export function courseCard(course, index) {
       ${course.duration ? `<span class="tag tag--soft">${icon('clock')} ${esc(course.duration)}${isArduino ? ' previstas' : ''}</span>` : ''}
     </div>
     <p class="card__text">${esc(course.description)}</p>
-    ${isArduino ? `<p class="card__text"><strong>${ARDUINO_PUBLIC_LESSONS.length} lecciones disponibles.</strong> Desde el LED hasta un robot evasor programado por ti. Accede con una cuenta habilitada.</p>
+    ${isArduino ? `<p class="card__text"><strong>${ARDUINO_PUBLIC_LESSONS.length} lecciones disponibles.</strong> Desde el LED hasta un robot evasor programado por ti. Puedes explorar la guía como invitado. Para compilar y guardar tu avance, inscríbete.</p>
     <details class="syllabus">
       <summary>${icon('book')} Qué puedes practicar ahora</summary>
       <ol>${ARDUINO_PUBLIC_LESSONS.map((title) => `<li>${esc(title)}</li>`).join('')}</ol>
@@ -58,11 +59,9 @@ export function courseCard(course, index) {
     </details>` : ''}
     <div class="card__actions">
       ${lab ? `<a class="btn btn--primary" href="${lab.path}">Material y práctica · Abrir laboratorio ${lab.name}</a>` : ''}
-      ${isArduino
-        ? `<a class="btn btn--primary" href="aula/" data-aula-link hidden>Entrar al Aula</a>
-          <a class="btn btn--outline" href="${waLink('Hola, quiero solicitar una cuenta para acceder a las lecciones del curso de Arduino en GLOBALT ROBOTICS.')}" target="_blank" rel="noopener">Solicitar acceso</a>`
-        : `${link && !lab ? `<a class="btn btn--outline" href="${esc(link)}" ${external ? 'target="_blank" rel="noopener"' : ''}>${icon('external')} Material y práctica</a>` : ''}
-          <a class="btn btn--wa" href="${waLink(waMsg.course(course.title))}" target="_blank" rel="noopener">Inscribirme</a>`}
+      ${isArduino ? '<a class="btn btn--primary" href="games/laboratorio-arduino/index.html">Explorar laboratorio Arduino</a>'
+        : link && !lab ? `<a class="btn btn--outline" href="${esc(link)}" ${external ? 'target="_blank" rel="noopener"' : ''}>${icon('external')} Material y práctica</a>` : ''}
+      <a class="btn btn--wa" href="aula/${original ? '?curso=' + encodeURIComponent(original.id) : ''}">${original ? 'Inscribirme' : 'Ver cursos en el Aula'}</a>
     </div>
   </article>`;
 }

@@ -7,7 +7,14 @@ import * as api from './api.js';
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const vistas = { acceso: $('#vista-acceso'), cursos: $('#vista-cursos') };
-let laboratorioDisponible = null;
+const cursoElegido = new URLSearchParams(location.search).get('curso');
+const laboratorios = new Map();
+function indicarCurso(curso, inscrito = false) {
+  const aviso = $('#eleccion');
+  aviso.hidden = !cursoElegido;
+  aviso.textContent = curso ? (inscrito ? 'Ya estás inscrito en ' : 'Curso elegido: ') + curso.titulo
+    : 'Este curso no está disponible. Puedes elegir otro en el catálogo del Aula.';
+}
 let usuarioActual = null;
 const LAB_SRC = '../../games/laboratorio-arduino/src/';
 let modulosLab = null;   // { MANIFEST, pc } cuando el laboratorio está publicado en este servidor; false si no
@@ -48,27 +55,30 @@ function pestana(cual) {
 
 // El laboratorio llega con la PR #1; solo se enlaza si el archivo existe en este servidor.
 async function comprobarLaboratorio(ruta) {
-  if (laboratorioDisponible !== null) return laboratorioDisponible;
+  if (laboratorios.has(ruta)) return laboratorios.get(ruta);
   try {
     const r = await fetch('../' + ruta, { method: 'HEAD', cache: 'no-store' });
-    laboratorioDisponible = r.ok && (r.headers.get('content-type') || '').includes('text/html');
+    const disponible = r.ok && (r.headers.get('content-type') || '').includes('text/html');
+    if (disponible) laboratorios.set(ruta, true);
+    return disponible;
   } catch {
-    laboratorioDisponible = false;
+    return false;
   }
-  return laboratorioDisponible;
+
 }
 
 async function tarjetaCurso(curso) {
   const lab = curso.laboratorio && await comprobarLaboratorio(curso.laboratorio);
   const acceso = lab
     ? `<a class="btn btn--primary btn--sm" href="../${esc(curso.laboratorio)}">Abrir laboratorio</a>`
-    : '<span class="pendiente">Laboratorio pendiente de publicación en este servidor</span>';
+    : '<span class="muted">Inscripción registrada.</span>';
   return `<article class="curso"><h3>${esc(curso.titulo)}</h3>
     <p class="muted">Inscrito el ${esc(new Date(curso.inscrito_en).toLocaleDateString('es-CO', { dateStyle: 'long' }))}</p>${acceso}</article>`;
 }
 
 /** Panel de las lecciones del manifiesto con su estado y «Continuar». Solo con laboratorio publicado y API con progreso. */
 async function panelProgreso(curso, clave) {
+  if (curso.id !== 'course-arduino') return null;
   const lab = curso.laboratorio && await comprobarLaboratorio(curso.laboratorio);
   const mods = lab && curso.progreso && await cargarModulosLab();
   if (!mods) return null;
@@ -127,18 +137,21 @@ async function cargarCursos(usuario) {
   const [{ cursos: mios }, { cursos: todos }] = await Promise.all([api.misCursos(), api.catalogo()]);
   if (usuarioActual !== usuario) return;   // la sesión cambió mientras se cargaba
   const inscritos = new Set(mios.map((c) => c.id));
-  $('#mis-cursos').innerHTML = mios.length
+  const tarjetas = mios.length
     ? (await Promise.all(mios.map(async (c) => (await panelProgreso(c, clave)) || tarjetaCurso(c)))).join('')
     : '<p class="muted">Todavía no te has inscrito en ningún curso.</p>';
+  if (usuarioActual !== usuario) return;
+  $('#mis-cursos').innerHTML = tarjetas;
+  indicarCurso(todos.find(c => c.id === cursoElegido), inscritos.has(cursoElegido));
   if (envio && envio.estado !== 'al-dia' && $('#sincro-texto')) {
     const motivo = { 'otra-cuenta': 'La sesión cambió: no se envió nada.', 'no-disponible': 'Este servidor aún no guarda el progreso.' }[envio.estado]
       || 'No se pudo enviar ahora; pulsa Reintentar.';
     $('#sincro-texto').textContent += ' ' + motivo;
   }
-  const libres = todos.filter((c) => !inscritos.has(c.id));
+  const libres = todos.filter((c) => !inscritos.has(c.id)).sort((a,b) => Number(b.id === cursoElegido) - Number(a.id === cursoElegido));
   $('#catalogo').innerHTML = libres.length
     ? libres.map((c) => `<article class="curso"><h3>${esc(c.titulo)}</h3>
-        <button type="button" class="btn btn--orange btn--sm" data-inscribir="${esc(c.id)}">Inscribirme</button></article>`).join('')
+        <button type="button" class="btn btn--orange btn--sm" data-inscribir="${esc(c.id)}">${c.id === cursoElegido ? 'Confirmar inscripción' : 'Inscribirme'}</button></article>`).join('')
     : '<p class="muted">Ya estás inscrito en todos los cursos disponibles.</p>';
   estado('');
 }
@@ -204,6 +217,7 @@ $('#btn-salir').addEventListener('click', async () => {
   $('#mis-cursos').innerHTML = '';
   $('#catalogo').innerHTML = '';
   mostrar('acceso');
+  $('#eleccion').hidden = true;
   pestana('entrar');
   const quedan = mods && clave ? Object.keys(mods.pc.pendientes(clave)).length : 0;
   estado(quedan ? `Sesión cerrada. ${quedan} lección(es) con avance sin enviar quedan en este navegador solo para tu cuenta; se enviarán cuando vuelvas a entrar.`
@@ -239,13 +253,19 @@ $('#catalogo').addEventListener('click', async (e) => {
 });
 
 (async () => {
+  if (cursoElegido) {
+    try { const { cursos } = await api.catalogo(); indicarCurso(cursos.find(c => c.id === cursoElegido)); }
+    catch { $('#eleccion').hidden = true; }
+  }
   // Registro público: solo si el servidor lo permite explícitamente.
   try {
     const { registro_abierto: abierto } = await api.configuracion();
     $('#tab-registro').hidden = !abierto;
     $('#registro-cerrado').hidden = abierto;
+    if (abierto && cursoElegido) pestana('registro');
   } catch {
     $('#tab-registro').hidden = true;
+    $('#registro-cerrado').hidden = false;
   }
   try {
     const { usuario } = await api.sesion();
