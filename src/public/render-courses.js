@@ -50,6 +50,7 @@ export function courseCard(course, index) {
       <ol>${topics.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
     </details>` : ''}
     <div class="card__actions">
+      ${course.id === 'course-web' ? '<a class="btn btn--primary" href="games/laboratorio-web/">Practicar en el laboratorio web</a>' : ''}
       ${isArduino
         ? `<a class="btn btn--primary" href="aula/" data-aula-link hidden>Entrar al Aula</a>
           <a class="btn btn--outline" href="${waLink('Hola, quiero solicitar una cuenta para acceder a las lecciones del curso de Arduino en GLOBALT ROBOTICS.')}" target="_blank" rel="noopener">Solicitar acceso</a>`

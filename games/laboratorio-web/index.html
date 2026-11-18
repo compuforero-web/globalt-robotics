@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101b21"><title>Taller de desarrollo web · GLOBALT Robotics</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header><a href="../../#programacion">← GLOBALT ROBOTICS</a><span>Desarrollo Web</span></header>
+<main>
+  <aside aria-label="Ruta de prácticas"><h2>Tu recorrido</h2><nav id="ruta" aria-label="Lecciones"></nav><p id="avance"></p><p id="guardado" role="status">Tus borradores se guardan en este navegador.</p></aside>
+  <article>
+    <p id="tema"></p><h1 id="titulo"></h1><p id="objetivo"></p>
+    <details id="guia" open><summary>Guía de la práctica</summary><ol id="pasos"></ol><details><summary>Ver una pista</summary><p id="pista"></p><pre><code id="muestra"></code></pre></details></details>
+    <div class="banco">
+      <section class="editor"><h2>Código fuente</h2><div id="archivos" aria-label="Archivos del proyecto"></div>
+        <label id="archivo" for="codigo"></label><textarea id="codigo" spellcheck="false" autocapitalize="off" autocomplete="off" dir="ltr"></textarea>
+        <div class="acciones"><button id="ejecutar">Ver resultado</button><button id="evaluar">Comprobar reto</button></div></section>
+      <section class="salida"><h2>Vista previa</h2><label for="ancho">Pantalla de prueba</label>
+        <select id="ancho"><option value="640">Escritorio · 640 px</option><option value="360">Móvil · 360 px</option></select>
+        <div id="pantalla"></div><p id="estado" role="status"></p><ul id="resultados" aria-live="polite"></ul>
+      </section>
+    </div>
+    <div class="pie"><button id="descarga">Descargar mi página (.html)</button><button id="siguiente" hidden>Siguiente práctica →</button></div>
+  </article>
+</main>
+<script type="module" src="main.js"></script>
+</body></html>

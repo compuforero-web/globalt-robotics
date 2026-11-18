@@ -1,0 +1,54 @@
+:root{color-scheme:dark;font:16px/1.5 "Segoe UI",system-ui,sans-serif;color:#edf4ee;background:#101b21;--muted:#b6c8c7;--line:#395052;--accent:#a9ecc6}
+*{box-sizing:border-box}
+body{margin:0}
+header{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:1rem clamp(1rem,4vw,4rem);border-bottom:1px solid var(--line)}
+header a{font-weight:750;letter-spacing:.035em}
+a{color:var(--accent)}
+header span,label,#avance,#estado,#guardado{color:var(--muted)}
+main{max-width:1540px;margin:auto;padding:clamp(1rem,3vw,3rem);display:grid;grid-template-columns:minmax(160px,220px) minmax(0,1fr);gap:clamp(1rem,3vw,3rem)}
+h1,h2,p{margin:0 0 .65rem}
+h1{font-size:clamp(2rem,4vw,3.6rem);letter-spacing:-.045em;line-height:1.06}
+h2{font-size:1.08rem}
+#tema{font:700 .8rem/1.5 monospace;color:var(--accent)}
+#objetivo{max-width:65ch;color:#d1e0df}
+nav{display:grid;gap:.4rem;margin:1rem 0}
+button,select{font:inherit;color:inherit;background:#203036;border:1px solid var(--line);border-radius:.55rem;padding:.47rem .78rem;cursor:pointer}
+button:hover,select:hover{border-color:var(--accent)}
+button:focus-visible,textarea:focus-visible,summary:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #ffbd73;outline-offset:2px}
+nav button{text-align:left}
+button[aria-current=step],button[aria-pressed=true]{background:#26483c;color:#c9ffdd;border-color:#64ab84}
+#guardado,#estado,#avance{font-size:.86rem}
+#guia{margin:1rem 0 1.4rem;border-left:3px solid #d09b6e;padding:.65rem 1rem;background:#17262b}
+summary{cursor:pointer;font-weight:640}
+#pasos{padding-left:1.4rem;margin:.6rem 0}
+#pista{margin:.5rem 0}
+.banco{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1rem}
+.banco section{min-width:0;background:#16262d;border:1px solid var(--line);border-radius:1rem;padding:clamp(.7rem,1.5vw,1.3rem)}
+#archivos,.acciones,.pie{display:flex;flex-wrap:wrap;gap:.45rem}
+label{display:block;margin:.5rem 0 .3rem;font-size:.86rem}
+textarea{resize:vertical;width:100%;min-height:240px;background:#0c171c;color:#e5f4ea;border:1px solid var(--line);border-radius:.45rem;padding:.7rem;font: .92rem/1.5 "Courier New",monospace;tab-size:2}
+#pantalla{width:100%;margin:.75rem 0;position:relative;background:white;overflow:hidden;border-radius:.4rem}
+iframe{border:0;background:white;transform-origin:top left;display:block}
+.acciones,.pie{margin-top:.65rem}
+#evaluar,#siguiente{background:var(--accent);color:#112d21;font-weight:700}
+#resultados{padding-left:1.4rem;margin:.5rem 0}
+#resultados li{margin:.25rem 0}
+.pie{justify-content:space-between}
+button[hidden]{display:none}
+@media(max-width:1050px){
+main{grid-template-columns:1fr}
+nav{display:flex;flex-wrap:wrap;margin:.4rem 0}
+aside h2{font-size:1rem}
+#avance,#guardado{display:inline;margin-right:.6rem}
+}
+@media(max-width:730px){
+.banco{grid-template-columns:1fr}
+main{padding:.85rem}
+header span{display:none}
+nav button{font-size:.88rem}
+}
+
+
+pre{max-width:100%;overflow:auto;padding:.75rem;background:#0c171c;color:var(--accent);border-radius:.45rem}
+article,section{min-width:0}
+
