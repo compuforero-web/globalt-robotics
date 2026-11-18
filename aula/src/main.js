@@ -1,4 +1,7 @@
-// Aula GLOBALT: registro, acceso, cierre de sesión, «Mis cursos» y progreso del curso de Arduino.
+// Aula GLOBALT: registro de adultos (edad, documentos, enlace por correo), acceso, recuperación de contraseña,
+// cierre de sesión, «Mis cursos» y progreso. El curso elegido (?curso=) se conserva en todo el recorrido.
+// Los tokens de los enlaces llegan en el fragmento (#verificar=… / #restablecer=…): se leen, se quitan de la barra
+// y del historial y solo se envían en el cuerpo de una petición POST.
 // El aula no guarda credenciales en el navegador. El progreso se lee de la cuenta; si el laboratorio dejó avance
 // pendiente para la cuenta con sesión (módulo progreso-cuenta.js del laboratorio), se envía y se borra al confirmarse.
 // El progreso es DECLARATIVO: el reto se evalúa en el navegador; no es un resultado verificado por el servidor.
@@ -7,8 +10,22 @@ import * as api from './api.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const vistas = { acceso: $('#vista-acceso'), cursos: $('#vista-cursos') };
+const vistas = { acceso: $('#vista-acceso'), cursos: $('#vista-cursos'), correo: $('#vista-correo'),
+  enlace: $('#vista-enlace'), autorizacion: $('#vista-autorizacion') };
 const cursoElegido = new URLSearchParams(location.search).get('curso');
+const cursoValido = /^[a-z0-9-]{3,60}$/.test(cursoElegido || '') ? cursoElegido : null;
+function leerEnlace() {
+  const fragmento = new URLSearchParams(location.hash.slice(1));
+  const enlace = ['verificar', 'restablecer'].map((accion) => ({ accion, token: fragmento.get(accion) })).find((e) => e.token) || null;
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search);   // el token no queda a la vista
+  return enlace;
+}
+let enlaceCorreo = leerEnlace();
+// Otro enlace abierto en esta misma pestaña (solo cambia el fragmento): se atiende sin recargar.
+addEventListener('hashchange', () => { const nuevo = leerEnlace(); if (nuevo) { enlaceCorreo = nuevo; mostrarEnlace(); } });
+let ajustes = { registro_abierto: false, recuperacion: false, documentos: {} };
+let correoPendiente = '';
+let pendientesActuales = [];
 const laboratorios = new Map();
 function indicarCurso(curso, inscrito = false) {
   const aviso = $('#eleccion');
@@ -47,11 +64,89 @@ function mostrar(nombre, usuario = null) {
 
 function pestana(cual) {
   const registro = cual === 'registro';
-  $('#form-entrar').hidden = registro;
-  $('#form-registro').hidden = !registro;
+  $('#form-entrar').hidden = cual !== 'entrar';
+  $('#form-recuperar').hidden = cual !== 'recuperar';
+  $('#panel-registro').hidden = !registro;
   $('#tab-entrar').setAttribute('aria-selected', String(!registro));
   $('#tab-registro').setAttribute('aria-selected', String(registro));
   $('#error-form').textContent = '';
+  if (registro) pasoEdad('pregunta');
+}
+
+// Registro en dos pasos: primero la edad. Quien indica ser menor vuelve a la práctica sin cuenta sin haber
+// escrito ni enviado ningún dato (este paso no hace ninguna petición).
+function pasoEdad(paso) {
+  $('#paso-edad').hidden = paso !== 'pregunta';
+  $('#aviso-menor').hidden = paso !== 'menor';
+  $('#form-registro').hidden = paso !== 'adulto';
+  if (paso !== 'adulto') $('#form-registro').reset();
+  $('#error-form').textContent = '';
+}
+
+const enlaceDocumento = (doc) => `documento.html?tipo=${encodeURIComponent(doc.tipo)}&version=${encodeURIComponent(doc.version)}`;
+
+function aplicarAjustes() {
+  const docs = ajustes.documentos || {};
+  $('#tab-registro').hidden = !ajustes.registro_abierto;
+  $('#registro-cerrado').hidden = ajustes.registro_abierto;
+  $('#btn-olvido').hidden = !ajustes.recuperacion;
+  for (const tipo of ['terminos', 'datos']) {
+    const doc = docs[tipo];
+    if (!doc) continue;
+    $('#doc-' + tipo).href = enlaceDocumento(doc);
+    $(`[data-version="${tipo}"]`).textContent = `(versión ${doc.version})`;
+  }
+  if (docs.datos) $('[data-finalidad="datos"]').textContent = 'Finalidad: ' + docs.datos.finalidad;
+  $('#aviso-textos-prueba').hidden = !Object.values(docs).some((d) => d.prueba);
+}
+
+async function prepararInvitado(cursos) {
+  const curso = cursos?.find((c) => c.id === cursoElegido);
+  const destino = curso?.laboratorio && await comprobarLaboratorio(curso.laboratorio) ? '../' + curso.laboratorio : '../index.html#cursos';
+  for (const boton of [$('#btn-invitado'), $('#btn-invitado-menor')]) boton.href = destino;
+}
+
+/** Tras iniciar sesión (contraseña, enlace del correo o recuperación): documentos pendientes o «Mis cursos». */
+async function entrarCon(respuesta, { avisar = true } = {}) {
+  if (avisar) {
+    const mods = await cargarModulosLab();
+    if (mods) mods.pc.avisarSesion('sesion-iniciada');   // otra cuenta pudo entrar en este navegador
+  }
+  if (respuesta.pendientes?.length) mostrarAutorizacion(respuesta.usuario, respuesta.pendientes);
+  else await cargarCursos(respuesta.usuario);
+}
+
+function mostrarAutorizacion(usuario, pendientes) {
+  usuarioActual = usuario;
+  pendientesActuales = pendientes;
+  mostrar('autorizacion', usuario);
+  estado('');
+  $('#error-autorizacion').textContent = '';
+  $('#aviso-textos-prueba-2').hidden = !pendientes.some((d) => d.prueba);
+  $('#lista-autorizacion').innerHTML = pendientes.map((d) => `<label class="check"><input type="checkbox" name="${esc(d.tipo)}" required>
+    <span>${d.tipo === 'datos' ? 'Autorizo el tratamiento de mis datos personales según la' : 'He leído y acepto los'}
+    <a href="${esc(enlaceDocumento(d))}" target="_blank" rel="noopener">${esc(d.titulo)}</a> <small>(versión ${esc(d.version)})</small>.
+    <small class="finalidad">Finalidad: ${esc(d.finalidad)}</small></span></label>`).join('');
+}
+
+function mostrarEnlace() {
+  const verificar = enlaceCorreo.accion === 'verificar';
+  mostrar('enlace');
+  estado('');
+  const f = $('#form-enlace');
+  f.hidden = false;
+  f.reset();
+  $('#titulo-enlace').textContent = verificar ? 'Confirma tu correo' : 'Elige una contraseña nueva';
+  $('#texto-enlace').textContent = verificar
+    ? 'Escribe la contraseña que elegiste al crear la cuenta. Así terminamos de crearla y entras al Aula.'
+    : 'Mínimo 10 caracteres. Al guardarla se cerrarán las demás sesiones abiertas de tu cuenta.';
+  $('#etq-clave').textContent = verificar ? 'Contraseña' : 'Contraseña nueva';
+  f.clave.autocomplete = verificar ? 'current-password' : 'new-password';
+  f.clave.minLength = verificar ? 1 : 10;
+  $('#etq-clave2').hidden = verificar;
+  f.clave2.required = !verificar;
+  $('#btn-enlace').textContent = verificar ? 'Confirmar y entrar' : 'Guardar y entrar';
+  $('#error-enlace').textContent = '';
 }
 
 // El laboratorio llega con la PR #1; solo se enlaza si el archivo existe en este servidor.
@@ -171,6 +266,10 @@ function tratarError(error, destino) {
     return;
   }
   if (error.status === 0) { estado(error.message, 'error'); return; }
+  if (error.status === 403 && /documentos vigentes/.test(error.message)) {   // cambió la versión durante la sesión
+    api.sesion().then((r) => mostrarAutorizacion(r.usuario, r.pendientes)).catch(() => {});
+    return;
+  }
   $(destino).textContent = error.message;
 }
 
@@ -180,15 +279,14 @@ async function enviar(formulario, accion) {
   if (!formulario.checkValidity()) { formulario.reportValidity(); return; }
   boton.disabled = true;
   try {
-    const { usuario } = await accion(new FormData(formulario));
+    const respuesta = await accion(new FormData(formulario));
     formulario.reset();
-    const mods = await cargarModulosLab();
-    if (mods) mods.pc.avisarSesion('sesion-iniciada');   // otra cuenta pudo entrar en este navegador
-    await cargarCursos(usuario);
+    await entrarCon(respuesta);
   } catch (error) {
     // En el formulario, un 401 significa credenciales incorrectas, no sesión caducada.
     if (error.status === 0) estado(error.message, 'error');
-    else $('#error-form').textContent = error.message;
+    else $('#error-form').textContent = error.status === 401 && ajustes.registro_abierto
+      ? error.message + ' Si acabas de crear la cuenta, primero abre el enlace que te enviamos por correo.' : error.message;
   } finally {
     boton.disabled = false;
   }
@@ -200,12 +298,102 @@ $('#form-entrar').addEventListener('submit', (e) => {
   e.preventDefault();
   enviar(e.target, (d) => api.entrar(d.get('correo').trim(), d.get('clave')));
 });
+$('#btn-adulto').addEventListener('click', () => { pasoEdad('adulto'); $('#form-registro [name=nombre]').focus(); });
+$('#btn-menor').addEventListener('click', () => pasoEdad('menor'));
+document.querySelectorAll('[data-edad-volver]').forEach((b) => b.addEventListener('click', () => pasoEdad('pregunta')));
+document.querySelectorAll('[data-ir-acceso]').forEach((b) => b.addEventListener('click', () => {
+  enlaceCorreo = null;
+  mostrar('acceso');
+  pestana('entrar');
+  estado('');
+}));
+$('#btn-olvido').addEventListener('click', () => {
+  pestana('recuperar');
+  $('#form-recuperar [name=correo]').value = $('#form-entrar [name=correo]').value;
+});
+$('#form-recuperar [data-volver]').addEventListener('click', () => pestana('entrar'));
+
+async function conBoton(formulario, destinoError, accion) {
+  const boton = formulario.querySelector('button[type="submit"]');
+  $(destinoError).textContent = '';
+  if (!formulario.checkValidity()) { formulario.reportValidity(); return; }
+  boton.disabled = true;
+  try {
+    await accion(new FormData(formulario));
+  } catch (error) {
+    if (error.status === 0) estado(error.message, 'error');
+    else $(destinoError).textContent = error.message;
+  } finally {
+    boton.disabled = false;
+  }
+}
+
 $('#form-registro').addEventListener('submit', (e) => {
   e.preventDefault();
-  enviar(e.target, (d) => api.registrar(d.get('nombre').trim(), d.get('correo').trim(), d.get('clave')));
+  conBoton(e.target, '#error-form', async (d) => {
+    const docs = ajustes.documentos;
+    if (!docs.terminos || !docs.datos) throw new api.ApiError(409, 'Faltan los documentos. Recarga la página.');
+    const correo = d.get('correo').trim();
+    const r = await api.registrar({ nombre: d.get('nombre').trim(), correo, clave: d.get('clave'), mayor_de_edad: true,
+      terminos: docs.terminos.version, datos: docs.datos.version, ...(cursoValido ? { curso: cursoValido } : {}) });
+    correoPendiente = correo;
+    e.target.reset();
+    pasoEdad('pregunta');
+    mostrar('correo');
+    estado('');
+    $('#correo-mensaje').textContent = r.mensaje;
+  });
 });
-$('#btn-salir').addEventListener('click', async () => {
-  const boton = $('#btn-salir');
+$('#form-recuperar').addEventListener('submit', (e) => {
+  e.preventDefault();
+  conBoton(e.target, '#error-form', async (d) => {
+    const r = await api.recuperar(d.get('correo').trim(), cursoValido);
+    e.target.reset();
+    pestana('entrar');
+    estado(r.mensaje, 'ok');
+  });
+});
+$('#btn-reenviar').addEventListener('click', async () => {
+  const boton = $('#btn-reenviar');
+  boton.disabled = true;
+  try {
+    await api.reenviar(correoPendiente);
+    estado('Si había una solicitud pendiente, te enviamos un enlace nuevo. El anterior ya no sirve.', 'ok');
+  } catch (error) {
+    estado(error.message, 'error');
+  }
+  setTimeout(() => { boton.disabled = false; }, 30000);   // evita reenvíos seguidos (el servidor también limita)
+});
+$('#form-enlace').addEventListener('submit', (e) => {
+  e.preventDefault();
+  conBoton(e.target, '#error-enlace', async (d) => {
+    const verificar = enlaceCorreo.accion === 'verificar';
+    if (!verificar && d.get('clave') !== d.get('clave2')) throw new api.ApiError(422, 'Las contraseñas no coinciden.');
+    let r;
+    try {
+      r = await (verificar ? api.verificar : api.restablecer)(enlaceCorreo.token, d.get('clave'));
+    } catch (error) {
+      if (error.status === 410 || error.status === 409) { e.target.hidden = true; enlaceCorreo = null; }
+      throw error;
+    }
+    enlaceCorreo = null;
+    e.target.reset();
+    await entrarCon(r);
+    estado(verificar ? 'Correo confirmado. Tu cuenta está lista.' : 'Contraseña actualizada.', 'ok');
+  });
+});
+$('#form-autorizacion').addEventListener('submit', (e) => {
+  e.preventDefault();
+  conBoton(e.target, '#error-autorizacion', async () => {
+    const versiones = Object.fromEntries(pendientesActuales.map((d) => [d.tipo, d.version]));
+    const r = await api.autorizar(versiones);
+    if (r.pendientes.length) { mostrarAutorizacion(usuarioActual, r.pendientes); return; }
+    await cargarCursos(usuarioActual);
+    estado('Gracias. Ya puedes seguir con tus cursos.', 'ok');
+  });
+});
+
+async function salirDeCuenta(boton) {
   boton.disabled = true;
   // Último intento de enviar el avance pendiente de ESTA cuenta (máx. 5 s); lo que no salga queda en su cola.
   const usuario = usuarioActual;
@@ -229,7 +417,9 @@ $('#btn-salir').addEventListener('click', async () => {
     + await pendientesPracticas(usuario).catch(() => 0);
   estado(quedan ? `Sesión cerrada. ${quedan} lección(es) con avance sin enviar quedan en este navegador solo para tu cuenta; se enviarán cuando vuelvas a entrar.`
     : 'Sesión cerrada.', quedan ? 'aviso' : 'ok');
-});
+}
+$('#btn-salir').addEventListener('click', () => salirDeCuenta($('#btn-salir')));
+$('#btn-salir-autorizacion').addEventListener('click', () => salirDeCuenta($('#btn-salir-autorizacion')));
 $('#mis-cursos').addEventListener('click', async (e) => {
   const boton = e.target.closest('#btn-sincronizar');
   if (!boton) return;
@@ -260,23 +450,22 @@ $('#catalogo').addEventListener('click', async (e) => {
 });
 
 (async () => {
+  let cursos = null;
+  try { ({ cursos } = await api.catalogo()); } catch { /* sin catálogo: la práctica sin cuenta lleva a la portada */ }
   if (cursoElegido) {
-    try { const { cursos } = await api.catalogo(); indicarCurso(cursos.find(c => c.id === cursoElegido)); }
-    catch { $('#eleccion').hidden = true; }
+    if (cursos) indicarCurso(cursos.find((c) => c.id === cursoElegido));
+    else $('#eleccion').hidden = true;
   }
-  // Registro público: solo si el servidor lo permite explícitamente.
+  prepararInvitado(cursos);
+  // Registro público: solo si el servidor lo permite (decisión explícita, correo y documentos vigentes).
   try {
-    const { registro_abierto: abierto } = await api.configuracion();
-    $('#tab-registro').hidden = !abierto;
-    $('#registro-cerrado').hidden = abierto;
-    if (abierto && cursoElegido) pestana('registro');
-  } catch {
-    $('#tab-registro').hidden = true;
-    $('#registro-cerrado').hidden = false;
-  }
+    ajustes = await api.configuracion();
+  } catch { /* se queda cerrado */ }
+  aplicarAjustes();
+  if (ajustes.registro_abierto && cursoElegido) pestana('registro');
+  if (enlaceCorreo) { mostrarEnlace(); return; }   // enlace del correo: primero se completa (aunque haya otra sesión)
   try {
-    const { usuario } = await api.sesion();
-    await cargarCursos(usuario);
+    await entrarCon(await api.sesion(), { avisar: false });
   } catch (error) {
     if (error.status === 401) { mostrar('acceso'); estado(''); }
     else { mostrar(null); estado(error.message + ' Inténtalo más tarde.', 'error'); }

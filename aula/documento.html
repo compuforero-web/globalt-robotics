@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#070b14">
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="same-origin">
+  <title>Documento · Aula GLOBALT ROBOTICS</title>
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../styles/base.css">
+  <link rel="stylesheet" href="aula.css">
+  <script type="module" src="src/documento.js?v=registro-adultos-1"></script>
+</head>
+<body>
+  <header class="aula-top">
+    <a class="aula-top__home" href="../index.html"><img src="../assets/img/logo.svg" alt="" width="28" height="28"> GLOBALT ROBOTICS</a>
+    <span class="aula-top__title">Aula</span>
+  </header>
+  <main class="aula">
+    <p id="aviso-prueba" class="aviso" role="note" hidden><strong>Texto provisional solo para pruebas.</strong> No es un documento definitivo.</p>
+    <p id="estado" class="estado" role="status" aria-live="polite">Cargando el documento…</p>
+    <article id="documento" hidden aria-labelledby="titulo">
+      <h1 id="titulo"></h1>
+      <p class="muted">Versión <strong id="version"></strong><span id="vigencia"></span></p>
+      <p><strong>Finalidad:</strong> <span id="finalidad"></span></p>
+      <div id="texto" class="documento"></div>
+      <p class="muted huella">Huella SHA-256 del texto: <code id="huella"></code></p>
+    </article>
+    <p><a href="./">Volver al Aula</a></p>
+  </main>
+</body>
+</html>

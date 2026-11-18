@@ -4,6 +4,7 @@
 // Crea cuentas ficticias @example.com.
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { crearCuenta } from './cuenta-prueba.mjs';   // alta de adulto con el buzón de pruebas
 
 const { chromium, devices } = createRequire(import.meta.url)('playwright');
 const SITIO = (process.env.AULA_SITIO || 'http://127.0.0.1:8180').replace(/\/$/, '');
@@ -29,7 +30,7 @@ async function api(ctx, metodo, ruta, datos, csrf) {
 }
 async function cuenta(ctx, nombre, inscribir = true) {
   const correo = `${nombre}.${sufijo}@example.com`;
-  const { json } = await api(ctx, 'POST', '/registro', { nombre: 'Estudiante ' + nombre, correo, clave: CLAVE });
+  const { json } = await crearCuenta(ctx, SITIO, { nombre: 'Estudiante ' + nombre, correo, clave: CLAVE });
   if (inscribir) await api(ctx, 'POST', '/inscripciones', { curso_id: 'course-arduino' }, json.csrf);
   return { correo, csrf: json.csrf };
 }

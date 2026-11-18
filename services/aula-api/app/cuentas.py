@@ -2,7 +2,8 @@
 
 Uso dentro del contenedor de la API; la contraseña se lee de la entrada estándar (nunca como argumento):
   printf '%s' "$CLAVE" | python -m app.cuentas crear --correo alumno@ejemplo.org --nombre "Nombre visible"
-Siempre crea rol «estudiante». No imprime la contraseña.
+Siempre crea rol «estudiante» con origen «consola» (sin autorizaciones: las acepta la persona en su primer acceso
+si hay documentos vigentes). No imprime la contraseña.
 """
 import argparse
 import os
@@ -13,12 +14,12 @@ from psycopg.errors import UniqueViolation
 from pydantic import ValidationError
 
 from . import seguridad
-from .main import Registro
+from .main import DatosCuenta
 
 
 def crear(url, correo, nombre, clave):
     try:
-        datos = Registro(nombre=nombre, correo=correo, clave=clave)
+        datos = DatosCuenta(nombre=nombre, correo=correo, clave=clave)
     except ValidationError as error:
         campos = sorted({str(e['loc'][-1]) for e in error.errors() if e.get('loc')})
         raise ValueError('Datos no válidos: ' + ', '.join(campos)) from None

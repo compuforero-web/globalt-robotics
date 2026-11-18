@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#070b14">
   <meta name="robots" content="noindex">
+  <meta name="referrer" content="same-origin">
   <title>Aula · GLOBALT ROBOTICS</title>
   <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,7 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../styles/base.css">
   <link rel="stylesheet" href="aula.css">
-  <script type="module" src="src/main.js?v=progreso-practicas-1"></script>
+  <script type="module" src="src/main.js?v=registro-adultos-1"></script>
 </head>
 <body>
   <header class="aula-top">
@@ -22,30 +23,107 @@
   </header>
 
   <main class="aula">
-    <p class="aviso" role="note"><strong>Versión de prueba.</strong> Usa solo datos ficticios. Todavía no se admiten cuentas de menores ni datos personales reales.</p>
+    <p class="aviso" role="note"><strong>Versión de prueba.</strong> Usa solo datos ficticios. Las cuentas son solo para personas adultas; para practicar no necesitas cuenta.</p>
     <p id="eleccion" class="nota" hidden></p>
     <p id="estado" class="estado" role="status" aria-live="polite">Conectando con el aula…</p>
 
     <section id="vista-acceso" class="tarjeta" hidden aria-labelledby="titulo-acceso">
       <h1 id="titulo-acceso">Entra a tu aula</h1>
+      <div class="invitado">
+        <a id="btn-invitado" class="btn btn--ghost btn--sm" href="../index.html#cursos">Probar sin cuenta</a>
+        <small class="muted">Sin registro: tu avance queda solo en este navegador.</small>
+      </div>
       <div class="pestanas" role="tablist">
         <button type="button" role="tab" id="tab-entrar" aria-controls="form-entrar" aria-selected="true">Iniciar sesión</button>
-        <button type="button" role="tab" id="tab-registro" aria-controls="form-registro" aria-selected="false">Crear cuenta</button>
+        <button type="button" role="tab" id="tab-registro" aria-controls="panel-registro" aria-selected="false">Crear cuenta</button>
       </div>
       <form id="form-entrar" class="formulario" role="tabpanel" aria-labelledby="tab-entrar" novalidate>
         <label>Correo <input name="correo" type="email" autocomplete="username" required maxlength="254"></label>
         <label>Contraseña <input name="clave" type="password" autocomplete="current-password" required maxlength="128"></label>
         <button class="btn btn--primary" type="submit">Iniciar sesión</button>
+        <button id="btn-olvido" class="enlace" type="button" hidden>¿Olvidaste tu contraseña?</button>
       </form>
-      <form id="form-registro" class="formulario" role="tabpanel" aria-labelledby="tab-registro" hidden novalidate>
-        <label>Nombre visible <input name="nombre" autocomplete="nickname" required minlength="2" maxlength="60"></label>
+      <form id="form-recuperar" class="formulario" hidden novalidate aria-labelledby="titulo-recuperar">
+        <h2 id="titulo-recuperar">Recuperar la contraseña</h2>
+        <p class="muted">Escribe el correo de tu cuenta. Si existe, te enviaremos un enlace de un solo uso para elegir otra contraseña.</p>
         <label>Correo <input name="correo" type="email" autocomplete="email" required maxlength="254"></label>
-        <label>Contraseña <small>(mínimo 10 caracteres)</small>
-          <input name="clave" type="password" autocomplete="new-password" required minlength="10" maxlength="128"></label>
-        <button class="btn btn--primary" type="submit">Crear cuenta de estudiante</button>
+        <button class="btn btn--primary" type="submit">Enviarme el enlace</button>
+        <button class="enlace" type="button" data-volver>Volver a iniciar sesión</button>
       </form>
-      <p id="registro-cerrado" class="muted" hidden>Las cuentas de estudiante las crea GLOBALT ROBOTICS. Si necesitas una, escríbenos por WhatsApp desde la página principal.</p>
+      <div id="panel-registro" role="tabpanel" aria-labelledby="tab-registro" hidden>
+        <div id="paso-edad" class="paso-edad">
+          <h2>Antes de empezar</h2>
+          <p>Por ahora las cuentas del Aula son solo para personas adultas. ¿Tienes 18 años o más?</p>
+          <div class="botones">
+            <button id="btn-adulto" type="button" class="btn btn--primary">Sí, tengo 18 años o más</button>
+            <button id="btn-menor" type="button" class="btn btn--ghost">No, soy menor de 18</button>
+          </div>
+          <p class="muted">No te pedimos fecha de nacimiento, documento de identidad ni teléfono.</p>
+        </div>
+        <div id="aviso-menor" class="aviso-menor" hidden role="region" aria-labelledby="titulo-menor">
+          <h2 id="titulo-menor">Practica sin cuenta</h2>
+          <p>Todavía no creamos cuentas para menores de edad. Puedes usar las prácticas sin registrarte: no te pedimos ningún dato y tu avance queda solo en este navegador.</p>
+          <div class="botones">
+            <a id="btn-invitado-menor" class="btn btn--primary" href="../index.html#cursos">Practicar sin cuenta</a>
+            <button type="button" class="btn btn--ghost" data-edad-volver>Volver</button>
+          </div>
+        </div>
+        <form id="form-registro" class="formulario" hidden novalidate>
+          <label>Nombre visible o alias <small>(así te verás en el Aula; puede ser un apodo)</small>
+            <input name="nombre" autocomplete="nickname" required minlength="2" maxlength="60"></label>
+          <label>Correo <small>(te enviaremos un enlace para confirmarlo)</small>
+            <input name="correo" type="email" autocomplete="email" required maxlength="254"></label>
+          <label>Contraseña <small>(mínimo 10 caracteres)</small>
+            <input name="clave" type="password" autocomplete="new-password" required minlength="10" maxlength="128"></label>
+          <fieldset class="autorizaciones">
+            <legend>Documentos</legend>
+            <p id="aviso-textos-prueba" class="aviso" hidden><strong>Textos provisionales solo para pruebas.</strong> No son los documentos definitivos.</p>
+            <label class="check"><input type="checkbox" name="terminos" required>
+              <span>He leído y acepto los <a id="doc-terminos" target="_blank" rel="noopener">términos de uso</a> <small data-version="terminos"></small>.</span></label>
+            <label class="check"><input type="checkbox" name="datos" required>
+              <span>Autorizo el tratamiento de mis datos personales según la <a id="doc-datos" target="_blank" rel="noopener">autorización de tratamiento de datos</a> <small data-version="datos"></small>.
+              <small class="finalidad" data-finalidad="datos"></small></span></label>
+          </fieldset>
+          <button class="btn btn--primary" type="submit">Crear cuenta</button>
+          <button type="button" class="enlace" data-edad-volver>Volver</button>
+        </form>
+      </div>
+      <p id="registro-cerrado" class="muted" hidden>Por ahora no se pueden crear cuentas desde aquí. Puedes practicar sin cuenta. Si necesitas ayuda, también puedes escribirnos por WhatsApp desde la página principal (opcional).</p>
       <p id="error-form" class="error" role="alert"></p>
+    </section>
+
+    <section id="vista-correo" class="tarjeta" hidden aria-labelledby="titulo-correo">
+      <h1 id="titulo-correo">Revisa tu correo</h1>
+      <p id="correo-mensaje"></p>
+      <p class="muted">Abre el enlace en este u otro dispositivo y escribe tu contraseña para terminar. Si no llega, revisa el correo no deseado o pide otro enlace (el anterior dejará de servir).</p>
+      <div class="botones">
+        <button id="btn-reenviar" type="button" class="btn btn--ghost btn--sm">Reenviar el enlace</button>
+        <button type="button" class="enlace" data-ir-acceso>Volver</button>
+      </div>
+    </section>
+
+    <section id="vista-enlace" class="tarjeta" hidden aria-labelledby="titulo-enlace">
+      <h1 id="titulo-enlace">Confirma tu correo</h1>
+      <p id="texto-enlace"></p>
+      <form id="form-enlace" class="formulario" novalidate>
+        <label><span id="etq-clave">Contraseña</span> <input name="clave" type="password" autocomplete="current-password" required minlength="1" maxlength="128"></label>
+        <label id="etq-clave2" hidden>Repite la contraseña <input name="clave2" type="password" autocomplete="new-password" maxlength="128"></label>
+        <button class="btn btn--primary" type="submit" id="btn-enlace">Confirmar</button>
+      </form>
+      <p id="error-enlace" class="error" role="alert"></p>
+      <button type="button" class="enlace" data-ir-acceso>Ir a iniciar sesión</button>
+    </section>
+
+    <section id="vista-autorizacion" class="tarjeta" hidden aria-labelledby="titulo-autorizacion">
+      <h1 id="titulo-autorizacion">Revisa los documentos del Aula</h1>
+      <p>Para seguir usando tu cuenta, lee y acepta los documentos vigentes. Solo queda registrado lo que aceptes ahora.</p>
+      <p id="aviso-textos-prueba-2" class="aviso" hidden><strong>Textos provisionales solo para pruebas.</strong></p>
+      <form id="form-autorizacion" class="formulario" novalidate>
+        <fieldset class="autorizaciones"><legend>Documentos</legend><div id="lista-autorizacion"></div></fieldset>
+        <button class="btn btn--primary" type="submit">Aceptar y continuar</button>
+      </form>
+      <p id="error-autorizacion" class="error" role="alert"></p>
+      <button id="btn-salir-autorizacion" type="button" class="enlace">Cerrar sesión</button>
     </section>
 
     <section id="vista-cursos" hidden aria-labelledby="titulo-cursos">

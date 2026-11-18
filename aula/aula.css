@@ -65,3 +65,21 @@
   .tarjeta { padding: 16px; }
   .curso .btn { width: 100%; }
 }
+
+/* Registro de adultos */
+.invitado { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 16px; }
+.botones { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.paso-edad h2, .aviso-menor h2, #form-recuperar h2 { font-size: 1.2rem; }
+.paso-edad, .aviso-menor { display: grid; gap: 4px; }
+.enlace { background: none; border: 0; padding: 6px 0; color: var(--cyan); cursor: pointer; justify-self: start; min-height: 44px; text-align: left; }
+.enlace:hover { text-decoration: underline; }
+.autorizaciones { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; display: grid; gap: 12px; margin: 0; min-width: 0; }
+.autorizaciones legend { padding: 0 6px; font-weight: 600; font-size: .92rem; }
+.formulario .check { display: grid; grid-template-columns: 24px 1fr; gap: 10px; align-items: start; font-weight: 400; }
+.formulario .check input { width: 22px; height: 22px; min-height: 0; margin: 2px 0 0; accent-color: var(--cyan); }
+.finalidad { display: block; margin-top: 4px; }
+.documento { white-space: pre-wrap; overflow-wrap: anywhere; font: 400 .95rem/1.6 var(--font); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px; }
+.huella { overflow-wrap: anywhere; font-size: .8rem; }
+@media (max-width: 520px) {
+  .botones .btn { width: 100%; }
+}

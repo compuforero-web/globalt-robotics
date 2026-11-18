@@ -1,20 +1,20 @@
-"""API del aula: registro, sesión de servidor y cursos del estudiante. Prefijo: /api/aula."""
+"""API del aula: registro de adultos, sesión de servidor y cursos del estudiante. Prefijo: /api/aula."""
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 import re
 import threading
 import unicodedata
 from typing import Literal
 from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from psycopg.errors import UniqueViolation
 from psycopg_pool import ConnectionPool
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, StrictBool, StrictInt, field_validator
 
-from . import compilador, seguridad
+from . import compilador, correo, seguridad
 from .config import cargar
 
 COOKIE = 'aula_sesion'
@@ -62,10 +62,19 @@ PRACTICAS = {
     'python-asistente': 'course-python',
 }
 CON_PROGRESO = {**LECCIONES, **PRACTICAS}   # lección o práctica → curso, para el progreso
+TIPOS_DOCUMENTO = ('terminos', 'datos')   # términos de uso y autorización de tratamiento de datos, por separado
+VERSION_DOC = r'^[A-Za-z0-9][A-Za-z0-9.-]{0,39}$'
+DIAS_PENDIENTE = 7   # altas sin confirmar: se pueden reenviar durante 7 días y después se borran
+ACEPTADO = ('Si los datos son correctos, te enviamos un correo. Revisa tu bandeja de entrada y la carpeta de '
+            'correo no deseado. El enlace sirve una sola vez.')
+ENLACE_INVALIDO = 'El enlace no es válido, venció o ya se usó. Solicita uno nuevo.'
+AUTORIZACION_PENDIENTE = 'Antes de continuar, revisa y acepta los documentos vigentes en el Aula.'
 
 
-def crear_app(config=None):
+def crear_app(config=None, enviar_correo=None):
     config = config or cargar()
+    # enviar_correo(destino, asunto, texto, tipo): inyectable en pruebas; por defecto, SMTP configurado.
+    enviar_correo = enviar_correo or (lambda destino, asunto, texto, tipo: correo.enviar(config, destino, asunto, texto, tipo))
     pool = ConnectionPool(config.database_url, min_size=1, max_size=10, open=False,
                           kwargs={'autocommit': True})
 
@@ -152,7 +161,9 @@ def crear_app(config=None):
         if not fila:
             raise HTTPException(401, 'La sesión no existe, se cerró o caducó.')
         claves = ('id_hash', 'csrf', 'usuario_id', 'nombre', 'correo', 'rol')
-        return dict(zip(claves, fila))
+        sesion = dict(zip(claves, fila))
+        sesion['pendientes'] = pendientes_de(conexion, sesion['usuario_id'])
+        return sesion
 
     def con_csrf(request: Request, sesion=Depends(sesion_actual)):
         recibido = request.headers.get('x-csrf-token', '')
@@ -163,6 +174,79 @@ def crear_app(config=None):
     def publico(sesion):
         return {'nombre': sesion['nombre'], 'correo': sesion['correo'], 'rol': sesion['rol']}
 
+    def autorizada(sesion=Depends(sesion_actual)):
+        """Con documentos vigentes, la cuenta debe haber aceptado su versión actual (cuentas anteriores incluidas)."""
+        if sesion['pendientes']:
+            raise HTTPException(403, AUTORIZACION_PENDIENTE)
+        return sesion
+
+    def autorizada_csrf(sesion=Depends(con_csrf)):
+        return autorizada(sesion)
+
+    # ---------- Documentos y autorizaciones ----------
+    def documentos_vigentes(conexion):
+        """Versión vigente de cada documento. Los textos «prueba» solo cuentan con permitir_textos_prueba."""
+        estados = ['aprobado', 'prueba'] if config.permitir_textos_prueba else ['aprobado']
+        filas = conexion.execute(
+            'SELECT DISTINCT ON (tipo) id, tipo, version, titulo, finalidad, sha256, estado FROM documentos_legales '
+            'WHERE vigente_desde IS NOT NULL AND vigente_desde <= now() AND estado = ANY(%s) '
+            'ORDER BY tipo, vigente_desde DESC, id DESC', (estados,)).fetchall()
+        claves = ('id', 'tipo', 'version', 'titulo', 'finalidad', 'sha256', 'estado')
+        return {f[1]: dict(zip(claves, f)) for f in filas}
+
+    def doc_publico(doc):
+        return {'tipo': doc['tipo'], 'version': doc['version'], 'titulo': doc['titulo'],
+                'finalidad': doc['finalidad'], 'prueba': doc['estado'] == 'prueba'}
+
+    def pendientes_de(conexion, usuario_id):
+        docs = documentos_vigentes(conexion)
+        if not docs:
+            return []
+        aceptados = {f[0] for f in conexion.execute(
+            'SELECT documento_id FROM autorizaciones WHERE usuario_id = %s AND documento_id = ANY(%s)',
+            (usuario_id, [d['id'] for d in docs.values()])).fetchall()}
+        return [doc_publico(docs[t]) for t in TIPOS_DOCUMENTO if t in docs and docs[t]['id'] not in aceptados]
+
+    def registro_disponible(conexion):
+        """El registro público exige decisión explícita, correo configurado y ambos documentos vigentes."""
+        docs = documentos_vigentes(conexion)
+        abierto = config.registro_abierto and correo.listo(config) and all(t in docs for t in TIPOS_DOCUMENTO)
+        return abierto, docs
+
+    def anotar_autorizacion(conexion, usuario_id, documento_id, aceptada_en, via):
+        conexion.execute(
+            'INSERT INTO autorizaciones (usuario_id, documento_id, tipo, version, sha256, finalidad, aceptada_en, via) '
+            'SELECT %s, id, tipo, version, sha256, finalidad, %s, %s FROM documentos_legales WHERE id = %s '
+            'ON CONFLICT (usuario_id, documento_id) DO NOTHING', (usuario_id, aceptada_en, via, documento_id))
+
+    def limitar_ip(conexion, request, tipo, maximo):
+        if contar(conexion, tipo, ip(request)) >= maximo:
+            raise HTTPException(429, 'Demasiadas solicitudes desde esta conexión. Espera unos minutos.',
+                                headers={'Retry-After': str(config.ventana_min * 60)})
+        anotar(conexion, tipo, ip(request))
+
+    # Límite por dirección y hora, separado para altas (verificación, reenvío y aviso) y para recuperación.
+    def puede_enviar(conexion, direccion, motivo='alta'):
+        return contar_hora(conexion, 'correo_envio', f'{motivo}:{direccion}') < config.correos_por_hora
+
+    def anotar_envio(conexion, direccion, motivo='alta'):
+        anotar(conexion, 'correo_envio', f'{motivo}:{direccion}')
+
+    def contar_hora(conexion, tipo, clave):
+        return conexion.execute(
+            "SELECT count(*) FROM intentos WHERE tipo = %s AND clave = %s AND creado_en > now() - interval '1 hour'",
+            (tipo, seguridad.huella(clave))).fetchone()[0]
+
+    def curso_valido(conexion, curso_id):
+        if curso_id and conexion.execute('SELECT 1 FROM cursos WHERE id = %s AND activo', (curso_id,)).fetchone():
+            return curso_id
+        return None
+
+    def limpiar_enlaces(conexion):
+        conexion.execute("DELETE FROM registros_pendientes WHERE creado_en < now() - %s "
+                         "OR usado_en < now() - interval '1 day'", (timedelta(days=DIAS_PENDIENTE),))
+        conexion.execute("DELETE FROM enlaces_recuperacion WHERE expira_en < now() - interval '1 day'")
+
     # ---------- Rutas ----------
     @app.get('/api/aula/salud')
     def salud(conexion=Depends(bd)):
@@ -170,28 +254,204 @@ def crear_app(config=None):
         return {'ok': True}
 
     @app.get('/api/aula/config')
-    def configuracion_publica():
-        return {'registro_abierto': config.registro_abierto}
+    def configuracion_publica(conexion=Depends(bd)):
+        abierto, docs = registro_disponible(conexion)
+        return {'registro_abierto': abierto, 'recuperacion': correo.listo(config),
+                'documentos': {t: doc_publico(docs[t]) for t in TIPOS_DOCUMENTO if t in docs}}
 
-    @app.post('/api/aula/registro', status_code=201)
-    def registro(datos: Registro, request: Request, respuesta: Response, conexion=Depends(bd)):
-        if not config.registro_abierto:
-            raise HTTPException(403, 'El registro de cuentas no está abierto. Pide tu cuenta a GLOBALT ROBOTICS.')
+    @app.get('/api/aula/documentos/{tipo}/{version}')
+    def documento(tipo: Literal['terminos', 'datos'], version: str, conexion=Depends(bd)):
+        """Texto exacto de una versión (vigente o anterior), para consultarlo antes y después de aceptarlo."""
+        if not re.fullmatch(VERSION_DOC, version):
+            raise HTTPException(404, 'Documento no disponible.')
+        fila = conexion.execute(
+            'SELECT tipo, version, titulo, finalidad, texto, sha256, estado, vigente_desde FROM documentos_legales '
+            'WHERE tipo = %s AND version = %s', (tipo, version)).fetchone()
+        if not fila or (fila[6] == 'prueba' and not config.permitir_textos_prueba):
+            raise HTTPException(404, 'Documento no disponible.')
+        return {'tipo': fila[0], 'version': fila[1], 'titulo': fila[2], 'finalidad': fila[3], 'texto': fila[4],
+                'sha256': fila[5], 'prueba': fila[6] == 'prueba',
+                'vigente_desde': fila[7].isoformat() if fila[7] else None}
+
+    @app.post('/api/aula/registro', status_code=202)
+    def registro(datos: Registro, request: Request, conexion=Depends(bd)):
+        """Alta de ADULTO en dos pasos: aquí solo se guarda la solicitud y se envía el enlace; la cuenta se crea al
+        abrirlo (verificar). La respuesta es la misma tenga o no cuenta el correo."""
+        abierto, docs = registro_disponible(conexion)
+        if not abierto:
+            raise HTTPException(403, 'El registro de cuentas no está abierto. Puedes practicar sin cuenta.')
         if contar(conexion, 'registro_ip', ip(request)) >= config.max_registros_ip:
             raise HTTPException(429, 'Demasiados registros desde esta conexión. Intenta más tarde.')
         anotar(conexion, 'registro_ip', ip(request))
         if datos.clave.lower() == datos.correo.lower():
             raise HTTPException(422, 'La contraseña no puede ser igual al correo.')
+        if datos.terminos != docs['terminos']['version'] or datos.datos != docs['datos']['version']:
+            raise HTTPException(409, 'Los documentos cambiaron mientras completabas el formulario. Recarga la página y revísalos.')
+        hash_clave = seguridad.hash_clave(datos.clave)   # también si el correo ya tiene cuenta (tiempos similares)
+        curso = curso_valido(conexion, datos.curso)
+        if not puede_enviar(conexion, datos.correo):
+            return {'mensaje': ACEPTADO}   # límite por dirección: misma respuesta, sin correo
+        limpiar_enlaces(conexion)
+        token = seguridad.token()
+        existe = conexion.execute('SELECT 1 FROM usuarios WHERE correo = %s', (datos.correo,)).fetchone()
+        pendiente = None
+        if existe:
+            asunto = 'Ya tienes una cuenta en el Aula de GLOBALT ROBOTICS'
+            texto = correo.texto_cuenta_existente(correo.pagina(config, curso))
+            tipo = 'aviso-cuenta-existente'
+        else:
+            # La aceptación expresa queda fijada aquí (fecha y versiones exactas) y pasa a la cuenta al verificar.
+            pendiente = conexion.execute(
+                'INSERT INTO registros_pendientes (correo, nombre, hash_clave, terminos_id, datos_id, curso_id, token_hash, expira_en) '
+                'VALUES (%s, %s, %s, %s, %s, %s, %s, now() + %s) RETURNING id',
+                (datos.correo, datos.nombre, hash_clave, docs['terminos']['id'], docs['datos']['id'], curso,
+                 seguridad.huella(token), timedelta(minutes=config.verificacion_min))).fetchone()[0]
+            asunto = 'Confirma tu correo · Aula GLOBALT ROBOTICS'
+            texto = correo.texto_verificacion(datos.nombre, correo.enlace(config, 'verificar', token, curso),
+                                              max(1, config.verificacion_min // 60))
+            tipo = 'verificacion'
+        try:
+            enviar_correo(datos.correo, asunto, texto, tipo)
+        except correo.ErrorEnvio:
+            if pendiente:
+                conexion.execute('DELETE FROM registros_pendientes WHERE id = %s', (pendiente,))
+            raise HTTPException(503, 'No pudimos enviar el correo en este momento. No se guardó nada: inténtalo de nuevo en unos minutos.')
+        anotar_envio(conexion, datos.correo)
+        return {'mensaje': ACEPTADO}
+
+    @app.post('/api/aula/cuenta/reenviar', status_code=202)
+    def reenviar(datos: SoloCorreo, request: Request, tareas: BackgroundTasks, conexion=Depends(bd)):
+        """Nuevo enlace para un alta pendiente (el anterior deja de servir). Misma respuesta en todos los casos."""
+        limitar_ip(conexion, request, 'correo_ip', config.max_correos_ip)
+        if not correo.listo(config) or not puede_enviar(conexion, datos.correo):
+            return {'mensaje': ACEPTADO}
+        fila = conexion.execute(
+            'SELECT p.id, p.nombre, p.curso_id FROM registros_pendientes p WHERE p.correo = %s AND p.usado_en IS NULL '
+            'AND p.creado_en > now() - %s AND NOT EXISTS (SELECT 1 FROM usuarios u WHERE u.correo = p.correo) '
+            'ORDER BY p.creado_en DESC LIMIT 1', (datos.correo, timedelta(days=DIAS_PENDIENTE))).fetchone()
+        if fila:
+            token = seguridad.token()
+            conexion.execute('UPDATE registros_pendientes SET token_hash = %s, expira_en = now() + %s WHERE id = %s',
+                             (seguridad.huella(token), timedelta(minutes=config.verificacion_min), fila[0]))
+            anotar_envio(conexion, datos.correo)
+            texto = correo.texto_verificacion(fila[1], correo.enlace(config, 'verificar', token, fila[2]),
+                                              max(1, config.verificacion_min // 60))
+            tareas.add_task(enviar_en_segundo_plano, datos.correo, 'Confirma tu correo · Aula GLOBALT ROBOTICS', texto, 'verificacion')
+        return {'mensaje': ACEPTADO}
+
+    def enviar_en_segundo_plano(destino, asunto, texto, tipo):
+        # Tras responder: el tiempo de envío no revela si el correo tiene cuenta. Un fallo solo se anota (sin enlace);
+        # la persona puede volver a pedirlo dentro del límite por hora.
+        try:
+            enviar_correo(destino, asunto, texto, tipo)
+        except correo.ErrorEnvio:
+            pass
+
+    @app.post('/api/aula/cuenta/verificar')
+    def verificar(datos: Enlace, request: Request, respuesta: Response, conexion=Depends(bd)):
+        """Abre el enlace del correo: con la contraseña elegida al registrarse se crea la cuenta y se inicia sesión."""
+        if contar(conexion, 'enlace_ip', ip(request)) >= config.max_fallos_ip:
+            raise HTTPException(429, 'Demasiados intentos. Espera unos minutos.', headers={'Retry-After': str(config.ventana_min * 60)})
+        fila = conexion.execute(
+            'SELECT id, correo, nombre, hash_clave, terminos_id, datos_id, curso_id, creado_en FROM registros_pendientes '
+            'WHERE token_hash = %s AND usado_en IS NULL AND expira_en > now()', (seguridad.huella(datos.token),)).fetchone()
+        if not fila:
+            anotar(conexion, 'enlace_ip', ip(request))
+            raise HTTPException(410, ENLACE_INVALIDO)
+        pid, direccion, nombre, hash_clave, terminos_id, datos_id, curso, aceptada_en = fila
+        if contar(conexion, 'acceso_correo', direccion) >= config.max_fallos_correo:
+            raise HTTPException(429, 'Demasiados intentos fallidos. Espera unos minutos.',
+                                headers={'Retry-After': str(config.ventana_min * 60)})
+        if not seguridad.verificar_clave(hash_clave, datos.clave):
+            anotar(conexion, 'acceso_correo', direccion)
+            anotar(conexion, 'acceso_ip', ip(request))
+            raise HTTPException(401, 'La contraseña no coincide con la que elegiste al crear la cuenta.')
         try:
             with conexion.transaction():
-                # El rol nunca procede del cliente: el registro público solo crea estudiantes.
-                fila = conexion.execute(
-                    "INSERT INTO usuarios (correo, nombre, hash_clave, rol) VALUES (%s, %s, %s, 'estudiante') RETURNING id",
-                    (datos.correo, datos.nombre, seguridad.hash_clave(datos.clave))).fetchone()
-                csrf = abrir_sesion(conexion, respuesta, fila[0])
+                if not conexion.execute('UPDATE registros_pendientes SET usado_en = now() WHERE id = %s AND usado_en IS NULL '
+                                        'RETURNING id', (pid,)).fetchone():
+                    raise HTTPException(410, ENLACE_INVALIDO)
+                usuario_id = conexion.execute(
+                    "INSERT INTO usuarios (correo, nombre, hash_clave, rol, origen, correo_verificado_en, mayor_edad_declarada_en) "
+                    "VALUES (%s, %s, %s, 'estudiante', 'registro', now(), %s) RETURNING id",
+                    (direccion, nombre, hash_clave, aceptada_en)).fetchone()[0]
+                for documento_id in (terminos_id, datos_id):
+                    anotar_autorizacion(conexion, usuario_id, documento_id, aceptada_en, 'registro')
+                conexion.execute('DELETE FROM registros_pendientes WHERE correo = %s AND id <> %s', (direccion, pid))
+                csrf = abrir_sesion(conexion, respuesta, usuario_id)
         except UniqueViolation:
-            raise HTTPException(409, 'Ya existe una cuenta con ese correo.')
-        return {'usuario': {'nombre': datos.nombre, 'correo': datos.correo, 'rol': 'estudiante'}, 'csrf': csrf}
+            conexion.execute('UPDATE registros_pendientes SET usado_en = now() WHERE id = %s', (pid,))
+            raise HTTPException(409, 'Este correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña.')
+        return {'usuario': {'nombre': nombre, 'correo': direccion, 'rol': 'estudiante'}, 'csrf': csrf,
+                'curso_id': curso, 'pendientes': pendientes_de(conexion, usuario_id)}
+
+    @app.post('/api/aula/cuenta/recuperar', status_code=202)
+    def recuperar(datos: SoloCorreo, request: Request, tareas: BackgroundTasks, conexion=Depends(bd)):
+        """Enlace para elegir otra contraseña. Misma respuesta (y sin esperar al envío) tenga o no cuenta el correo."""
+        if not correo.listo(config):
+            raise HTTPException(503, 'La recuperación por correo todavía no está disponible.')
+        limitar_ip(conexion, request, 'correo_ip', config.max_correos_ip)
+        fila = conexion.execute('SELECT id FROM usuarios WHERE correo = %s', (datos.correo,)).fetchone()
+        if fila and puede_enviar(conexion, datos.correo, 'recuperacion'):
+            limpiar_enlaces(conexion)
+            token = seguridad.token()
+            conexion.execute('INSERT INTO enlaces_recuperacion (token_hash, usuario_id, expira_en) VALUES (%s, %s, now() + %s)',
+                             (seguridad.huella(token), fila[0], timedelta(minutes=config.recuperacion_min)))
+            anotar_envio(conexion, datos.correo, 'recuperacion')
+            texto = correo.texto_recuperacion(correo.enlace(config, 'restablecer', token, curso_valido(conexion, datos.curso)),
+                                              config.recuperacion_min)
+            tareas.add_task(enviar_en_segundo_plano, datos.correo, 'Cambia tu contraseña · Aula GLOBALT ROBOTICS', texto, 'recuperacion')
+        return {'mensaje': ACEPTADO}
+
+    @app.post('/api/aula/cuenta/restablecer')
+    def restablecer(datos: Enlace, request: Request, respuesta: Response, conexion=Depends(bd)):
+        """Enlace de recuperación (un solo uso): nueva contraseña, cierre de las demás sesiones e inicio de sesión."""
+        if contar(conexion, 'enlace_ip', ip(request)) >= config.max_fallos_ip:
+            raise HTTPException(429, 'Demasiados intentos. Espera unos minutos.', headers={'Retry-After': str(config.ventana_min * 60)})
+        if len(datos.clave) < 10:
+            raise HTTPException(422, 'La contraseña debe tener al menos 10 caracteres.')
+        if not conexion.execute('SELECT 1 FROM enlaces_recuperacion WHERE token_hash = %s AND usado_en IS NULL AND expira_en > now()',
+                                (seguridad.huella(datos.token),)).fetchone():
+            anotar(conexion, 'enlace_ip', ip(request))   # sin calcular Argon2 para enlaces inválidos
+            raise HTTPException(410, ENLACE_INVALIDO)
+        hash_nuevo = seguridad.hash_clave(datos.clave)
+        with conexion.transaction():
+            fila = conexion.execute(
+                'UPDATE enlaces_recuperacion e SET usado_en = now() FROM usuarios u WHERE e.token_hash = %s '
+                'AND e.usado_en IS NULL AND e.expira_en > now() AND u.id = e.usuario_id RETURNING u.id, u.correo, u.nombre, u.rol',
+                (seguridad.huella(datos.token),)).fetchone()
+            if not fila:
+                anotar(conexion, 'enlace_ip', ip(request))
+                usuario_id = None
+            else:
+                usuario_id, direccion, nombre, rol = fila
+                if datos.clave.lower() == direccion:
+                    raise HTTPException(422, 'La contraseña no puede ser igual al correo.')   # deshace: el enlace sigue sirviendo
+                conexion.execute('UPDATE usuarios SET hash_clave = %s, correo_verificado_en = COALESCE(correo_verificado_en, now()) '
+                                 'WHERE id = %s', (hash_nuevo, usuario_id))
+                conexion.execute('UPDATE sesiones SET revocada_en = now() WHERE usuario_id = %s AND revocada_en IS NULL', (usuario_id,))
+                conexion.execute('DELETE FROM enlaces_recuperacion WHERE usuario_id = %s AND usado_en IS NULL', (usuario_id,))
+                conexion.execute('DELETE FROM intentos WHERE tipo = %s AND clave = %s', ('acceso_correo', seguridad.huella(direccion)))
+                csrf = abrir_sesion(conexion, respuesta, usuario_id)
+        if usuario_id is None:
+            raise HTTPException(410, ENLACE_INVALIDO)
+        return {'usuario': {'nombre': nombre, 'correo': direccion, 'rol': rol}, 'csrf': csrf,
+                'pendientes': pendientes_de(conexion, usuario_id)}
+
+    @app.post('/api/aula/cuenta/autorizar')
+    def autorizar(datos: Autorizacion, sesion=Depends(con_csrf), conexion=Depends(bd)):
+        """Aceptación expresa de las versiones vigentes por una cuenta que aún no las aceptó (p. ej. anterior al registro)."""
+        recibidas = {'terminos': datos.terminos, 'datos': datos.datos}
+        pendientes = sesion['pendientes']
+        if not pendientes:
+            return {'pendientes': []}
+        if any(recibidas[p['tipo']] != p['version'] for p in pendientes):
+            raise HTTPException(409, 'Los documentos cambiaron. Recarga la página y revísalos de nuevo.')
+        docs = documentos_vigentes(conexion)
+        with conexion.transaction():
+            for p in pendientes:
+                anotar_autorizacion(conexion, sesion['usuario_id'], docs[p['tipo']]['id'], datetime.now(UTC), 'cuenta-existente')
+        return {'pendientes': pendientes_de(conexion, sesion['usuario_id'])}
 
     @app.post('/api/aula/sesion')
     def iniciar(datos: Acceso, request: Request, respuesta: Response, conexion=Depends(bd)):
@@ -213,11 +473,12 @@ def crear_app(config=None):
         if anterior:
             conexion.execute('UPDATE sesiones SET revocada_en = now() WHERE id_hash = %s', (seguridad.huella(anterior),))
         csrf = abrir_sesion(conexion, respuesta, fila[0])
-        return {'usuario': {'nombre': fila[2], 'correo': datos.correo, 'rol': fila[3]}, 'csrf': csrf}
+        return {'usuario': {'nombre': fila[2], 'correo': datos.correo, 'rol': fila[3]}, 'csrf': csrf,
+                'pendientes': pendientes_de(conexion, fila[0])}
 
     @app.get('/api/aula/sesion')
     def consultar(sesion=Depends(sesion_actual)):
-        return {'usuario': publico(sesion), 'csrf': sesion['csrf']}
+        return {'usuario': publico(sesion), 'csrf': sesion['csrf'], 'pendientes': sesion['pendientes']}
 
     @app.delete('/api/aula/sesion', status_code=204)
     def cerrar(respuesta: Response, sesion=Depends(con_csrf), conexion=Depends(bd)):
@@ -232,7 +493,7 @@ def crear_app(config=None):
         return {'cursos': [{'id': f[0], 'titulo': f[1], 'laboratorio': f[2]} for f in filas]}
 
     @app.get('/api/aula/mis-cursos')
-    def mis_cursos(sesion=Depends(sesion_actual), conexion=Depends(bd)):
+    def mis_cursos(sesion=Depends(autorizada), conexion=Depends(bd)):
         filas = conexion.execute(
             'SELECT c.id, c.titulo, c.ruta_laboratorio, i.creada_en FROM inscripciones i '
             'JOIN cursos c ON c.id = i.curso_id WHERE i.usuario_id = %s ORDER BY i.creada_en',
@@ -242,7 +503,7 @@ def crear_app(config=None):
                             'progreso': progreso.get(f[0], vacio(f[0]))} for f in filas]}
 
     @app.post('/api/aula/inscripciones')
-    def inscribir(datos: Inscripcion, respuesta: Response, sesion=Depends(con_csrf), conexion=Depends(bd)):
+    def inscribir(datos: Inscripcion, respuesta: Response, sesion=Depends(autorizada_csrf), conexion=Depends(bd)):
         if not conexion.execute('SELECT 1 FROM cursos WHERE id = %s AND activo', (datos.curso_id,)).fetchone():
             raise HTTPException(404, 'Curso no disponible.')
         nueva = conexion.execute(
@@ -269,12 +530,12 @@ def crear_app(config=None):
                                 'WHERE usuario_id = %s AND leccion_id = %s', (usuario_id, leccion_id)).fetchone()
 
     @app.get('/api/aula/borradores/{leccion_id}')
-    def ver_borrador(leccion_id: str, sesion=Depends(sesion_actual), conexion=Depends(bd)):
+    def ver_borrador(leccion_id: str, sesion=Depends(autorizada), conexion=Depends(bd)):
         leccion_permitida(leccion_id, sesion, conexion)
         return {'borrador': borrador_publico(leer_borrador(conexion, sesion['usuario_id'], leccion_id))}
 
     @app.put('/api/aula/borradores/{leccion_id}')
-    def guardar_borrador(leccion_id: str, datos: Borrador, sesion=Depends(con_csrf), conexion=Depends(bd)):
+    def guardar_borrador(leccion_id: str, datos: Borrador, sesion=Depends(autorizada_csrf), conexion=Depends(bd)):
         leccion_permitida(leccion_id, sesion, conexion)
         usuario = sesion['usuario_id']
         if datos.version_base is None:   # primera copia en la cuenta
@@ -329,7 +590,7 @@ def crear_app(config=None):
         return cursos
 
     @app.post('/api/aula/mis-cursos')
-    def registrar_progreso(datos: Progreso, sesion=Depends(con_csrf), conexion=Depends(bd)):
+    def registrar_progreso(datos: Progreso, sesion=Depends(autorizada_csrf), conexion=Depends(bd)):
         # Lecciones de Arduino y prácticas de Web/Python; cada una exige inscripción en SU curso.
         leccion_permitida(datos.leccion_id, sesion, conexion, CON_PROGRESO,
                           'Inscríbete en el curso desde el aula para guardar tu avance.')
@@ -366,7 +627,7 @@ def crear_app(config=None):
             raise HTTPException(403, 'Inscríbete en el curso de Arduino desde el aula para compilar.')
 
     @app.get('/api/aula/compilador/salud')
-    def salud_compilador(sesion=Depends(sesion_actual), conexion=Depends(bd)):
+    def salud_compilador(sesion=Depends(autorizada), conexion=Depends(bd)):
         exigir_inscripcion(conexion, sesion['usuario_id'])
         try:
             estado, datos = compilador.pedir(config.compilador_socket, 'GET', '/salud', tiempo=5)
@@ -380,7 +641,7 @@ def crear_app(config=None):
     def compilar(datos: Compilacion, request: Request):
         # Conexiones a la base cortas: no se retiene ninguna mientras se espera al compilador.
         with pool.connection() as conexion:
-            sesion = con_csrf(request, sesion_actual(request, conexion))
+            sesion = autorizada(con_csrf(request, sesion_actual(request, conexion)))
             usuario = sesion['usuario_id']
             exigir_inscripcion(conexion, usuario)
             minuto, hora = conexion.execute(
@@ -446,7 +707,8 @@ def error(estado, mensaje):
 CONTROL = re.compile(r'[\x00-\x1f\x7f-\x9f​-‏ -‮⁦-⁩]')
 
 
-class Registro(BaseModel):
+class DatosCuenta(BaseModel):
+    """Nombre visible o alias, correo y contraseña: lo único que se pide (ni documento, ni teléfono, ni fecha de nacimiento)."""
     model_config = ConfigDict(extra='forbid')   # campos como «rol» se rechazan
     nombre: str = Field(min_length=2, max_length=60)
     correo: EmailStr = Field(max_length=254)
@@ -464,6 +726,37 @@ class Registro(BaseModel):
     @classmethod
     def correo_minusculas(cls, valor):
         return str(valor).lower()
+
+
+class Registro(DatosCuenta):
+    """Registro público: solo adultos, con aceptación expresa de las versiones exactas de ambos documentos."""
+    mayor_de_edad: Literal[True]                       # declaración expresa; quien indica ser menor no llega a enviar
+    terminos: str = Field(pattern=VERSION_DOC)         # versión de los términos de uso que se aceptan
+    datos: str = Field(pattern=VERSION_DOC)            # versión de la autorización de tratamiento de datos
+    curso: str | None = Field(default=None, pattern=r'^[a-z0-9-]{3,60}$')   # curso elegido (para volver a él)
+
+
+class SoloCorreo(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    correo: EmailStr = Field(max_length=254)
+    curso: str | None = Field(default=None, pattern=r'^[a-z0-9-]{3,60}$')
+
+    @field_validator('correo')
+    @classmethod
+    def correo_minusculas(cls, valor):
+        return str(valor).lower()
+
+
+class Enlace(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    token: str = Field(min_length=20, max_length=100, pattern=r'^[A-Za-z0-9_-]+$')
+    clave: str = Field(min_length=1, max_length=128)
+
+
+class Autorizacion(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    terminos: str | None = Field(default=None, pattern=VERSION_DOC)
+    datos: str | None = Field(default=None, pattern=VERSION_DOC)
 
 
 class Acceso(BaseModel):

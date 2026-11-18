@@ -18,7 +18,7 @@ Lección piloto con editor, compilación real (avr-gcc), emulación ATmega328P e
 
 ## Aula (cuentas e inscripción, en desarrollo)
 
-`aula/` (frontend) y `services/aula-api/` (FastAPI + PostgreSQL): cuentas de estudiante, sesión de servidor, inscripción al curso de Arduino, borradores y compilación autenticada. Ver [services/aula-api/README.md](services/aula-api/README.md). Despliegue en el dominio por etapas (preparar, activar, revertir, respaldos): [docs/AULA_PRODUCCION.md](docs/AULA_PRODUCCION.md). El registro público está cerrado por defecto.
+`aula/` (frontend) y `services/aula-api/` (FastAPI + PostgreSQL): cuentas de estudiante, sesión de servidor, inscripción al curso de Arduino, borradores y compilación autenticada. Ver [services/aula-api/README.md](services/aula-api/README.md). Despliegue en el dominio por etapas (preparar, activar, revertir, respaldos): [docs/AULA_PRODUCCION.md](docs/AULA_PRODUCCION.md). El registro público está cerrado por defecto; el registro de adultos (verificación de correo, recuperación y autorizaciones con evidencia) se describe en [docs/AULA_REGISTRO_ADULTOS.md](docs/AULA_REGISTRO_ADULTOS.md).
 
 ## GitHub y Linux
 

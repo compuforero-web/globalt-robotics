@@ -63,7 +63,8 @@ console.log(JSON.stringify({{ web: lessons.map((l) => l.id), py: PRACTICAS.map((
         self.assertNotRegex(modulo, r'taller-web|laboratorio\.python|laboratorio\.arduino')
 
     def test_arduino_y_migraciones_intactas(self):
-        cambios = subprocess.run(['git', 'diff', '--name-only', 'origin/main', '--', 'games/laboratorio-arduino',
+        # Migraciones nuevas permitidas; las ya aplicadas y el laboratorio de Arduino no se modifican ni se borran.
+        cambios = subprocess.run(['git', 'diff', '--name-only', '--diff-filter=MDR', 'origin/main', '--', 'games/laboratorio-arduino',
                                   'services/aula-api/migrations'],
                                  cwd=ROOT, capture_output=True, text=True).stdout.strip()
         self.assertEqual(cambios, '')

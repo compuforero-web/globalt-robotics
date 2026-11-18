@@ -4,6 +4,7 @@
 // Crea cuentas ficticias @example.com. El registro abierto solo se usa en el banco local para crearlas.
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { crearCuenta } from './cuenta-prueba.mjs';   // alta de adulto con el buzón de pruebas
 
 const { chromium, devices } = createRequire(import.meta.url)('playwright');
 const SITIO = (process.env.AULA_SITIO || 'http://127.0.0.1:8180').replace(/\/$/, '');
@@ -43,7 +44,7 @@ async function api(ctx, metodo, ruta, datos, csrf) {
 const creador = await contexto();
 async function cuenta(nombre) {
   const correo = `prog-${nombre}.${sufijo}@example.com`;
-  const { json } = await api(creador, 'POST', '/registro', { nombre: 'Estudiante ' + nombre, correo, clave: CLAVE });
+  const { json } = await crearCuenta(creador, SITIO, { nombre: 'Estudiante ' + nombre, correo, clave: CLAVE });
   await api(creador, 'POST', '/inscripciones', { curso_id: 'course-arduino' }, json.csrf);
   await api(creador, 'DELETE', '/sesion', null, json.csrf);
   return correo;

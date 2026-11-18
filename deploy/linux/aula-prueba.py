@@ -3,7 +3,7 @@
 
 Uso: AULA_PRUEBA_CLAVE=... python3 aula-prueba.py <base> <correo> <registro_abierto: si|no> [tunel]
 Con «tunel» se envían las cabeceras que añadiría Cloudflare (HTTPS y IP del visitante) a 127.0.0.1:8096.
-Solo biblioteca estándar. Comprueba cookies Secure/HttpOnly, CSRF, inscripción, borrador, progreso y compilación real.
+No envía correos. Solo biblioteca estándar. Comprueba documentos, enlaces inventados, cookies Secure/HttpOnly, CSRF, inscripción, borrador, progreso y compilación real.
 """
 import json
 import os
@@ -58,15 +58,28 @@ def pedir(metodo, ruta, datos=None, csrf=None, extra=None):
 
 
 e, d = pedir('GET', '/api/aula/salud'); assert e == 200 and d == {'ok': True}, (e, d)
-e, d = pedir('GET', '/api/aula/config'); assert d == {'registro_abierto': registro == 'si'}, d
-if registro == 'no':
-    e, d = pedir('POST', '/api/aula/registro', {'nombre': 'Intruso', 'correo': 'x' + correo, 'clave': clave})
+e, conf = pedir('GET', '/api/aula/config')
+# «si» = AULA_REGISTRO_ABIERTO=true; solo queda abierto de verdad con correo configurado y ambos documentos vigentes.
+assert e == 200 and conf['registro_abierto'] in ((True, False) if registro == 'si' else (False,)), conf
+if not conf['registro_abierto']:
+    e, d = pedir('POST', '/api/aula/registro', {'nombre': 'Intruso', 'correo': 'x' + correo, 'clave': clave,
+                                                'mayor_de_edad': True, 'terminos': 'x', 'datos': 'x'})
     assert e == 403, ('registro cerrado', e)
+for tipo, doc in conf.get('documentos', {}).items():   # versión vigente consultable por la ruta pública
+    e, d = pedir('GET', f"/api/aula/documentos/{tipo}/{doc['version']}")
+    assert e == 200 and d['texto'] and len(d['sha256']) == 64, ('documento', tipo, e)
+# Enlaces de correo: uno inventado no sirve (no se envía ningún correo en esta prueba).
+assert pedir('POST', '/api/aula/cuenta/verificar', {'token': 'x' * 43, 'clave': clave})[0] == 410
+assert pedir('POST', '/api/aula/cuenta/restablecer', {'token': 'x' * 43, 'clave': clave})[0] == 410
 e, d = pedir('POST', '/api/aula/sesion', {'correo': correo, 'clave': clave + 'x'}); assert e == 401, e
 e, d = pedir('POST', '/api/aula/sesion', {'correo': correo, 'clave': clave}, extra={'Origin': 'https://atacante.example'})
 assert e == 403, ('origen ajeno', e)
 e, d = pedir('POST', '/api/aula/sesion', {'correo': correo, 'clave': clave}); assert e == 200 and cookie, (e, d)
 csrf = d['csrf']
+if d.get('pendientes'):   # documentos vigentes: la cuenta temporal (de consola) los acepta, como cualquier cuenta
+    assert pedir('GET', '/api/aula/mis-cursos')[0] == 403, 'sin aceptar no se usa la cuenta'
+    e, r = pedir('POST', '/api/aula/cuenta/autorizar', {p['tipo']: p['version'] for p in d['pendientes']}, csrf)
+    assert e == 200 and r == {'pendientes': []}, ('autorizar', e, r)
 assert pedir('POST', '/api/aula/inscripciones', {'curso_id': 'course-arduino'})[0] == 403, 'sin CSRF'
 assert pedir('POST', '/api/aula/inscripciones', {'curso_id': 'course-arduino'}, csrf)[0] in (200, 201)
 assert [c['id'] for c in pedir('GET', '/api/aula/mis-cursos')[1]['cursos']] == ['course-arduino']
@@ -103,5 +116,5 @@ assert pedir('GET', B)[1]['borrador']['codigo'] == codigo, 'recuperar borrador'
 p = progreso()
 assert p['ultima'] == 'arduino-led-serie' and p['lecciones'][0]['estado'] == 'completada' and p['lecciones'][0]['paso'] == 2, p
 pedir('DELETE', '/api/aula/sesion', None, d['csrf'])
-print('Prueba funcional del aula: salud, registro ' + ('abierto' if registro == 'si' else 'cerrado')
+print('Prueba funcional del aula: salud, registro ' + ('abierto' if conf['registro_abierto'] else 'cerrado')
       + ', cookies Secure/HttpOnly, origen, CSRF, inscripción, borrador, progreso y compilación real: OK')

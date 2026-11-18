@@ -8,6 +8,7 @@
 import assert from 'node:assert/strict';
 import { execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { crearCuenta, enlaceDe, esperarCorreo } from './cuenta-prueba.mjs';   // alta de adulto con el buzón de pruebas
 
 const { chromium, devices } = createRequire(import.meta.url)('playwright');
 const SITIO = (process.env.AULA_SITIO || 'http://127.0.0.1:8100').replace(/\/$/, '');
@@ -46,7 +47,7 @@ async function api(ctx, metodo, ruta, datos, csrf) {
   return { status: r.status(), json: r.status() === 204 ? null : await r.json().catch(() => null) };
 }
 async function cuentaApi(ctx, nombre, inscribir = true) {
-  const { json } = await api(ctx, 'POST', '/registro', { nombre: 'Estudiante ' + nombre, correo: `${nombre}.${sufijo}@example.com`, clave: CLAVE });
+  const { json } = await crearCuenta(ctx, SITIO, { nombre: 'Estudiante ' + nombre, correo: `${nombre}.${sufijo}@example.com`, clave: CLAVE });
   if (inscribir) await api(ctx, 'POST', '/inscripciones', { curso_id: 'course-arduino' }, json.csrf);
   return json.csrf;
 }
@@ -92,10 +93,17 @@ const a = await ctx1.newPage();
 await a.goto(SITIO + '/aula/');
 await a.waitForSelector('#vista-acceso:not([hidden])');
 await a.click('#tab-registro');
+await a.click('#btn-adulto');
 await a.fill('#form-registro [name=nombre]', 'Estudiante Recorrido');
 await a.fill('#form-registro [name=correo]', `recorrido.${sufijo}@example.com`);
 await a.fill('#form-registro [name=clave]', CLAVE);
+await a.check('#form-registro [name=terminos]');
+await a.check('#form-registro [name=datos]');
 await a.click('#form-registro button[type=submit]');
+await a.waitForSelector('#vista-correo:not([hidden])');
+await a.goto(enlaceDe(await esperarCorreo(`recorrido.${sufijo}@example.com`, 1), 'verificar'));
+await a.fill('#form-enlace [name=clave]', CLAVE);
+await a.click('#btn-enlace');
 await a.waitForSelector('#vista-cursos:not([hidden])');
 await a.click('[data-inscribir="course-arduino"]');
 await a.waitForSelector('#mis-cursos .curso a');
