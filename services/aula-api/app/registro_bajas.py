@@ -23,7 +23,8 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 MARCA = '.aula-registro-bajas'
-CONTENIDO_MARCA = 'aula-registro-bajas v1\n'
+CABECERA_MARCA = 'aula-registro-bajas v1'
+IDENTIFICADOR = re.compile(r'^id=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$')
 # Sistemas de archivos montados desde otro equipo. Un disco local del servidor no protege ante su pérdida.
 REMOTOS = {'nfs', 'nfs4', 'cifs', 'smb3', 'fuse.sshfs'}
 MOTIVOS = {'pendiente': {'previa'},
@@ -94,18 +95,20 @@ def base_actual(db):
 
 
 class Registro:
-    def __init__(self, ruta, pruebas=False):
+    def __init__(self, ruta, pruebas=False, identidad=''):
         self.ruta = Path(ruta) if ruta else None
         self.pruebas = pruebas
+        self.identidad = identidad   # identificador esperado del registro (AULA_BAJAS_REGISTRO_ID)
 
     @classmethod
     def desde_config(cls, cfg):
-        return cls(cfg.bajas_registro, cfg.bajas_registro_pruebas)
+        return cls(cfg.bajas_registro, cfg.bajas_registro_pruebas, cfg.bajas_registro_id)
 
     @classmethod
     def desde_entorno(cls):
         return cls(os.environ.get('AULA_BAJAS_REGISTRO', '').strip(),
-                   os.environ.get('AULA_BAJAS_REGISTRO_PRUEBAS', '').strip().lower() in ('1', 'true', 'si', 'sí', 'yes'))
+                   os.environ.get('AULA_BAJAS_REGISTRO_PRUEBAS', '').strip().lower() in ('1', 'true', 'si', 'sí', 'yes'),
+                   os.environ.get('AULA_BAJAS_REGISTRO_ID', '').strip())
 
     def _carpeta(self):
         if self.ruta is None:
@@ -119,11 +122,10 @@ class Registro:
     def comprobar(self):
         """Destino configurado, identificado y con escritura sincronizada. Si falla, no se borra nada."""
         self._carpeta()
-        try:
-            if (self.ruta / MARCA).read_text() != CONTENIDO_MARCA:
-                raise RegistroNoDisponible('La marca del registro de bajas no es válida')
-        except OSError as e:
-            raise RegistroNoDisponible('Destino sin inicializar o inaccesible: falta la marca del registro') from e
+        identidad = self.leer_identidad()
+        if self.identidad != identidad and (self.identidad or not self.pruebas):
+            raise RegistroNoDisponible('El destino montado no es el registro de bajas configurado '
+                                       '(AULA_BAJAS_REGISTRO_ID distinto o sin definir)')
         prueba = self.ruta / f'.prueba-{uuid4()}'
         try:
             self._escribir(prueba, b'ok\n')
@@ -137,13 +139,24 @@ class Registro:
             except OSError:
                 pass
 
+    def leer_identidad(self):
+        """Identificador escrito en la marca al inicializar el registro."""
+        try:
+            lineas = (self.ruta / MARCA).read_text().splitlines()
+        except OSError as e:
+            raise RegistroNoDisponible('Destino sin inicializar o inaccesible: falta la marca del registro') from e
+        m = IDENTIFICADOR.match(lineas[1]) if len(lineas) == 2 and lineas[0] == CABECERA_MARCA else None
+        if not m:
+            raise RegistroNoDisponible('La marca del registro de bajas no es válida')
+        return m.group(1)
+
     def inicializar(self):
         self._carpeta()
         if (self.ruta / MARCA).exists():
             return False
         if any(p.name != 'lost+found' for p in self.ruta.iterdir()):
             raise RegistroNoDisponible('La carpeta del registro de bajas no está vacía')
-        self._escribir(self.ruta / MARCA, CONTENIDO_MARCA.encode())
+        self._escribir(self.ruta / MARCA, f'{CABECERA_MARCA}\nid={uuid4()}\n'.encode())
         return True
 
     def _escribir(self, ruta, datos):
@@ -251,7 +264,10 @@ def main(argv=None):
     registro = Registro.desde_entorno()
     try:
         if args.accion == 'inicializar':
-            print('Registro inicializado' if registro.inicializar() else 'Ya estaba inicializado')
+            if not registro.inicializar():
+                print('Ya estaba inicializado: no se cambia nada', file=sys.stderr)
+                return 1
+            print(f'Registro inicializado. Identificador: {registro.leer_identidad()}')
             return 0
         registro.comprobar()
         diario = registro.leer()
@@ -268,7 +284,7 @@ def main(argv=None):
             print(f'Operación {args.operacion}: {estado} por decisión del operador')
             return 0
         canceladas = sum(e['estado'] == 'cancelada' for e in diario.finales.values())
-        print(f'Destino operativo. Confirmadas: {len(diario.confirmadas)}. Canceladas: {canceladas}. '
+        print(f'Destino operativo. Registro {registro.leer_identidad()}. Confirmadas: {len(diario.confirmadas)}. Canceladas: {canceladas}. '
               f'Inciertas: {len(diario.abiertas)}. Problemas: {len(diario.problemas)}.')
         for evento in diario.abiertas:
             print('Incierta:', evento['operacion'], 'cuenta', evento['usuario_id'])

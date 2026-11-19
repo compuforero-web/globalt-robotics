@@ -73,9 +73,16 @@ def test_destino_sin_configurar_local_o_sin_marca(tmp_path, monkeypatch):
     (tmp_path / 'otro.txt').unlink()
     monkeypatch.setattr(registro_bajas, 'tipo_montaje', lambda ruta: 'nfs4')   # montaje remoto simulado
     real = Registro(tmp_path)
-    assert real.inicializar()
-    real.comprobar()
+    assert real.inicializar() and not real.inicializar()
+    with pytest.raises(RegistroNoDisponible, match='sin definir'):
+        real.comprobar()                 # fuera de pruebas se exige el identificador del registro configurado
+    with pytest.raises(RegistroNoDisponible, match='no es el registro'):
+        Registro(tmp_path, identidad=str(uuid4())).comprobar()     # otro registro inicializado
+    Registro(tmp_path, identidad=real.leer_identidad()).comprobar()
     assert not list(tmp_path.glob('.prueba-*'))   # la prueba de escritura no deja restos
+    (tmp_path / registro_bajas.MARCA).write_text('aula-registro-bajas v1\n')
+    with pytest.raises(RegistroNoDisponible, match='no es válida'):
+        Registro(tmp_path, identidad=real.leer_identidad()).comprobar()
 
 
 def test_tipo_montaje_lee_el_montaje_mas_especifico(tmp_path, monkeypatch):
