@@ -68,7 +68,7 @@ Pendiente fuera de este paquete: textos definitivos aprobados (Ley 1581 de 2012 
   sudo docker exec -i globalt-aula-db sh -c 'pg_restore -U "$POSTGRES_USER" -d aula_inspeccion --no-owner' < /var/backups/globalt-aula/aula-AAAAMMDDTHHMMSSZ.dump
   ```
 
-  Solo con decisión expresa del responsable: detener la API (`docker compose -f /var/lib/globalt-robotics-aula/compose.json stop api`), restaurar sobre `aula` con `pg_restore --clean --if-exists` y volver a arrancarla.
+  Antes de promover una copia, detener la API, cerrar las bajas inciertas (`aula-produccion.sh bajas resolver` mientras exista la base original) y reconciliar en una base aislada con el registro externo de bajas según docs/AULA_INACTIVIDAD.md. Una copia con ese registro ausente, dañado, incompleto o con operaciones inciertas no es apta. Las bajas siguen bloqueadas hasta configurar ese registro con `aula-produccion.sh bajas configurar` (requisitos y comandos en el mismo documento); el resto del aula no lo necesita. Conservar la base anterior aparte. Solo con decisión expresa del responsable, promover la copia ya comprobada y reconciliada y volver a arrancar el servicio.
 - No ejecutar `docker compose … down -v` (borra el volumen) ni eliminar la red `globalt-aula_frontal` mientras esté activado: el contenedor público está conectado a ella. Para retirar el aula, `revertir` primero.
 
 ## Probado y pendiente

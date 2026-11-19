@@ -42,6 +42,10 @@ class Config:
     recuperacion_min: int = 60         # validez del enlace de recuperación
     correos_por_hora: int = 3          # correos por dirección y hora (registro, reenvío, recuperación)
     max_correos_ip: int = 10           # solicitudes de correo por IP en la ventana de intentos
+    # Registro externo de bajas por inactividad (docs/AULA_INACTIVIDAD.md). Sin él, `eliminar` se niega.
+    bajas_registro: str = ''           # carpeta montada desde un almacenamiento independiente del servidor
+    bajas_registro_pruebas: bool = False   # solo pruebas: admite una carpeta local
+    bajas_registro_id: str = ''        # identificador del registro esperado (marca escrita al inicializarlo)
 
 
 def cargar():
@@ -79,4 +83,7 @@ def cargar():
         recuperacion_min=int(os.environ.get('AULA_ENLACE_RECUPERACION_MIN', '60')),
         correos_por_hora=int(os.environ.get('AULA_CORREOS_POR_HORA', '3')),
         max_correos_ip=int(os.environ.get('AULA_MAX_CORREOS_IP', '10')),
+        bajas_registro=os.environ.get('AULA_BAJAS_REGISTRO', '').strip(),
+        bajas_registro_pruebas=_bool('AULA_BAJAS_REGISTRO_PRUEBAS', False),
+        bajas_registro_id=os.environ.get('AULA_BAJAS_REGISTRO_ID', '').strip(),
     )
