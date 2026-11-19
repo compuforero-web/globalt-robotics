@@ -36,7 +36,8 @@ def base_limpia():
     with psycopg.connect(URL, autocommit=True) as c:
         c.execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
     assert migraciones.aplicar(URL) == ['0001_inicial.sql', '0002_borradores.sql', '0003_compilaciones.sql',
-                                       '0004_progreso.sql', '0005_catalogo.sql', '0006_registro_adultos.sql', '0007_inactividad.sql']
+                                       '0004_progreso.sql', '0005_catalogo.sql', '0006_registro_adultos.sql', '0007_inactividad.sql',
+                                       '0008_bajas_registradas.sql']
     assert migraciones.aplicar(URL) == []          # reproducible e idempotente
     documentos.cargar_prueba(URL)                  # textos PROVISIONALES de prueba, versión prueba-1
 
@@ -728,8 +729,16 @@ def test_registro_cerrado_por_defecto_y_cuentas_por_consola():
                                                                  'correo': 'consola.prueba@example.com', 'rol': 'estudiante'}
 
 
-def test_inactividad_aviso_y_reingreso():
+def registro_bajas(tmp_path):
+    from app.registro_bajas import Registro
+    registro = Registro(tmp_path, pruebas=True)   # destino independiente de PRUEBAS (carpeta temporal)
+    registro.inicializar()
+    return registro
+
+
+def test_inactividad_aviso_y_reingreso(tmp_path):
     from app import correo, inactividad
+    bajas = registro_bajas(tmp_path)
     email = 'alumna-inactiva@example.com'
     with cliente() as c, psycopg.connect(URL, autocommit=True) as db:
         assert registrar(c, email).status_code == 200
@@ -742,7 +751,7 @@ def test_inactividad_aviso_y_reingreso():
         assert inactividad.avisar(db, config(), uid, falla) == 'fallido'
         ref = sql('SELECT referencia FROM avisos_inactividad WHERE usuario_id=%s', uid)[0][0]
         assert not inactividad.gestionar(db, 'acreditar', ref)
-        assert not inactividad.gestionar(db, 'eliminar', ref)
+        assert inactividad.eliminar(db, bajas, ref) == 'sin cambio'
         assert inactividad.gestionar(db, 'invalidar', ref)
         buz = []
         envio = lambda *args: buz.append(args)
@@ -752,15 +761,18 @@ def test_inactividad_aviso_y_reingreso():
         nuevo = sql('SELECT referencia FROM avisos_inactividad WHERE usuario_id=%s', uid)[0][0]
         assert not inactividad.gestionar(db, 'acreditar', ref)
         assert inactividad.gestionar(db, 'acreditar', nuevo)
-        assert not inactividad.gestionar(db, 'eliminar', nuevo)
+        assert inactividad.eliminar(db, bajas, nuevo) == 'sin cambio'
         assert c.get('/api/aula/sesion').status_code == 200
         assert not sql('SELECT 1 FROM avisos_inactividad WHERE usuario_id=%s', uid)
-        assert not inactividad.gestionar(db, 'eliminar', nuevo)
+        assert inactividad.eliminar(db, bajas, nuevo) == 'sin cambio'
+        assert not bajas.leer().pendientes      # nada que no cumpla las condiciones llega a anotarse
         assert inactividad.avisar(db, config(), uid, envio) == 'sin cambio'
 
 
-def test_limites_de_inactividad_y_supresion():
+def test_limites_de_inactividad_y_supresion(tmp_path):
     from app import inactividad
+    from app.registro_bajas import Registro, RegistroNoDisponible
+    bajas = registro_bajas(tmp_path)
     email = 'cuenta-plazos@example.com'
     with cliente() as c, psycopg.connect(URL, autocommit=True) as db:
         assert registrar(c, email).status_code == 200
@@ -776,10 +788,23 @@ def test_limites_de_inactividad_y_supresion():
         ref = sql('SELECT referencia FROM avisos_inactividad WHERE usuario_id=%s', uid)[0][0]
         assert inactividad.gestionar(db, 'acreditar', ref)
         sql("UPDATE avisos_inactividad SET acreditado_en=now()-interval '31 days' WHERE referencia=%s", ref)
-        assert not inactividad.gestionar(db, 'eliminar', ref)
+        assert inactividad.eliminar(db, bajas, ref) == 'sin cambio'
         sql("UPDATE usuarios SET ultimo_acceso=now()-interval '25 months' WHERE id=%s", uid)
-        assert inactividad.gestionar(db, 'eliminar', ref)
-        assert not inactividad.gestionar(db, 'eliminar', ref)
+        with pytest.raises(ValueError, match='registro externo'):
+            inactividad.gestionar(db, 'eliminar', ref)          # la vía anterior ya no borra
+        with pytest.raises(psycopg.errors.RaiseException, match='registro externo'):
+            sql('DELETE FROM usuarios WHERE id=%s', uid)        # ni el SQL directo del procedimiento anterior
+        with pytest.raises(RegistroNoDisponible, match='no está configurado'):
+            inactividad.eliminar(db, Registro(''), ref)       # producción sin destino: bloqueada
+        with pytest.raises(RegistroNoDisponible, match='independiente'):
+            inactividad.eliminar(db, Registro(tmp_path), ref)  # una carpeta local no vale fuera de pruebas
+        assert sql('SELECT 1 FROM usuarios WHERE id=%s', uid)
+        assert inactividad.eliminar(db, bajas, ref) == 'aplicada'
+        assert inactividad.eliminar(db, bajas, ref) == 'sin cambio'
+        diario = bajas.leer()
+        assert not diario.problemas and not diario.abiertas and len(diario.confirmadas) == 1
+        assert diario.confirmadas[0]['usuario_id'] == uid
+        assert email not in ''.join(p.read_text() for p in tmp_path.glob('*.json'))
         assert not sql('SELECT 1 FROM usuarios WHERE id=%s', uid)
         assert not sql('SELECT 1 FROM inscripciones WHERE usuario_id=%s', uid)
         assert not sql('SELECT 1 FROM registros_pendientes WHERE correo=%s', email)
