@@ -535,7 +535,8 @@ instalar_salida_smtp() {
 Description=Socket privado de correo del aula GLOBALT
 [Socket]
 ListenStream=$STATE/smtp/proveedor.sock
-SocketGroup=10002
+SocketGroup=root
+ExecStartPost=/usr/bin/chgrp +10002 $STATE/smtp/proveedor.sock
 SocketMode=0660
 RemoveOnStop=yes
 [Install]
@@ -556,7 +557,8 @@ ExecStart=/usr/lib/systemd/systemd-socket-proxyd $1:$2
 EOF
   chmod 0644 "/etc/systemd/system/$unidad."{socket,service}
   systemctl daemon-reload
-  systemctl enable --now "$unidad.socket"
+  systemctl enable --now "$unidad.socket" || falla 'No se pudo activar el socket SMTP. Consulta journalctl -u globalt-aula-smtp.socket.'
+  systemctl is-active --quiet "$unidad.socket" && [[ -S $STATE/smtp/proveedor.sock && $(stat -c %g:%a "$STATE/smtp/proveedor.sock") == 10002:660 ]] || falla 'El socket SMTP no está listo para la API.'
   systemctl try-restart "$unidad.service"
 }
 
