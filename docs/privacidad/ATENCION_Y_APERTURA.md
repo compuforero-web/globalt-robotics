@@ -17,7 +17,7 @@ Guía de trabajo para GLOBALT E.U. El borrador de política no activa el registr
 | Tema | Evidencia o decisión pendiente |
 |---|---|
 | Identificación | Contacto confirmado en la política. Edwin atiende directamente el buzón de privacidad. Establecer suplencia y control de acceso. |
-| Oferta educativa | Documentar la revisión del objeto social y la gestión territorial que corresponda para la oferta de educación informal. |
+| Oferta educativa | El 18 de noviembre de 2026 GLOBALT envió la reforma que amplía su objeto social a educación informal (8559), portales web (6312), desarrollo (6201) y edición de software (5820), según el documento remitido por el representante. Edwin y Gemini llevan el seguimiento ante la Cámara. Pendiente contrastar el resultado con el certificado actualizado y revisar el RUT. Conservar la evidencia en el expediente privado. |
 | Datos y proveedores | Revisar las migraciones 0001–0008 y el registro externo de bajas previsto. Gmail está confirmado como proveedor SMTP. Inventariar servidor, Cloudflare, buzón y proveedor SMTP efectivo, tratamiento fuera de Colombia si aplica, contratos, registros y retención configurada. |
 | Conservación | Inactividad aprobada: 24 meses desde el último acceso y aviso al menos 30 días antes de eliminar. PR #28 integrada. El ensayo con cuentas ficticias cubrió plazos, acceso posterior, fallos de aviso y restauración. En producción las bajas están deshabilitadas hasta configurar y probar el destino externo. Mantener en revisión los casos sin fecha fiable de acceso o sin aviso acreditado. Fijar aparte los plazos de registros técnicos y evidencias. Comprobar la rotación efectiva y distinguir la baja por inactividad de una solicitud de supresión del titular. Esta última necesita su propio trámite. |
 | Texto aprobado | Completar datos pendientes, fecha de vigencia y versión. Archivar cada versión exacta del aviso, términos y autorización. Publicar enlaces accesibles antes de recoger datos reales. |
@@ -25,6 +25,27 @@ Guía de trabajo para GLOBALT E.U. El borrador de política no activa el registr
 | Derechos | Resolver un caso ficticio de consulta y uno de supresión, incluyendo identidad, plazos, constancia del reclamo, respuesta y respaldo. Asignar un responsable de incidentes y canal de escalamiento. |
 | Invitados y menores | Comprobar desde móvil la salida al laboratorio sin remitir el formulario ni crear cuenta. Revisar almacenamiento local y registros técnicos también en juegos utilizados por menores. |
 | Apertura | Aprobar por separado documentos, versión técnica y activación del registro para adultos. Los documentos de esta rama son material de revisión. |
+
+## Información para la aprobación del responsable
+
+Las tres piezas candidatas se pueden revisar por separado:
+
+| Documento | Uso previsto |
+|---|---|
+| [Términos del aula](TERMINOS_ADULTOS_BORRADOR.md) | Explicar gratuidad, alcance de la educación informal, acceso desde los 18 años y uso de los laboratorios. Corresponde a `terminos`. |
+| [Autorización de datos](AUTORIZACION_ADULTOS_BORRADOR.md) | Pedir una decisión expresa sobre el tratamiento necesario para la cuenta, la inscripción, el progreso y los mensajes operativos. Corresponde a `datos`. |
+| [Política de privacidad](POLITICA_ADULTOS_BORRADOR.md) | Explicar qué ocurre al explorar como visitante o usar una cuenta, cómo se conservan los datos y cómo solicitar atención. El apartado editorial sobre el formulario debe separarse al preparar la versión pública. |
+
+Para asignar plazos, el comportamiento comprobado en el código de producción `a8ea56f` es el siguiente:
+
+| Datos | Cuándo se limpian según la implementación |
+|---|---|
+| Intentos de acceso o registro | Al anotar un intento se eliminan filas anteriores a un día. |
+| Sesiones | Al abrir sesión se eliminan sesiones cuya caducidad o revocación ocurrió hace más de 30 días. |
+| Historial de compilaciones usado para límites | La limpieza por estudiante elimina filas de más de un día durante el flujo de compilación. |
+| Respaldos ordinarios del aula | El script conserva por defecto las 14 copias comprobadas más recientes. Revisar la configuración efectiva y los respaldos de actualizaciones por separado. |
+
+Las limpiezas asociadas a actividad pueden tardar más si nadie vuelve a usar el servicio. Para los textos públicos, acordar una duración que GLOBALT pueda cumplir, acreditar cómo se ejecuta y contemplar respaldos y registros de proveedores. Falta decidir quién atiende el buzón en ausencia de Edwin y ensayar cómo se marca y resuelve un reclamo de supresión mientras las bajas por inactividad están deshabilitadas.
 
 ## Secuencia para esta entrega
 
