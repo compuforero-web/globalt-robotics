@@ -34,7 +34,7 @@ Las tres piezas candidatas se pueden revisar por separado:
 |---|---|
 | [Términos del aula](TERMINOS_ADULTOS_BORRADOR.md) | Explicar gratuidad, alcance de la educación informal, acceso desde los 18 años y uso de los laboratorios. Corresponde a `terminos`. |
 | [Autorización de datos](AUTORIZACION_ADULTOS_BORRADOR.md) | Pedir una decisión expresa sobre el tratamiento necesario para la cuenta, la inscripción, el progreso y los mensajes operativos. Corresponde a `datos`. |
-| [Política de privacidad](POLITICA_ADULTOS_BORRADOR.md) | Explicar qué ocurre al explorar como visitante o usar una cuenta, cómo se conservan los datos y cómo solicitar atención. El apartado editorial sobre el formulario debe separarse al preparar la versión pública. |
+| [Política de privacidad](POLITICA_ADULTOS_BORRADOR.md) | Explicar qué ocurre al explorar como visitante o usar una cuenta, cómo se conservan los datos y cómo solicitar atención. Corresponde a `politica` desde la migración 0009. El apartado editorial sobre el formulario debe separarse al preparar la versión pública. |
 
 Para asignar plazos, el comportamiento comprobado en el código de producción `a8ea56f` es el siguiente:
 
@@ -49,7 +49,7 @@ Las limpiezas asociadas a actividad pueden tardar más si nadie vuelve a usar el
 
 ## Secuencia para esta entrega
 
-1. Con el registro cerrado, comprobar que una persona sin sesión puede leer la política y las versiones exactas de términos y autorización antes de enviar datos. Las dos clases que admite la API son `terminos` y `datos`. La política necesita un enlace público propio o una incorporación íntegra claramente identificada en el texto consultable.
+1. Con el registro cerrado, comprobar que una persona sin sesión puede leer la política y las versiones exactas de términos y autorización antes de enviar datos. En la entrega #30 se debe desplegar primero la migración 0009 con el registro cerrado y comprobar la ruta pública de la política. Los tipos son `terminos`, `datos` y `politica`. Hay dos casillas: la autorización de datos incluye el enlace a la política y conserva evidencia de su versión.
 2. En una réplica con correo de prueba, usar versiones ficticias distintas de las que se aprobarán. Ensayar la activación con registro cerrado, el acceso de una cuenta previa, la apertura, el alta desde un curso, la recuperación y el cierre de nuevas altas. Guardar resultados sin direcciones, claves ni enlaces de un solo uso.
 3. Entregar al responsable el texto exacto, el título, la finalidad, la versión, la fecha propuesta y el enlace de cada documento. Dejar resueltas las decisiones de la tabla anterior que afecten a lo que se promete a estudiantes. Conservar constancia de aprobación separada del commit técnico.
 4. Solo después de la aprobación, cargar y activar en Linux los documentos definitivos y comprobar versiones, enlaces y estado desde el dominio. Activar documentos también puede exigir aceptación a cuentas existentes. Abrir nuevas altas es una decisión posterior y explícita. Probar con un buzón controlado y mantener disponible el cierre de altas.
