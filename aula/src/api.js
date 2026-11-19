@@ -30,7 +30,14 @@ async function llamar(ruta, { metodo = 'GET', datos } = {}) {
 
 export const sesion = () => llamar('/sesion');
 export const entrar = (correo, clave) => llamar('/sesion', { metodo: 'POST', datos: { correo, clave } });
-export const registrar = (nombre, correo, clave) => llamar('/registro', { metodo: 'POST', datos: { nombre, correo, clave } });
+// Registro de adultos: solo envía la solicitud; la cuenta se crea al abrir el enlace del correo (verificar).
+export const registrar = (datos) => llamar('/registro', { metodo: 'POST', datos });
+export const reenviar = (correo) => llamar('/cuenta/reenviar', { metodo: 'POST', datos: { correo } });
+export const recuperar = (correo, curso) => llamar('/cuenta/recuperar', { metodo: 'POST', datos: curso ? { correo, curso } : { correo } });
+export const verificar = (token, clave) => llamar('/cuenta/verificar', { metodo: 'POST', datos: { token, clave } });
+export const restablecer = (token, clave) => llamar('/cuenta/restablecer', { metodo: 'POST', datos: { token, clave } });
+export const autorizar = (versiones) => llamar('/cuenta/autorizar', { metodo: 'POST', datos: versiones });
+export const documento = (tipo, version) => llamar(`/documentos/${encodeURIComponent(tipo)}/${encodeURIComponent(version)}`);
 export async function salir() { await llamar('/sesion', { metodo: 'DELETE' }); csrf = ''; }
 export const catalogo = () => llamar('/cursos');
 export const configuracion = () => llamar('/config');

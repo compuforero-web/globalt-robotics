@@ -7,6 +7,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { crearCuenta } from './cuenta-prueba.mjs';   // alta de adulto con el buzón de pruebas
 
 const { chromium, devices } = createRequire(import.meta.url)('playwright');
 const LAB = process.env.LAB_URL || 'http://localhost:8080/games/laboratorio-arduino/index.html';
@@ -189,7 +190,7 @@ if (SITIO) {
   const remote = async (ctx, id) => (await api(ctx, 'GET', '/borradores/' + id)).json.borrador;
   const ctxA = await context();
   const correo = `pot.${sufijo}@example.com`;
-  const { json } = await api(ctxA, 'POST', '/registro', { nombre: 'Estudiante pot', correo, clave: 'clave-ficticia-e2e-1' });
+  const { json } = await crearCuenta(ctxA, SITIO, { nombre: 'Estudiante pot', correo, clave: 'clave-ficticia-e2e-1' });
   await api(ctxA, 'POST', '/inscripciones', { curso_id: 'course-arduino' }, json.csrf);
   // Borradores previos en dos lecciones anteriores: no deben cambiar.
   await api(ctxA, 'PUT', '/borradores/arduino-led-serie', { codigo: '// l1' }, json.csrf);
@@ -207,7 +208,7 @@ if (SITIO) {
   assert.equal((await remote(ctxA, 'arduino-boton-flanco')).codigo, '// l5');
   for (const id of ['arduino-protoboard-semaforo', 'arduino-pwm-brillo', 'arduino-boton-entrada']) assert.equal(await remote(ctxA, id), null, id);
   const ctxB = await context();
-  const otro = await api(ctxB, 'POST', '/registro', { nombre: 'Otro', correo: `pot.otro.${sufijo}@example.com`, clave: 'clave-ficticia-e2e-2' });
+  const otro = await crearCuenta(ctxB, SITIO, { nombre: 'Otro', correo: `pot.otro.${sufijo}@example.com`, clave: 'clave-ficticia-e2e-2' });
   await api(ctxB, 'POST', '/inscripciones', { curso_id: 'course-arduino' }, otro.json.csrf);
   assert.equal(await remote(ctxB, L6), null);
   const ctxC = await context(devices['Pixel 7']);

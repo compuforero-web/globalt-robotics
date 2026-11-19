@@ -8,7 +8,9 @@
 #   sudo bash deploy/linux/aula-produccion.sh revertir              # vuelve web, nginx y publicador; NO toca la base
 #   sudo bash deploy/linux/aula-produccion.sh actualizar <commit>   # nueva versión de la API con respaldo y vuelta atrás
 #   sudo bash deploy/linux/aula-produccion.sh crear-cuenta --correo C --nombre N   # contraseña por teclado (oculta)
-#   sudo bash deploy/linux/aula-produccion.sh registro abrir|cerrar  # registro público: cerrado por defecto
+#   sudo bash deploy/linux/aula-produccion.sh registro estado|abrir|cerrar   # registro de adultos: cerrado por defecto
+#   sudo bash deploy/linux/aula-produccion.sh correo configurar|desactivar|probar --a CORREO   # SMTP de producción
+#   sudo bash deploy/linux/aula-produccion.sh documentos listar|cargar|activar …   # términos y autorización de datos
 #   sudo bash deploy/linux/aula-produccion.sh respaldo              # respaldo comprobado inmediato
 #
 # Ejecutar desde una copia del repositorio en el commit indicado (el script se compara con el del commit).
@@ -67,6 +69,7 @@ verificar_commit() {   # $1 commit
   "${GIT[@]}" show "$1:deploy/linux/aula-produccion.sh" | cmp -s - "$SELF" \
     || falla 'Este script no coincide con el del commit indicado. Ejecuta la copia de ese mismo commit.'
   for f in services/aula-api/Dockerfile services/aula-api/app/main.py services/aula-api/app/cuentas.py \
+           services/aula-api/app/correo.py services/aula-api/app/documentos.py \
            deploy/linux/nginx-public-aula.conf deploy/linux/aula-respaldo.sh deploy/linux/aula-prueba.py \
            deploy/linux/update.py aula/index.html; do
     "${GIT[@]}" cat-file -e "$1:$f" 2>/dev/null || falla "El commit no contiene $f."
@@ -114,6 +117,7 @@ print(gw)'
 }
 
 escribir_compose() {   # $1 commit, $2 gid del socket
+  install -d -m 0750 -o root -g 10002 "$STATE/smtp"
   python3 - "$STATE" "$1" "$2" "$SOCKET_DIR" "$SOCKET_API" "$IMG" "$PG_IMAGE" <<'PY'
 import json, pathlib, sys
 state, rev, gid, sdir, sapi, img, pg = sys.argv[1:]
@@ -128,8 +132,8 @@ c = {'name': 'globalt-aula', 'services': {
            'healthcheck': {'test': ['CMD-SHELL', 'pg_isready -U aula -d aula'], 'interval': '5s', 'timeout': '3s', 'retries': 30}},
     'api': {**duro, 'build': {'context': 'source/services/aula-api'}, 'image': f'{img}:{rev}',
             'container_name': 'globalt-aula-api', 'env_file': ['api.env'],
-            'environment': {'AULA_COMPILADOR_SOCKET': f'{sapi}/compilador.sock'},
-            'volumes': [f'{sdir}:{sapi}:ro'], 'group_add': [gid],
+            'environment': {'AULA_COMPILADOR_SOCKET': f'{sapi}/compilador.sock', 'AULA_SMTP_SOCKET': '/smtp/proveedor.sock'},
+            'volumes': [f'{sdir}:{sapi}:ro', f'{state}/smtp:/smtp:ro'], 'group_add': [gid],
             'networks': ['aislada', 'frontal'], 'mem_limit': '512m', 'cpus': 1, 'pids_limit': 128,
             'depends_on': {'db': {'condition': 'service_healthy'}}}},
     # Ambas redes internas: la base solo ve a la API; la API solo ve a la base y a la web pública.
@@ -284,6 +288,8 @@ comprobar() {
   verificar_migraciones "$REV"
   local ultimo; ultimo=$(find "$RESPALDOS" -maxdepth 1 -name 'aula-*.dump' -mmin -1800 | sort | tail -1)
   [[ -n $ultimo ]] && echo "Último respaldo (<30 h): $ultimo" || echo 'AVISO: no hay respaldo de las últimas 30 h.'
+  echo 'Registro de adultos (requisitos de producción):'
+  estado_registro || echo 'Registro real: NO disponible (ver «faltan»).'
   if [[ -f $STATE/activado ]]; then
     echo 'Estado: ACTIVADO en la web pública.'
     curl -fsS --max-time 5 -H 'X-Forwarded-Proto: https' "$PUB_URL/api/aula/salud" | grep -q '"ok"' && echo 'Ruta pública /api/aula/salud: OK'
@@ -379,7 +385,9 @@ def estado(ruta, metodo='GET', proto='https'):
     except urllib.error.HTTPError as e: return e.code
 esperado = {'/': 200, '/aula/': 200, '/games/robolab-arduino/index.html': 200, '/api/aula/salud': 200,
             '/api/aula/config': 200, '/api/arduino/salud': 403, '/api/arduino/compilar': 403, '/admin': 403,
-            '/admin.html': 403, '/src/admin/admin.js': 403, '/api/aula/otra': 403, '/api/aula/../arduino/salud': 403}
+            '/admin.html': 403, '/src/admin/admin.js': 403, '/api/aula/otra': 403, '/api/aula/../arduino/salud': 403,
+            '/api/aula/documentos/datos/no-existe': 404, '/api/aula/cuenta/otra': 403, '/api/aula/documentos/otro/v1': 403,
+            '/aula/documento.html': 200}
 malos = {r: (estado(r), e) for r, e in esperado.items() if estado(r) != e}
 assert estado('/api/aula/salud', proto='http') == 403 and estado('/aula/', proto='http') == 301, 'HTTP sin cifrar'
 assert estado('/api/arduino/compilar', 'POST') == 403
@@ -423,6 +431,10 @@ actualizar() {
   volver_api() {
     set +e
     echo '!! Fallo: se vuelve a la API anterior. La base NO se restaura.' >&2
+    if [[ -f $ANT/nginx-public.conf ]]; then   # rutas públicas de la versión anterior
+      cat "$ANT/nginx-public.conf" > "$PUB_CONF"
+      docker exec "$PUB_C" nginx -t -q && docker exec "$PUB_C" nginx -s reload
+    fi
     cp -p "$ANT/compose.json" "$STATE/compose.json"
     if [[ -d $ANT/source ]]; then rm -rf -- "$STATE/source.fallida"; mv "$STATE/source" "$STATE/source.fallida"; mv "$ANT/source" "$STATE/source"; fi
     "${DC[@]}" up -d --no-deps api
@@ -438,6 +450,20 @@ actualizar() {
   "${DC[@]}" up -d --no-deps api
   esperar_api
   verificar_migraciones "$REV"
+  if [[ -f $STATE/activado ]]; then   # lista cerrada de rutas públicas de esta versión (p. ej. /api/aula/cuenta/…)
+    local PUERTA; PUERTA=$(puerta_tunel)
+    cp -p "$PUB_CONF" "$ANT/nginx-public.conf"
+    sed "s/__PUERTA_TUNEL__/$PUERTA/" "$STATE/source/deploy/linux/nginx-public-aula.conf" > "$ANT/nginx-public.conf.nuevo"
+    if cmp -s "$ANT/nginx-public.conf.nuevo" "$PUB_CONF"; then
+      echo 'Configuración nginx pública: sin cambios.'
+    else
+      cat "$ANT/nginx-public.conf.nuevo" > "$PUB_CONF"   # mismo archivo (montado en el contenedor)
+      docker exec "$PUB_C" nginx -t -q
+      docker exec "$PUB_C" nginx -s reload
+      sleep 2
+      echo "Configuración nginx pública actualizada (copia anterior: $ANT/nginx-public.conf)."
+    fi
+  fi
   paso '4/4 Prueba funcional'
   if [[ -f $STATE/activado ]]; then prueba_funcional tunel; else prueba_funcional interna; fi
   trap - ERR
@@ -461,28 +487,164 @@ crear_cuenta() {
   unset c1 c2
 }
 
+fijar_env() {   # KEY=VALOR por la entrada estándar, una por línea; sustituye las existentes en api.env
+  python3 -c '
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+nuevos = dict(l.split("=", 1) for l in sys.stdin.read().splitlines() if "=" in l)
+for k, v in nuevos.items():
+    assert k.replace("_", "").isalnum() and "\n" not in v, k
+lineas = [l for l in p.read_text().splitlines() if l.split("=", 1)[0] not in nuevos]
+p.write_text("\n".join(lineas + [f"{k}={v}" for k, v in nuevos.items()]) + "\n")' "$STATE/api.env"
+}
+
+recrear_api() {
+  "${DC[@]}" up -d --no-deps --force-recreate api
+  esperar_api
+}
+
+estado_registro() {   # 0 solo si el registro real puede abrirse (documentos aprobados vigentes y correo de producción)
+  docker exec "$API_C" python -m app.documentos estado --produccion
+}
+
 registro() {
   local accion=${1:-}
-  [[ $accion == abrir || $accion == cerrar ]] || falla 'Uso: registro abrir|cerrar'
-  iniciar_registro
+  [[ $accion == abrir || $accion == cerrar || $accion == estado ]] || falla 'Uso: registro estado|abrir|cerrar'
   [[ -f $STATE/api.env ]] || falla 'El aula no está preparada.'
+  if [[ $accion == estado ]]; then estado_registro || true; return; fi
+  iniciar_registro
   if [[ $accion == abrir ]]; then
-    echo 'AVISO: el registro abierto permite crear cuentas a cualquier visitante del dominio.'
-    echo 'Antes de abrirlo deben estar definidos y publicados los términos, la política de datos y el'
-    echo 'tratamiento de datos de menores (autorización de acudientes). Este paquete NO los incluye.'
+    grep -q '^AULA_PERMITIR_TEXTOS_PRUEBA=true' "$STATE/api.env" && falla 'api.env admite textos de prueba: no se abre el registro real.'
+    estado_registro || falla 'No se abre: faltan documentos aprobados vigentes o la configuración de correo de producción (ver arriba).'
+    echo 'AVISO: el registro abierto permite a cualquier ADULTO crear una cuenta con su correo.'
+    echo 'Las personas que indican ser menores de edad no pueden registrarse (practican sin cuenta).'
+    echo 'Los documentos vigentes (listados arriba) deben ser los textos definitivos aprobados por el responsable.'
     local resp; IFS= read -r -p 'Escribe ABRIR para confirmar: ' resp </dev/tty
     [[ $resp == ABRIR ]] || falla 'Cancelado.'
   fi
   local valor; valor=$([[ $accion == abrir ]] && echo true || echo false)
-  python3 - "$STATE/api.env" "$valor" <<'PY'
-import pathlib, sys
-p = pathlib.Path(sys.argv[1])
-lineas = [l for l in p.read_text().splitlines() if not l.startswith('AULA_REGISTRO_ABIERTO=')]
-p.write_text('\n'.join(lineas) + f'\nAULA_REGISTRO_ABIERTO={sys.argv[2]}\n')
-PY
-  "${DC[@]}" up -d --no-deps --force-recreate api
-  esperar_api
+  printf 'AULA_REGISTRO_ABIERTO=%s\n' "$valor" | fijar_env
+  recrear_api
   docker exec "$API_C" python -c "import json,urllib.request; print('Registro público abierto:', json.load(urllib.request.urlopen('http://127.0.0.1:8000/api/aula/config'))['registro_abierto'])"
+}
+
+instalar_salida_smtp() {
+  local unidad=globalt-aula-smtp
+  cat > "/etc/systemd/system/$unidad.socket" <<EOF
+[Unit]
+Description=Socket privado de correo del aula GLOBALT
+[Socket]
+ListenStream=$STATE/smtp/proveedor.sock
+SocketGroup=10002
+SocketMode=0660
+RemoveOnStop=yes
+[Install]
+WantedBy=sockets.target
+EOF
+  cat > "/etc/systemd/system/$unidad.service" <<EOF
+[Unit]
+Description=Conexión al proveedor SMTP del aula GLOBALT
+Requires=$unidad.socket
+After=network-online.target
+[Service]
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ExecStart=/usr/lib/systemd/systemd-socket-proxyd $1:$2
+EOF
+  chmod 0644 "/etc/systemd/system/$unidad."{socket,service}
+  systemctl daemon-reload
+  systemctl enable --now "$unidad.socket"
+  systemctl try-restart "$unidad.service"
+}
+
+correo_cmd() {
+  local accion=${1:-}; shift || true
+  [[ -f $STATE/api.env ]] || falla 'El aula no está preparada.'
+  en_ejecucion "$API_C" || falla 'La API no está en ejecución.'
+  case $accion in
+    configurar)
+      iniciar_registro
+      local host puerto tls usuario remitente c1 c2
+      IFS= read -r -p 'Servidor SMTP (p. ej. smtp.proveedor.example): ' host </dev/tty
+      IFS= read -r -p 'Puerto [587]: ' puerto </dev/tty; puerto=${puerto:-587}
+      IFS= read -r -p 'Cifrado (starttls|ssl) [starttls]: ' tls </dev/tty; tls=${tls:-starttls}
+      IFS= read -r -p 'Usuario SMTP: ' usuario </dev/tty
+      IFS= read -r -p 'Remitente (p. ej. "Aula GLOBALT ROBOTICS <aula@dominio>"): ' remitente </dev/tty
+      IFS= read -r -s -p 'Clave SMTP (oculta): ' c1 </dev/tty; echo
+      IFS= read -r -s -p 'Repite la clave: ' c2 </dev/tty; echo
+      [[ $c1 == "$c2" ]] || falla 'Las claves no coinciden.'
+      [[ $host =~ ^[A-Za-z0-9.-]+$ && $puerto =~ ^[0-9]+$ && ( $tls == starttls || $tls == ssl ) && -n $remitente ]] \
+        || falla 'Datos de correo no válidos (TLS obligatorio: starttls o ssl).'
+      [[ $host =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ && ${#puerto} -le 5 ]] && (( 10#$puerto >= 1 && 10#$puerto <= 65535 )) || falla 'Destino SMTP inválido.'
+      [[ -x /usr/lib/systemd/systemd-socket-proxyd ]] || falla 'Falta systemd-socket-proxyd.'
+      grep -q '/smtp/proveedor.sock' "$STATE/compose.json" || falla 'Actualiza primero el despliegue del aula.'
+      instalar_salida_smtp "$host" "$puerto"
+      printf 'AULA_CORREO_MODO=smtp\nAULA_SMTP_HOST=%s\nAULA_SMTP_PUERTO=%s\nAULA_SMTP_TLS=%s\nAULA_SMTP_USUARIO=%s\nAULA_SMTP_CLAVE=%s\nAULA_CORREO_REMITENTE=%s\nAULA_URL_PUBLICA=https://globalt-robotics.com\n' \
+        "$host" "$puerto" "$tls" "$usuario" "$c1" "$remitente" | fijar_env
+      unset c1 c2
+      recrear_api
+      echo 'Correo configurado (la clave no se muestra). Pruébalo con: correo probar --a <tu correo>'
+      ;;
+    desactivar)
+      iniciar_registro
+      printf 'AULA_CORREO_MODO=desactivado\nAULA_REGISTRO_ABIERTO=false\n' | fijar_env
+      recrear_api
+      if [[ -f /etc/systemd/system/globalt-aula-smtp.socket ]]; then
+        systemctl disable --now globalt-aula-smtp.socket
+        systemctl stop globalt-aula-smtp.service
+      fi
+      echo 'Correo desactivado y registro cerrado. La recuperación por correo queda no disponible.'
+      ;;
+    probar)
+      [[ ${1:-} == --a && -n ${2:-} ]] || falla 'Uso: correo probar --a CORREO'
+      docker exec -i "$API_C" python - "$2" <<'PY'
+import sys
+from app import config, correo
+try:
+    correo.enviar(config.cargar(), sys.argv[1], 'Prueba de correo · Aula GLOBALT ROBOTICS',
+                  'Mensaje de prueba de la configuración de correo del Aula. No requiere ninguna acción.', 'prueba')
+except correo.ErrorEnvio as e:
+    sys.exit(f'No se pudo enviar ({e}).')
+print('Correo de prueba entregado al servidor SMTP.')
+PY
+      ;;
+    *) falla 'Uso: correo configurar|desactivar|probar --a CORREO' ;;
+  esac
+}
+
+documentos_cmd() {
+  local accion=${1:-}; shift || true
+  en_ejecucion "$API_C" || falla 'La API no está en ejecución.'
+  local tipo='' version='' titulo='' finalidad='' archivo=''
+  while (($#)); do case $1 in
+    --tipo) tipo=$2; shift 2;; --version) version=$2; shift 2;; --titulo) titulo=$2; shift 2;;
+    --finalidad) finalidad=$2; shift 2;; --archivo) archivo=$2; shift 2;; *) falla "Opción desconocida: $1";; esac; done
+  case $accion in
+    listar) docker exec "$API_C" python -m app.documentos listar ;;
+    cargar)
+      [[ -n $tipo && -n $version && -n $titulo && -n $finalidad && -f $archivo ]] \
+        || falla 'Uso: documentos cargar --tipo terminos|datos --version V --titulo T --finalidad F --archivo texto.md'
+      iniciar_registro
+      echo "Texto: $archivo (sha256 $(sha256sum "$archivo" | cut -d' ' -f1))"
+      echo 'Solo se cargan textos DEFINITIVOS aprobados por el responsable. Una versión cargada no se modifica.'
+      local resp; IFS= read -r -p 'Escribe APROBADO para confirmar: ' resp </dev/tty
+      [[ $resp == APROBADO ]] || falla 'Cancelado.'
+      docker exec -i "$API_C" python -m app.documentos cargar --tipo "$tipo" --version "$version" \
+        --titulo "$titulo" --finalidad "$finalidad" --aprobado < "$archivo"
+      ;;
+    activar)
+      [[ -n $tipo && -n $version ]] || falla 'Uso: documentos activar --tipo terminos|datos --version V'
+      iniciar_registro
+      echo 'Al activar una versión, las cuentas que no la hayan aceptado deberán aceptarla en su próximo acceso.'
+      local resp; IFS= read -r -p 'Escribe ACTIVAR para confirmar: ' resp </dev/tty
+      [[ $resp == ACTIVAR ]] || falla 'Cancelado.'
+      docker exec "$API_C" python -m app.documentos activar --tipo "$tipo" --version "$version"
+      ;;
+    *) falla 'Uso: documentos listar|cargar|activar …' ;;
+  esac
 }
 
 case $ORDEN in
@@ -493,6 +655,8 @@ case $ORDEN in
   actualizar) actualizar "$@" ;;
   crear-cuenta) crear_cuenta "$@" ;;
   registro) registro "$@" ;;
+  correo) correo_cmd "$@" ;;
+  documentos) documentos_cmd "$@" ;;
   respaldo) iniciar_registro; respaldo_ahora ;;
-  *) sed -n '2,16p' "$SELF"; exit 1 ;;
+  *) sed -n '2,18p' "$SELF"; exit 1 ;;
 esac

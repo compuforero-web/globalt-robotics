@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { enlaceDe, esperarCorreo } from './cuenta-prueba.mjs';
 
 const { chromium, devices } = createRequire(import.meta.url)('playwright');
 const URL_AULA = process.env.AULA_URL || 'http://127.0.0.1:8180/aula/';
@@ -24,10 +25,17 @@ async function pagina(opciones = {}) {
 }
 async function registrar(p, nombre, correo) {
   await p.click('#tab-registro');
+  await p.click('#btn-adulto');
   await p.fill('#form-registro [name=nombre]', nombre);
   await p.fill('#form-registro [name=correo]', correo);
   await p.fill('#form-registro [name=clave]', CLAVE);
+  await p.check('#form-registro [name=terminos]');
+  await p.check('#form-registro [name=datos]');
   await p.click('#form-registro button[type=submit]');
+  await p.waitForSelector('#vista-correo:not([hidden])');
+  await p.goto(enlaceDe(await esperarCorreo(correo, 1), 'verificar'));   // enlace del buzón de pruebas
+  await p.fill('#form-enlace [name=clave]', CLAVE);
+  await p.click('#btn-enlace');
 }
 
 // 1. Registro (móvil) → «Mis cursos» vacío, sin desbordamiento.
@@ -51,7 +59,7 @@ if (labExiste) {
   assert.equal(await a.locator('#mis-cursos .leccion[data-estado="sin-comenzar"]').count(), 15);
 }
 else assert.match(textoCurso, /Laboratorio pendiente de publicación/);
-assert.match(await a.textContent('#catalogo'), /Ya estás inscrito/);
+assert.equal(await a.locator('#catalogo [data-inscribir="course-arduino"]').count(), 0);   // ya inscrito: no se ofrece de nuevo
 log('inscripción visible; laboratorio', labExiste ? 'enlazado' : 'marcado como pendiente (no existe en este servidor)');
 if (SHOTS) await a.screenshot({ path: SHOTS + '/aula-movil.png', fullPage: true });
 
@@ -74,15 +82,23 @@ log(process.env.AULA_REINICIO ? 'persistencia tras reiniciar API y PostgreSQL' :
 const { p: b } = await pagina({ viewport: { width: 1280, height: 900 } });
 await registrar(b, 'Beto Ficticio', `beto.${sufijo}@example.com`);
 await b.waitForSelector('#vista-cursos:not([hidden])');
+await b.waitForFunction(() => document.querySelector('#mis-cursos').textContent.trim());
 assert.match(await b.textContent('#mis-cursos'), /Todavía no te has inscrito/);
 log('separación entre estudiantes');
 
-// 6. Correo duplicado.
+// 6. Correo duplicado: la pantalla no revela que existe; solo llega un aviso sin enlace a la dirección.
 const { p: c } = await pagina();
-await registrar(c, 'Copia', `ana.${sufijo}@example.com`);
-await c.waitForFunction(() => document.querySelector('#error-form').textContent);
-assert.match(await c.textContent('#error-form'), /Ya existe una cuenta/);
-log('correo duplicado rechazado');
+await c.click('#tab-registro');
+await c.click('#btn-adulto');
+await c.fill('#form-registro [name=nombre]', 'Copia');
+await c.fill('#form-registro [name=correo]', `ana.${sufijo}@example.com`);
+await c.fill('#form-registro [name=clave]', CLAVE);
+await c.check('#form-registro [name=terminos]');
+await c.check('#form-registro [name=datos]');
+await c.click('#form-registro button[type=submit]');
+await c.waitForSelector('#vista-correo:not([hidden])');
+assert.equal(enlaceDe(await esperarCorreo(`ana.${sufijo}@example.com`, 2), 'verificar'), null);
+log('correo duplicado: misma respuesta, aviso sin enlace');
 
 // 7. Cerrar sesión; contraseña incorrecta; acceso correcto.
 await a.click('#btn-salir');
@@ -93,7 +109,7 @@ await a.fill('#form-entrar [name=correo]', `ana.${sufijo}@example.com`);
 await a.fill('#form-entrar [name=clave]', 'incorrecta-123');
 await a.click('#form-entrar button[type=submit]');
 await a.waitForFunction(() => document.querySelector('#error-form').textContent);
-assert.equal(await a.textContent('#error-form'), 'Correo o contraseña incorrectos.');
+assert.match(await a.textContent('#error-form'), /^Correo o contraseña incorrectos\./);
 await a.fill('#form-entrar [name=clave]', CLAVE);
 await a.click('#form-entrar button[type=submit]');
 await a.waitForSelector('#mis-cursos .curso');

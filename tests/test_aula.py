@@ -41,7 +41,8 @@ class AulaStaticTests(unittest.TestCase):
     def test_registro_no_acepta_rol(self):
         codigo = (API / 'app/main.py').read_text()
         self.assertIn("extra='forbid'", codigo)
-        self.assertRegex(codigo, re.escape("VALUES (%s, %s, %s, 'estudiante')"))
+        self.assertRegex(codigo, re.escape("VALUES (%s, %s, %s, 'estudiante'"))   # el rol nunca viene del cliente
+        self.assertNotIn('rol:', codigo[codigo.index('class DatosCuenta'):codigo.index('class Acceso')])
 
 
 if __name__ == '__main__':
@@ -53,7 +54,8 @@ class ProgresoStaticTests(unittest.TestCase):
 
     def test_migracion_nueva_sin_tocar_las_aplicadas(self):
         nombres = sorted(p.name for p in (API / 'migrations').glob('*.sql'))
-        self.assertEqual(nombres, ['0001_inicial.sql', '0002_borradores.sql', '0003_compilaciones.sql', '0004_progreso.sql', '0005_catalogo.sql'])
+        self.assertEqual(nombres, ['0001_inicial.sql', '0002_borradores.sql', '0003_compilaciones.sql', '0004_progreso.sql', '0005_catalogo.sql',
+                                   '0006_registro_adultos.sql'])
         sql = (API / 'migrations/0004_progreso.sql').read_text()
         self.assertIn('CREATE TABLE progreso_lecciones', sql)
         self.assertIn('ON DELETE CASCADE', sql)
@@ -67,7 +69,7 @@ class ProgresoStaticTests(unittest.TestCase):
         self.assertRegex('/api/aula/mis-cursos', lista)
         codigo = (API / 'app/main.py').read_text()
         self.assertIn("@app.post('/api/aula/mis-cursos')", codigo)
-        self.assertRegex(codigo, r"def registrar_progreso\(datos: Progreso, sesion=Depends\(con_csrf\)")
+        self.assertRegex(codigo, r"def registrar_progreso\(datos: Progreso, sesion=Depends\(autorizada_csrf\)")
         # Arduino y, con su propio catálogo, las prácticas Web/Python (tests/test_progreso_practicas.py).
         self.assertRegex(codigo, r'leccion_permitida\(datos\.leccion_id, sesion, conexion[,)]')
         modelo = codigo[codigo.index('class Progreso'):codigo.index('class Inscripcion')]
@@ -88,3 +90,43 @@ class ProgresoStaticTests(unittest.TestCase):
 
     def test_modulo_de_progreso(self):
         subprocess.run(['node', '--test', 'tests/progreso-cuenta.test.mjs'], cwd=ROOT, check=True, capture_output=True)
+
+
+class RegistroAdultosStaticTests(unittest.TestCase):
+    """Registro de adultos: migración que solo añade, rutas públicas, enlaces en el fragmento y sin datos sensibles."""
+
+    def test_migracion_0006_conserva_datos(self):
+        sql = (API / 'migrations/0006_registro_adultos.sql').read_text()
+        sentencias = re.sub(r'--[^\n]*', '', sql)
+        cuerpo_funciones = re.sub(r'\$\$.*?\$\$', '', sentencias, flags=re.S)
+        cuerpo_funciones = re.sub(r'BEFORE UPDATE( OR DELETE)? ON|ON DELETE CASCADE', '', cuerpo_funciones)
+        self.assertNotRegex(cuerpo_funciones, r'(?i)\b(UPDATE|DELETE|TRUNCATE|INSERT|DROP\s+(TABLE|COLUMN))\b')
+        self.assertIn("DEFAULT 'anterior'", sql)                    # cuentas existentes: sin autorizaciones históricas
+        self.assertNotIn('INSERT INTO autorizaciones', sql)
+        for campo in ('cedula', 'telefono', 'nacimiento'):
+            self.assertNotIn(campo, sql.lower())
+
+    def test_rutas_nuevas_en_la_lista_cerrada_del_nginx_publico(self):
+        conf = (ROOT / 'deploy/linux/nginx-public-aula.conf').read_text()
+        lista = re.compile(re.search(r'location ~ "(\^/api/aula/\([^"]+)"', conf)[1])
+        for ruta in ('/api/aula/cuenta/verificar', '/api/aula/cuenta/reenviar', '/api/aula/cuenta/recuperar',
+                     '/api/aula/cuenta/restablecer', '/api/aula/cuenta/autorizar', '/api/aula/documentos/datos/2026-12-01'):
+            self.assertTrue(lista.match(ruta), ruta)
+        for ruta in ('/api/aula/cuenta/otra', '/api/aula/documentos/otro/v1', '/api/aula/documentos/datos/../x'):
+            self.assertFalse(lista.match(ruta), ruta)
+
+    def test_enlaces_con_token_en_el_fragmento_y_sin_registrarlos(self):
+        correo = (API / 'app/correo.py').read_text()
+        self.assertIn("return f'{pagina(config, curso)}#{accion}={token}'", correo)
+        self.assertIn('set_debuglevel(0)', correo)
+        self.assertNotRegex(correo, r'registro\.\w+\([^)]*(texto|token|enlace|smtp_clave)')
+        main = (ROOT / 'aula/src/main.js').read_text()
+        self.assertIn('history.replaceState', main)
+
+    def test_produccion_no_abre_sin_documentos_ni_correo(self):
+        script = (ROOT / 'deploy/linux/aula-produccion.sh').read_text()
+        bloque = script[script.index('registro() {'):script.index('correo_cmd() {')]
+        self.assertIn("estado_registro || falla", bloque)
+        self.assertIn('AULA_PERMITIR_TEXTOS_PRUEBA=true', bloque)
+        self.assertIn('AULA_REGISTRO_ABIERTO=false', script)        # preparar: cerrado por defecto
+        self.assertNotIn('AULA_PERMITIR_TEXTOS_PRUEBA', (API / 'Dockerfile').read_text())

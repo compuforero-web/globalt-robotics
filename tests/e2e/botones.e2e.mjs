@@ -8,6 +8,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { crearCuenta } from './cuenta-prueba.mjs';   // alta de adulto con el buzón de pruebas
 
 const { chromium, devices } = createRequire(import.meta.url)('playwright');
 const LAB = process.env.LAB_URL || 'http://localhost:8080/games/laboratorio-arduino/index.html';
@@ -249,7 +250,7 @@ if (SITIO) {
   const remote = async (ctx, id) => (await api(ctx, 'GET', '/borradores/' + id)).json.borrador;
   const ctxA = await context();
   const correo = `botones.${sufijo}@example.com`;
-  const { json } = await api(ctxA, 'POST', '/registro', { nombre: 'Estudiante botones', correo, clave: 'clave-ficticia-e2e-1' });
+  const { json } = await crearCuenta(ctxA, SITIO, { nombre: 'Estudiante botones', correo, clave: 'clave-ficticia-e2e-1' });
   await api(ctxA, 'POST', '/inscripciones', { curso_id: 'course-arduino' }, json.csrf);
   const pa = await ctxA.newPage();
   const openA = async (id) => {
@@ -272,7 +273,7 @@ if (SITIO) {
   assert.match(await check(pa), /^Reto superado/);
   // Otro estudiante no ve estos borradores; otro navegador del mismo estudiante recupera el de su lección.
   const ctxB = await context();
-  const otro = await api(ctxB, 'POST', '/registro', { nombre: 'Otro estudiante', correo: `botones.otro.${sufijo}@example.com`, clave: 'clave-ficticia-e2e-2' });
+  const otro = await crearCuenta(ctxB, SITIO, { nombre: 'Otro estudiante', correo: `botones.otro.${sufijo}@example.com`, clave: 'clave-ficticia-e2e-2' });
   await api(ctxB, 'POST', '/inscripciones', { curso_id: 'course-arduino' }, otro.json.csrf);
   assert.equal(await remote(ctxB, L4), null);
   assert.equal(await remote(ctxB, L5), null);

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 const { chromium } = createRequire(import.meta.url)('playwright');
-const origin = 'http://127.0.0.1:8182';
+import { enlaceDe, esperarCorreo } from './cuenta-prueba.mjs';
+const origin = process.env.AULA_SITIO || 'http://127.0.0.1:8180';
 const browser = await chromium.launch();
 try {
   for (const [width, id] of [[380, 'course-python'], [1366, 'course-web']]) {
@@ -15,13 +16,20 @@ try {
     assert.equal(await signup.count(), 8);
     assert.equal(await page.locator('.course-card a[href="games/laboratorio-arduino/index.html"]').count(), 1);
     await page.locator('.course-card a[href="aula/?curso=' + id + '"]').click();
-    await page.locator('#form-registro:visible').waitFor();
+    await page.locator('#paso-edad:visible').waitFor();
+    await page.click('#btn-adulto');
     const email = randomUUID() + '@example.com';
     const password = 'prueba-inscripcion-263';
     await page.fill('#form-registro [name=nombre]', 'Estudiante de prueba');
     await page.fill('#form-registro [name=correo]', email);
     await page.fill('#form-registro [name=clave]', password);
-    await page.click('#form-registro button');
+    await page.check('#form-registro [name=terminos]');
+    await page.check('#form-registro [name=datos]');
+    await page.click('#form-registro button[type=submit]');
+    await page.locator('#vista-correo:visible').waitFor();
+    await page.goto(enlaceDe(await esperarCorreo(email, 1), 'verificar'));   // vuelve con ?curso= del enlace
+    await page.fill('#form-enlace [name=clave]', password);
+    await page.click('#btn-enlace');
     await page.locator('#catalogo [data-inscribir="' + id + '"]').waitFor();
     assert.equal(await page.locator('#mis-cursos .curso').count(), 0);
     await page.getByRole('button', {name:'Confirmar inscripción'}).click();
@@ -37,6 +45,7 @@ try {
     await lab.waitFor();
     assert.equal(await lab.getAttribute('href'), destino);
     await page.click('#btn-salir');
+    await page.click('#tab-entrar');
     await page.fill('#form-entrar [name=correo]', email);
     await page.fill('#form-entrar [name=clave]', password);
     await page.click('#form-entrar button');

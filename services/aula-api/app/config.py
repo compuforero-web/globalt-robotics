@@ -27,6 +27,21 @@ class Config:
     compilar_tiempo_s: float = 45.0    # tiempo máximo de respuesta del compilador
     compilar_por_minuto: int = 6       # por estudiante (no por sesión)
     compilar_por_hora: int = 60
+    # Registro de adultos: correo (enlaces de un solo uso) y documentos. Sin correo listo o sin documentos
+    # vigentes de ambos tipos, el registro sigue cerrado aunque AULA_REGISTRO_ABIERTO=true.
+    url_publica: str = ''              # base de los enlaces de los correos, p. ej. https://globalt-robotics.com
+    correo_modo: str = 'desactivado'   # 'smtp' o 'desactivado'
+    smtp_host: str = ''
+    smtp_puerto: int = 587
+    smtp_tls: str = 'starttls'         # 'starttls', 'ssl' o 'ninguno' (este último solo para el buzón de pruebas local)
+    smtp_usuario: str = ''
+    smtp_clave: str = ''
+    correo_remitente: str = ''
+    permitir_textos_prueba: bool = False   # solo pruebas: admite documentos marcados «prueba»
+    verificacion_min: int = 1440       # validez del enlace de verificación
+    recuperacion_min: int = 60         # validez del enlace de recuperación
+    correos_por_hora: int = 3          # correos por dirección y hora (registro, reenvío, recuperación)
+    max_correos_ip: int = 10           # solicitudes de correo por IP en la ventana de intentos
 
 
 def cargar():
@@ -51,4 +66,17 @@ def cargar():
         compilar_tiempo_s=float(os.environ.get('AULA_COMPILAR_TIEMPO_S', '45')),
         compilar_por_minuto=int(os.environ.get('AULA_COMPILAR_POR_MINUTO', '6')),
         compilar_por_hora=int(os.environ.get('AULA_COMPILAR_POR_HORA', '60')),
+        url_publica=os.environ.get('AULA_URL_PUBLICA', '').strip().rstrip('/'),
+        correo_modo=os.environ.get('AULA_CORREO_MODO', 'desactivado').strip().lower(),
+        smtp_host=os.environ.get('AULA_SMTP_HOST', '').strip(),
+        smtp_puerto=int(os.environ.get('AULA_SMTP_PUERTO', '587')),
+        smtp_tls=os.environ.get('AULA_SMTP_TLS', 'starttls').strip().lower(),
+        smtp_usuario=os.environ.get('AULA_SMTP_USUARIO', ''),
+        smtp_clave=os.environ.get('AULA_SMTP_CLAVE', ''),
+        correo_remitente=os.environ.get('AULA_CORREO_REMITENTE', '').strip(),
+        permitir_textos_prueba=_bool('AULA_PERMITIR_TEXTOS_PRUEBA', False),
+        verificacion_min=int(os.environ.get('AULA_ENLACE_VERIFICACION_MIN', '1440')),
+        recuperacion_min=int(os.environ.get('AULA_ENLACE_RECUPERACION_MIN', '60')),
+        correos_por_hora=int(os.environ.get('AULA_CORREOS_POR_HORA', '3')),
+        max_correos_ip=int(os.environ.get('AULA_MAX_CORREOS_IP', '10')),
     )

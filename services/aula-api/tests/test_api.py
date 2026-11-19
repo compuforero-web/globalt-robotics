@@ -6,11 +6,13 @@ La base indicada se VACÍA (DROP SCHEMA public): usa una base de pruebas dedicad
 import os
 import re
 
+os.environ.setdefault('AULA_PERMITIR_TEXTOS_PRUEBA', 'true')   # solo para cargar los textos de prueba en esta base
+
 import psycopg
 import pytest
 from fastapi.testclient import TestClient
 
-from app import migraciones
+from app import documentos, migraciones
 from app.config import Config
 from app.main import COOKIE, crear_app
 
@@ -23,7 +25,8 @@ CLAVE = 'clave-de-prueba-123'
 def config(**cambios):
     base = dict(database_url=URL, origenes=frozenset({ORIGEN}), cookie_segura=False, inactividad_min=120,
                 duracion_max_horas=168, max_fallos_correo=5, max_fallos_ip=30, max_registros_ip=50, ventana_min=15,
-                registro_abierto=True)
+                registro_abierto=True, correo_modo='smtp', smtp_host='buzon.invalid', correo_remitente='aula@example.com',
+                url_publica='http://aula.test', permitir_textos_prueba=True)
     base.update(cambios)
     return Config(**base)
 
@@ -33,12 +36,20 @@ def base_limpia():
     with psycopg.connect(URL, autocommit=True) as c:
         c.execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
     assert migraciones.aplicar(URL) == ['0001_inicial.sql', '0002_borradores.sql', '0003_compilaciones.sql',
-                                       '0004_progreso.sql', '0005_catalogo.sql']
+                                       '0004_progreso.sql', '0005_catalogo.sql', '0006_registro_adultos.sql']
     assert migraciones.aplicar(URL) == []          # reproducible e idempotente
+    documentos.cargar_prueba(URL)                  # textos PROVISIONALES de prueba, versión prueba-1
 
 
-def cliente(**cambios):
-    c = TestClient(crear_app(config(**cambios)), base_url='http://aula.test')
+BUZON = []   # correos «enviados» en las pruebas: (destino, asunto, texto, tipo)
+
+
+def capturar(destino, asunto, texto, tipo):
+    BUZON.append((destino, asunto, texto, tipo))
+
+
+def cliente(enviar=capturar, **cambios):
+    c = TestClient(crear_app(config(**cambios), enviar_correo=enviar), base_url='http://aula.test')
     c.headers.update({'Origin': ORIGEN})
     return c
 
@@ -49,14 +60,28 @@ def sql(consulta, *params):
         return cursor.fetchall() if cursor.description else []
 
 
+def solicitar(c, correo, nombre='Estudiante Ficticio', clave=CLAVE, **extra):
+    return c.post('/api/aula/registro', json={'nombre': nombre, 'correo': correo, 'clave': clave, 'mayor_de_edad': True,
+                                              'terminos': 'prueba-1', 'datos': 'prueba-1', **extra})
+
+
+def ultimo_enlace(destino, accion):
+    texto = next(m[2] for m in reversed(BUZON) if m[0] == destino.lower())
+    return re.search('#' + accion + '=([A-Za-z0-9_-]+)', texto)[1]
+
+
 def registrar(c, correo, nombre='Estudiante Ficticio', **extra):
-    return c.post('/api/aula/registro', json={'nombre': nombre, 'correo': correo, 'clave': CLAVE, **extra})
+    """Alta completa: solicitud + enlace del correo + contraseña. Devuelve la respuesta de verificar (o el error)."""
+    r = solicitar(c, correo, nombre, **extra)
+    if r.status_code != 202:
+        return r
+    return c.post('/api/aula/cuenta/verificar', json={'token': ultimo_enlace(correo, 'verificar'), 'clave': CLAVE})
 
 
 def test_registro_crea_estudiante_y_sesion():
     with cliente() as c:
         r = registrar(c, 'Ana.Prueba@Example.com', '  Ana   Prueba ')
-        assert r.status_code == 201
+        assert r.status_code == 200
         assert r.json()['usuario'] == {'nombre': 'Ana Prueba', 'correo': 'ana.prueba@example.com', 'rol': 'estudiante'}
         cookie = r.headers['set-cookie']
         assert 'HttpOnly' in cookie and 'SameSite=strict' in cookie and 'Path=/api/aula' in cookie
@@ -75,9 +100,10 @@ def test_cookie_segura_en_produccion():
 
 def test_registro_duplicado_y_datos_invalidos():
     with cliente() as c:
-        assert registrar(c, 'dup@example.com').status_code == 201
-        r = registrar(c, 'DUP@example.com')
-        assert r.status_code == 409
+        assert registrar(c, 'dup@example.com').status_code == 200
+        r = solicitar(c, 'DUP@example.com')
+        assert r.status_code == 202 and r.json() == solicitar(c, 'nuevo-dup@example.com').json()   # no revela nada
+        assert BUZON[-2][3] == 'aviso-cuenta-existente' and '#' not in BUZON[-2][2]
         assert c.post('/api/aula/registro', json={'nombre': 'X', 'correo': 'no-es-correo', 'clave': 'corta'}).status_code == 422
         r = c.post('/api/aula/registro', json={'nombre': 'Valido', 'correo': 'v@example.com', 'clave': 'secreta-que-no-debe-salir'[:5]})
         assert r.status_code == 422 and 'secre' not in r.text            # no se devuelve lo recibido
@@ -122,8 +148,8 @@ def test_limite_por_ip_y_de_registros():
         assert c.post('/api/aula/sesion', json={'correo': 'a3@example.com', 'clave': 'x'}).status_code == 429
     sql('DELETE FROM intentos')
     with cliente(max_registros_ip=2) as c:
-        assert registrar(c, 'r1@example.com').status_code == 201
-        assert registrar(c, 'r2@example.com').status_code == 201
+        assert registrar(c, 'r1@example.com').status_code == 200
+        assert registrar(c, 'r2@example.com').status_code == 200
         assert registrar(c, 'r3@example.com').status_code == 429
     sql('DELETE FROM intentos')
 
@@ -686,7 +712,7 @@ def test_registro_cerrado_por_defecto_y_cuentas_por_consola():
                   duracion_max_horas=1, max_fallos_correo=1, max_fallos_ip=1, max_registros_ip=1,
                   ventana_min=1).registro_abierto is False
     with cliente(registro_abierto=False) as c:
-        assert c.get('/api/aula/config').json() == {'registro_abierto': False}
+        assert c.get('/api/aula/config').json()['registro_abierto'] is False
         r = registrar(c, 'cerrado@example.com')
         assert r.status_code == 403 and 'no está abierto' in r.json()['detail']
     assert not sql("SELECT 1 FROM usuarios WHERE correo = 'cerrado@example.com'")

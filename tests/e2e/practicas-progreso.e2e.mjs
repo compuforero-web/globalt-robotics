@@ -7,6 +7,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { crearCuenta } from './cuenta-prueba.mjs';   // alta de adulto con el buzón de pruebas
 
 const { chromium, devices } = createRequire(import.meta.url)('playwright');
 const SITIO = (process.env.AULA_SITIO || 'http://127.0.0.1:8180').replace(/\/$/, '');
@@ -37,7 +38,7 @@ async function api(ctx, metodo, ruta, datos, csrf) {
 const creador = await contexto();
 async function cuenta(nombre, cursos) {
   const correo = `prac-${nombre}.${sufijo}@example.com`;
-  const { json } = await api(creador, 'POST', '/registro', { nombre: 'Estudiante ' + nombre, correo, clave: CLAVE });
+  const { json } = await crearCuenta(creador, SITIO, { nombre: 'Estudiante ' + nombre, correo, clave: CLAVE });
   for (const c of cursos) await api(creador, 'POST', '/inscripciones', { curso_id: c }, json.csrf);
   await api(creador, 'DELETE', '/sesion', null, json.csrf);
   return correo;

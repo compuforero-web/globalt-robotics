@@ -51,7 +51,10 @@ def sql(consulta, *params):
 
 
 def cuenta(c, correo, *cursos):
-    r = c.post('/api/aula/registro', json={'nombre': 'Estudiante Ficticio', 'correo': correo, 'clave': CLAVE})
+    # Alta por consola (sin depender del registro público y su correo) e inicio de sesión.
+    from app import cuentas
+    cuentas.crear(URL, correo, 'Estudiante Ficticio', CLAVE)
+    r = c.post('/api/aula/sesion', json={'correo': correo, 'clave': CLAVE})
     h = {'X-CSRF-Token': r.json()['csrf']}
     for curso in cursos:
         assert c.post('/api/aula/inscripciones', json={'curso_id': curso}, headers=h).status_code == 201

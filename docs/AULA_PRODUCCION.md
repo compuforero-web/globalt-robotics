@@ -17,15 +17,30 @@ Despliegue por etapas con `deploy/linux/aula-produccion.sh`. El piloto privado (
 
 ## Seguridad
 
-- Rutas públicas de la API: solo `salud`, `config`, `cursos`, `mis-cursos`, `sesion`, `registro`, `inscripciones`, `borradores/<lección>`, `compilador/salud` y `compilar`. El resto de `/api/` (incluido `/api/arduino`, el compilador directo) y la administración devuelven 403.
+- Rutas públicas de la API: solo `salud`, `config`, `cursos`, `mis-cursos`, `sesion`, `registro`, `inscripciones`, `borradores/<lección>`, `compilador/salud`, `compilar`, `cuenta/(verificar|reenviar|recuperar|restablecer|autorizar)` y `documentos/(terminos|datos)/<versión>`. El resto de `/api/` (incluido `/api/arduino`, el compilador directo) y la administración devuelven 403.
 - Sesión: cookie `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/api/aula`; CSRF en peticiones que modifican datos; orígenes exactos `https://globalt-robotics.com` y `https://www.globalt-robotics.com`. Por HTTP sin cifrar, la API responde 403 y `/aula/` redirige a HTTPS.
 - IP del visitante: nginx acepta `CF-Connecting-IP` solo en conexiones que llegan por el puerto local del túnel (puerta de enlace de la red de 8096 y 127.0.0.1) y **sustituye** `X-Forwarded-For` al reenviar. La API solo confía en la IP de esa nginx (`FORWARDED_ALLOW_IPS`). Un contenedor que envíe cabeceras falsas conserva su propia IP. Cualquier proceso del propio servidor con acceso a 127.0.0.1:8096 podría declarar otra IP: el servidor se considera de confianza.
 - Límites: los de la API (intentos de acceso por correo e IP, registros por IP, compilaciones por estudiante y concurrencia) y, en nginx, 300 peticiones/min por IP con ráfaga de 150 (una clase detrás de una sola IP no se bloquea).
-- **Registro público cerrado por defecto.** Las cuentas las crea GLOBALT con `crear-cuenta`. La opción `registro abrir` pide confirmación escrita.
+- **Registro público cerrado por defecto.** Las cuentas las crea GLOBALT con `crear-cuenta`. Registro de adultos: ver [AULA_REGISTRO_ADULTOS.md](AULA_REGISTRO_ADULTOS.md).
 
-### Pendiente antes de abrir el registro o admitir menores
+### Registro de adultos: requisitos y comandos
 
-Este paquete **no** incluye términos de uso, política de tratamiento de datos ni el procedimiento de autorización de padres o acudientes para menores de edad. Deben redactarse y revisarse según la normativa colombiana de protección de datos (Ley 1581 de 2012 y sus decretos) antes de abrir el registro o usar datos reales de estudiantes. La página del aula mantiene el aviso de versión de prueba.
+`registro abrir` **se niega** si `registro estado` no está en verde: faltan versiones **aprobadas** y vigentes de los dos documentos, el correo de producción (SMTP con STARTTLS/SSL, remitente, `AULA_URL_PUBLICA` https) o si `api.env` admite textos de prueba. Después pide escribir `ABRIR`.
+
+```bash
+sudo bash deploy/linux/aula-produccion.sh registro estado
+sudo bash deploy/linux/aula-produccion.sh correo configurar               # datos SMTP; la clave se pide oculta
+sudo bash deploy/linux/aula-produccion.sh correo probar --a CORREO        # envía UN correo de prueba real
+sudo bash deploy/linux/aula-produccion.sh documentos cargar --tipo terminos --version V --titulo "…" --finalidad "…" --archivo terminos.md
+sudo bash deploy/linux/aula-produccion.sh documentos cargar --tipo datos --version V --titulo "…" --finalidad "…" --archivo datos.md
+sudo bash deploy/linux/aula-produccion.sh documentos activar --tipo terminos --version V
+sudo bash deploy/linux/aula-produccion.sh documentos activar --tipo datos --version V
+sudo bash deploy/linux/aula-produccion.sh registro abrir
+```
+
+Al **activar** documentos, las cuentas existentes deben aceptarlos en su siguiente acceso antes de seguir usando cursos, borradores, progreso y compilación (no se les atribuyen autorizaciones históricas). Activarlos antes de abrir el registro es posible y conviene avisarlo a esas personas. `correo desactivar` cierra también el registro. Los menores de edad no pueden registrarse: practican sin cuenta.
+
+Pendiente fuera de este paquete: textos definitivos aprobados (Ley 1581 de 2012 y decretos), proveedor SMTP y registros SPF/DKIM/DMARC del remitente, revocación de la autorización y eliminación de cuentas.
 
 ## Orden de instalación
 
@@ -44,7 +59,8 @@ Este paquete **no** incluye términos de uso, política de tratamiento de datos 
 ## Recuperación
 
 - **Web/configuración:** `sudo bash deploy/linux/aula-produccion.sh revertir` restaura la configuración nginx, desconecta la red interna, restaura el publicador y retira `aula/` de la web. La API y la base siguen en ejecución sin acceso público; los datos se conservan.
-- **API:** `actualizar` respalda, construye y cambia la API; si falla el arranque, las migraciones o la prueba, vuelve sola a la imagen y archivos anteriores (`anteriores/`). La base no se restaura.
+- **API:** `actualizar` respalda, construye y cambia la API; con el aula activada también instala la lista de rutas nginx de esa versión (copia previa en `anteriores/<fecha>/nginx-public.conf`). Si falla el arranque, las migraciones, nginx o la prueba, vuelve sola a la imagen, archivos y nginx anteriores. La base no se restaura: las migraciones solo añaden, así que la API anterior funciona con la base migrada.
+- **Actualizar a la versión con registro de adultos** (instalación existente): `actualizar <commit>` con el registro cerrado. Aplica `0006_registro_adultos.sql` (solo añade), conserva cuentas, inscripciones, borradores y avances, y no cambia `api.env` (registro cerrado, correo desactivado). Sin documentos activados todo funciona como antes. Volver atrás: `actualizar <commit anterior>` no es posible (la migración 0006 no está en ese commit); la vuelta automática del propio `actualizar` sí funciona, y una vuelta manual usa la imagen `globalt-aula-produccion-api:<commit anterior>` con `compose.json` de `anteriores/`.
 - **Base:** nunca automática. Restaurar sustituye todos los datos posteriores al respaldo. Primero inspeccionar en una base aparte:
 
   ```bash

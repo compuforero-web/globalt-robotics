@@ -6,6 +6,7 @@
 //           LAB_SHOTS=carpeta para capturas · LAB_LARGA=1 ejecuta la prueba de 60 s de PWM en tiempo real.
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { crearCuenta } from './cuenta-prueba.mjs';   // alta de adulto con el buzón de pruebas
 
 const { chromium, devices } = createRequire(import.meta.url)('playwright');
 const LAB = process.env.LAB_URL || 'http://localhost:8080/games/laboratorio-arduino/index.html';
@@ -288,7 +289,7 @@ if (SITIO) {
   const remote = async (ctx, id) => (await api(ctx, 'GET', '/borradores/' + id)).json.borrador;
   const ctxA = await context();
   const correo = `lecciones.${sufijo}@example.com`;
-  const { json } = await api(ctxA, 'POST', '/registro', { nombre: 'Estudiante lecciones', correo, clave: 'clave-ficticia-e2e-1' });
+  const { json } = await crearCuenta(ctxA, SITIO, { nombre: 'Estudiante lecciones', correo, clave: 'clave-ficticia-e2e-1' });
   await api(ctxA, 'POST', '/inscripciones', { curso_id: 'course-arduino' }, json.csrf);
   const pa = await ctxA.newPage();
   const openA = async (id) => {

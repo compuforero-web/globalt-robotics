@@ -8,6 +8,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { crearCuenta } from './cuenta-prueba.mjs';   // alta de adulto con el buzón de pruebas
 
 const { chromium, devices } = createRequire(import.meta.url)('playwright');
 const LAB = process.env.LAB_URL || 'http://localhost:8080/games/laboratorio-arduino/index.html';
@@ -197,7 +198,7 @@ if (SITIO) {
   const remote = async (ctx, id) => (await api(ctx, 'GET', '/borradores/' + id)).json.borrador;
   const ctxA = await context();
   const correo = `servo.${sufijo}@example.com`;
-  const { json } = await api(ctxA, 'POST', '/registro', { nombre: 'Estudiante servo', correo, clave: 'clave-ficticia-e2e-1' });
+  const { json } = await crearCuenta(ctxA, SITIO, { nombre: 'Estudiante servo', correo, clave: 'clave-ficticia-e2e-1' });
   await api(ctxA, 'POST', '/inscripciones', { curso_id: 'course-arduino' }, json.csrf);
   await api(ctxA, 'PUT', '/borradores/arduino-led-serie', { codigo: '// l1' }, json.csrf);
   await api(ctxA, 'PUT', '/borradores/' + L11, { codigo: '// l11' }, json.csrf);
@@ -216,7 +217,7 @@ if (SITIO) {
   assert.equal((await remote(ctxA, 'arduino-led-serie')).codigo, '// l1');
   assert.equal((await remote(ctxA, L11)).codigo, '// l11');
   const ctxB = await context();
-  const otro = await api(ctxB, 'POST', '/registro', { nombre: 'Otro', correo: `servo.otro.${sufijo}@example.com`, clave: 'clave-ficticia-e2e-2' });
+  const otro = await crearCuenta(ctxB, SITIO, { nombre: 'Otro', correo: `servo.otro.${sufijo}@example.com`, clave: 'clave-ficticia-e2e-2' });
   await api(ctxB, 'POST', '/inscripciones', { curso_id: 'course-arduino' }, otro.json.csrf);
   for (const id of [L12, L13]) assert.equal(await remote(ctxB, id), null, id);
   const ctxC = await context(devices['Pixel 7']);
