@@ -13,7 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../styles/base.css">
   <link rel="stylesheet" href="aula.css">
-  <script type="module" src="src/main.js?v=registro-adultos-2"></script>
+  <script type="module" src="src/main.js?v=registro-claves-1"></script>
 </head>
 <body>
   <header class="aula-top">
@@ -74,7 +74,10 @@
           <label>Correo <small>(te enviaremos un enlace para confirmarlo)</small>
             <input name="correo" type="email" autocomplete="email" required maxlength="254"></label>
           <label>Contraseña <small>(mínimo 10 caracteres)</small>
-            <input name="clave" type="password" autocomplete="new-password" required minlength="10" maxlength="128"></label>
+            <input id="registro-clave" name="clave" type="password" autocomplete="new-password" required minlength="10" maxlength="128"></label>
+          <label>Confirmar contraseña
+            <input id="registro-confirmacion" name="confirmacion" type="password" autocomplete="new-password" required maxlength="128"></label>
+          <button type="button" class="enlace" id="ver-claves" aria-controls="registro-clave registro-confirmacion">Mostrar contraseñas durante 5 segundos</button>
           <fieldset class="autorizaciones">
             <legend>Documentos</legend>
             <p id="aviso-textos-prueba" class="aviso" hidden><strong>Textos provisionales solo para pruebas.</strong> No son los documentos definitivos.</p>

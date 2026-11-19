@@ -23,8 +23,18 @@ try {
     await page.fill('#form-registro [name=nombre]', 'Estudiante de prueba');
     await page.fill('#form-registro [name=correo]', email);
     await page.fill('#form-registro [name=clave]', password);
+    const confirmar = page.locator('#registro-confirmacion');
+    await confirmar.fill(password + 'x');
+    await page.click('#ver-claves');
+    assert.equal(await confirmar.getAttribute('type'), 'text');
+    await page.waitForFunction(() => document.querySelector('#registro-clave').type === 'password');
+    assert.equal(await confirmar.getAttribute('type'), 'password');
     await page.check('#form-registro [name=terminos]');
     await page.check('#form-registro [name=datos]');
+    await page.click('#form-registro button[type=submit]');
+    assert.match(await confirmar.evaluate(c => c.validationMessage), /no coinciden/);
+    assert.equal(await page.locator('#form-registro [name=correo]').inputValue(), email);
+    await confirmar.fill(password);
     await page.click('#form-registro button[type=submit]');
     await page.locator('#vista-correo:visible').waitFor();
     await page.goto(enlaceDe(await esperarCorreo(email, 1), 'verificar'));   // vuelve con ?curso= del enlace
