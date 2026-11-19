@@ -83,14 +83,15 @@ function pasoEdad(paso) {
   $('#error-form').textContent = '';
 }
 
-const enlaceDocumento = (doc) => `documento.html?tipo=${encodeURIComponent(doc.tipo)}&version=${encodeURIComponent(doc.version)}`;
+const enlaceDocumento = (doc) => `documento.html?tipo=${encodeURIComponent(doc.tipo)}&version=${encodeURIComponent(doc.version)}`
+  + (cursoValido ? '&curso=' + encodeURIComponent(cursoValido) : '');
 
 function aplicarAjustes() {
   const docs = ajustes.documentos || {};
   $('#tab-registro').hidden = !ajustes.registro_abierto;
   $('#registro-cerrado').hidden = ajustes.registro_abierto;
   $('#btn-olvido').hidden = !ajustes.recuperacion;
-  for (const tipo of ['terminos', 'datos']) {
+  for (const tipo of ['terminos', 'datos', 'politica']) {
     const doc = docs[tipo];
     if (!doc) continue;
     $('#doc-' + tipo).href = enlaceDocumento(doc);
@@ -123,9 +124,15 @@ function mostrarAutorizacion(usuario, pendientes) {
   estado('');
   $('#error-autorizacion').textContent = '';
   $('#aviso-textos-prueba-2').hidden = !pendientes.some((d) => d.prueba);
-  $('#lista-autorizacion').innerHTML = pendientes.map((d) => `<label class="check"><input type="checkbox" name="${esc(d.tipo)}" required>
-    <span>${d.tipo === 'datos' ? 'Autorizo el tratamiento de mis datos personales según la' : 'He leído y acepto los'}
-    <a href="${esc(enlaceDocumento(d))}" target="_blank" rel="noopener">${esc(d.titulo)}</a> <small>(versión ${esc(d.version)})</small>.
+  // La política completa se acepta con la casilla de datos; solo tiene casilla propia si es lo único pendiente de datos.
+  const politica = pendientes.find((d) => d.tipo === 'politica');
+  const conDatos = politica && pendientes.some((d) => d.tipo === 'datos');
+  const enlace = (d) => `<a href="${esc(enlaceDocumento(d))}" target="_blank" rel="noopener">${esc(d.titulo)}</a> <small>(versión ${esc(d.version)})</small>`;
+  const texto = (d) => ({ terminos: `He leído y acepto los ${enlace(d)}.`,
+    datos: `Autorizo el tratamiento de mis datos personales según la ${enlace(d)}${conDatos ? ` y la ${enlace(politica)}, que he leído` : ''}.`,
+    politica: `He leído la ${enlace(d)}.` })[d.tipo];
+  $('#lista-autorizacion').innerHTML = pendientes.filter((d) => !(conDatos && d === politica)).map((d) => `<label class="check"><input type="checkbox" name="${esc(d.tipo)}" required>
+    <span>${texto(d)}
     <small class="finalidad">Finalidad: ${esc(d.finalidad)}</small></span></label>`).join('');
 }
 
@@ -328,14 +335,32 @@ async function conBoton(formulario, destinoError, accion) {
   }
 }
 
+// Se activó otra versión con el formulario abierto: se enlaza la nueva y se desmarcan sus casillas, para que se lea y
+// se acepte antes de continuar. Los demás campos se conservan.
+async function documentosCambiados(formulario, previos) {
+  try { ajustes = await api.configuracion(); } catch { return; }
+  aplicarAjustes();
+  const nuevos = ajustes.documentos || {};
+  const cambio = (t) => nuevos[t]?.version !== previos[t]?.version;
+  if (cambio('terminos')) formulario.terminos.checked = false;
+  if (cambio('datos') || cambio('politica')) formulario.datos.checked = false;
+}
+
 $('#form-registro').addEventListener('submit', (e) => {
   e.preventDefault();
   conBoton(e.target, '#error-form', async (d) => {
     const docs = ajustes.documentos;
-    if (!docs.terminos || !docs.datos) throw new api.ApiError(409, 'Faltan los documentos. Recarga la página.');
+    if (!docs.terminos || !docs.datos || !docs.politica) throw new api.ApiError(409, 'Faltan los documentos. Recarga la página.');
     const correo = d.get('correo').trim();
-    const r = await api.registrar({ nombre: d.get('nombre').trim(), correo, clave: d.get('clave'), mayor_de_edad: true,
-      terminos: docs.terminos.version, datos: docs.datos.version, ...(cursoValido ? { curso: cursoValido } : {}) });
+    let r;
+    try {
+      r = await api.registrar({ nombre: d.get('nombre').trim(), correo, clave: d.get('clave'), mayor_de_edad: true,
+        terminos: docs.terminos.version, datos: docs.datos.version, politica: docs.politica.version,
+        ...(cursoValido ? { curso: cursoValido } : {}) });
+    } catch (error) {
+      if (error.status === 409) await documentosCambiados(e.target, docs);
+      throw error;
+    }
     correoPendiente = correo;
     e.target.reset();
     pasoEdad('pregunta');
@@ -386,7 +411,16 @@ $('#form-autorizacion').addEventListener('submit', (e) => {
   e.preventDefault();
   conBoton(e.target, '#error-autorizacion', async () => {
     const versiones = Object.fromEntries(pendientesActuales.map((d) => [d.tipo, d.version]));
-    const r = await api.autorizar(versiones);
+    let r;
+    try {
+      r = await api.autorizar(versiones);
+    } catch (error) {
+      if (error.status !== 409) throw error;
+      // Se activó otra versión mientras se leía: se muestran las vigentes, sin marcar, para leerlas y aceptarlas.
+      const actual = await api.sesion();
+      mostrarAutorizacion(actual.usuario, actual.pendientes);
+      throw new api.ApiError(409, 'Se publicó una versión nueva de los documentos. Léela y marca de nuevo las casillas para continuar.');
+    }
     if (r.pendientes.length) { mostrarAutorizacion(usuarioActual, r.pendientes); return; }
     await cargarCursos(usuarioActual);
     estado('Gracias. Ya puedes seguir con tus cursos.', 'ok');

@@ -1,9 +1,11 @@
-// Texto exacto de una versión de los términos de uso o de la autorización de datos (solo lectura).
+// Texto exacto de una versión de los términos de uso, la autorización de datos o la política de tratamiento (solo lectura).
 // El texto se muestra como texto plano (textContent): nunca se interpreta como HTML.
 import * as api from './api.js';
 
 const $ = (s) => document.querySelector(s);
 const q = new URLSearchParams(location.search);
+const curso = q.get('curso');
+if (/^[a-z0-9-]{3,60}$/.test(curso || '')) $('#volver').href = './?curso=' + encodeURIComponent(curso);   // conserva el curso elegido
 (async () => {
   try {
     const d = await api.documento(q.get('tipo') || '', q.get('version') || '');

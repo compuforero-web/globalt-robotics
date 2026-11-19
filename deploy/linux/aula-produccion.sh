@@ -647,7 +647,7 @@ documentos_cmd() {
     listar) docker exec "$API_C" python -m app.documentos listar ;;
     cargar)
       [[ -n $tipo && -n $version && -n $titulo && -n $finalidad && -f $archivo ]] \
-        || falla 'Uso: documentos cargar --tipo terminos|datos --version V --titulo T --finalidad F --archivo texto.md'
+        || falla 'Uso: documentos cargar --tipo terminos|datos|politica --version V --titulo T --finalidad F --archivo texto.md'
       iniciar_registro
       echo "Texto: $archivo (sha256 $(sha256sum "$archivo" | cut -d' ' -f1))"
       echo 'Solo se cargan textos DEFINITIVOS aprobados por el responsable. Una versión cargada no se modifica.'
@@ -657,7 +657,7 @@ documentos_cmd() {
         --titulo "$titulo" --finalidad "$finalidad" --aprobado < "$archivo"
       ;;
     activar)
-      [[ -n $tipo && -n $version ]] || falla 'Uso: documentos activar --tipo terminos|datos --version V'
+      [[ -n $tipo && -n $version ]] || falla 'Uso: documentos activar --tipo terminos|datos|politica --version V'
       iniciar_registro
       echo 'Al activar una versión, las cuentas que no la hayan aceptado deberán aceptarla en su próximo acceso.'
       local resp; IFS= read -r -p 'Escribe ACTIVAR para confirmar: ' resp </dev/tty

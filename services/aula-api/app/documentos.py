@@ -1,4 +1,4 @@
-"""Documentos del registro (términos de uso y autorización de datos) y estado del registro público.
+"""Documentos del registro (términos de uso, autorización de datos y política de tratamiento de datos) y estado del registro público.
 
 Uso dentro del contenedor de la API (AULA_DATABASE_URL definida):
   python -m app.documentos cargar --tipo terminos --version 2026-12-01 --titulo "…" --finalidad "…" --aprobado < texto.md
@@ -23,7 +23,7 @@ import psycopg
 from . import correo
 from .config import _bool
 
-TIPOS = ('terminos', 'datos')
+TIPOS = ('terminos', 'datos', 'politica')
 VERSION = re.compile(r'^[A-Za-z0-9][A-Za-z0-9.-]{0,39}$')
 PRUEBA = Path(__file__).resolve().parents[1] / 'documentos' / 'prueba'
 VERSION_PRUEBA = 'prueba-1'
@@ -31,7 +31,7 @@ VERSION_PRUEBA = 'prueba-1'
 
 def cargar(url, tipo, version, titulo, finalidad, texto, aprobado):
     if tipo not in TIPOS:
-        raise ValueError('Tipo no válido (terminos o datos).')
+        raise ValueError('Tipo no válido (terminos, datos o politica).')
     if not VERSION.match(version):
         raise ValueError('Versión no válida: letras, números, puntos y guiones (máx. 40).')
     texto = texto.replace('\r\n', '\n')

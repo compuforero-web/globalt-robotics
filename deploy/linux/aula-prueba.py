@@ -10,6 +10,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from uuid import uuid4
 
 base, correo, registro = sys.argv[1:4]
 tunel = len(sys.argv) > 4 and sys.argv[4] == 'tunel'
@@ -59,12 +60,15 @@ def pedir(metodo, ruta, datos=None, csrf=None, extra=None):
 
 e, d = pedir('GET', '/api/aula/salud'); assert e == 200 and d == {'ok': True}, (e, d)
 e, conf = pedir('GET', '/api/aula/config')
-# «si» = AULA_REGISTRO_ABIERTO=true; solo queda abierto de verdad con correo configurado y ambos documentos vigentes.
+# «si» = AULA_REGISTRO_ABIERTO=true; solo queda abierto de verdad con correo configurado y los tres documentos vigentes.
 assert e == 200 and conf['registro_abierto'] in ((True, False) if registro == 'si' else (False,)), conf
 if not conf['registro_abierto']:
     e, d = pedir('POST', '/api/aula/registro', {'nombre': 'Intruso', 'correo': 'x' + correo, 'clave': clave,
                                                 'mayor_de_edad': True, 'terminos': 'x', 'datos': 'x'})
     assert e == 403, ('registro cerrado', e)
+# Incluso antes de activar textos, la consulta debe llegar a la API a través de nginx.
+e, d = pedir('GET', f'/api/aula/documentos/politica/{uuid4().hex}')
+assert e == 404 and isinstance(d, dict), ('ruta pública de política', e)
 for tipo, doc in conf.get('documentos', {}).items():   # versión vigente consultable por la ruta pública
     e, d = pedir('GET', f"/api/aula/documentos/{tipo}/{doc['version']}")
     assert e == 200 and d['texto'] and len(d['sha256']) == 64, ('documento', tipo, e)

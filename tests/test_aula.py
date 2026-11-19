@@ -55,7 +55,7 @@ class ProgresoStaticTests(unittest.TestCase):
     def test_migracion_nueva_sin_tocar_las_aplicadas(self):
         nombres = sorted(p.name for p in (API / 'migrations').glob('*.sql'))
         self.assertEqual(nombres, ['0001_inicial.sql', '0002_borradores.sql', '0003_compilaciones.sql', '0004_progreso.sql', '0005_catalogo.sql',
-                                   '0006_registro_adultos.sql', '0007_inactividad.sql', '0008_bajas_registradas.sql'])
+                                   '0006_registro_adultos.sql', '0007_inactividad.sql', '0008_bajas_registradas.sql', '0009_politica_datos.sql'])
         sql = (API / 'migrations/0004_progreso.sql').read_text()
         self.assertIn('CREATE TABLE progreso_lecciones', sql)
         self.assertIn('ON DELETE CASCADE', sql)
@@ -110,7 +110,8 @@ class RegistroAdultosStaticTests(unittest.TestCase):
         conf = (ROOT / 'deploy/linux/nginx-public-aula.conf').read_text()
         lista = re.compile(re.search(r'location ~ "(\^/api/aula/\([^"]+)"', conf)[1])
         for ruta in ('/api/aula/cuenta/verificar', '/api/aula/cuenta/reenviar', '/api/aula/cuenta/recuperar',
-                     '/api/aula/cuenta/restablecer', '/api/aula/cuenta/autorizar', '/api/aula/documentos/datos/2026-12-01'):
+                     '/api/aula/cuenta/restablecer', '/api/aula/cuenta/autorizar', '/api/aula/documentos/datos/2026-12-01',
+                     '/api/aula/documentos/politica/2026-12-01'):
             self.assertTrue(lista.match(ruta), ruta)
         for ruta in ('/api/aula/cuenta/otra', '/api/aula/documentos/otro/v1', '/api/aula/documentos/datos/../x'):
             self.assertFalse(lista.match(ruta), ruta)

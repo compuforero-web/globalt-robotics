@@ -54,7 +54,7 @@ export async function crearCuenta(ctx, sitio, { nombre, correo, clave, curso }) 
   const previos = correosPara(correo).length;
   const r = await ctx.request.post(sitio + '/api/aula/registro', { headers: cab, data: {
     nombre, correo, clave, mayor_de_edad: true, terminos: conf.documentos.terminos.version,
-    datos: conf.documentos.datos.version, ...(curso ? { curso } : {}) } });
+    datos: conf.documentos.datos.version, politica: conf.documentos.politica?.version, ...(curso ? { curso } : {}) } });
   if (r.status() !== 202) throw new Error('registro: ' + r.status() + ' ' + await r.text());
   const enlace = enlaceDe(await esperarCorreo(correo, previos + 1), 'verificar');
   const token = enlace.split('#verificar=')[1];
