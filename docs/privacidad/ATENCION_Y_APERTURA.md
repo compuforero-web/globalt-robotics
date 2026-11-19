@@ -16,12 +16,12 @@ Guía de trabajo para GLOBALT E.U. El borrador de política no activa el registr
 
 | Tema | Evidencia o decisión pendiente |
 |---|---|
-| Identificación | GLOBALT confirmó NIT y correo. Confirmar dirección y teléfono divulgables y quién atiende el buzón. Establecer suplencia y control de acceso. |
+| Identificación | Contacto confirmado en la política. Edwin atiende directamente el buzón de privacidad. Establecer suplencia y control de acceso. |
 | Oferta educativa | Documentar la revisión del objeto social y la gestión territorial que corresponda para la oferta de educación informal. |
-| Datos y proveedores | Contrastar las migraciones 0001–0005 con la entrega final del registro. Inventariar servidor, Cloudflare, buzón y proveedor SMTP efectivo, tratamiento fuera de Colombia si aplica, contratos, registros y retención configurada. |
-| Conservación | Aprobar vigencia de bases, plazos por categoría, reglas sobre inactividad y revisión de excepciones. Comprobar rotación efectiva de respaldos y ensayar supresión tras restauración. |
+| Datos y proveedores | Incluir las migraciones 0001–0006 y Gmail como proveedor SMTP confirmado. Inventariar servidor, Cloudflare, buzón y proveedor SMTP efectivo, tratamiento fuera de Colombia si aplica, contratos, registros y retención configurada. |
+| Conservación | Inactividad aprobada: 24 meses desde el último acceso y aviso al menos 30 días antes de eliminar. Implementar y probar con cuentas ficticias los límites temporales, la cancelación por nuevo acceso, los avisos fallidos y los reintentos sin duplicados. Mantener en revisión los casos sin fecha fiable de acceso o sin aviso acreditado. Fijar aparte los plazos de registros técnicos y evidencias. Comprobar rotación efectiva de respaldos y ensayar supresión tras restauración. |
 | Texto aprobado | Completar datos pendientes, fecha de vigencia y versión. Archivar cada versión exacta del aviso, términos y autorización. Publicar enlaces accesibles antes de recoger datos reales. |
-| Correo y registro | Con una cuenta controlada por GLOBALT comprobar entrega, caducidad, reenvío y recuperación de contraseña en el dominio. Registrar solo el resultado. Ensayar el cierre de nuevas altas conservando acceso de las cuentas existentes. |
+| Correo y registro | Entrega del mensaje de prueba de Linux a Gmail confirmada. Ensayar aún verificación de cuenta, caducidad, reenvío y recuperación de contraseña a través del dominio. Registrar solo el resultado. Ensayar el cierre de nuevas altas conservando acceso de las cuentas existentes. |
 | Derechos | Resolver un caso ficticio de consulta y uno de supresión, incluyendo identidad, plazos, constancia del reclamo, respuesta y respaldo. Asignar un responsable de incidentes y canal de escalamiento. |
 | Invitados y menores | Comprobar desde móvil la salida al laboratorio sin remitir el formulario ni crear cuenta. Revisar almacenamiento local y registros técnicos también en juegos utilizados por menores. |
 | Apertura | Aprobar por separado documentos, versión técnica y activación del registro para adultos. Los documentos de esta rama son material de revisión. |

@@ -2,7 +2,7 @@
 
 **Borrador para revisión, 18 de noviembre de 2026. Pendiente de aprobación y fecha de entrada en vigor.**
 
-GLOBALT E.U., NIT 901.742.833-0, con domicilio en La Mesa, Cundinamarca, es responsable del tratamiento de los datos del aula. Para asuntos de privacidad, escribe a globalteq2022@gmail.com. Antes de publicar este documento, GLOBALT completará la dirección y el teléfono de atención empresarial.
+GLOBALT E.U., NIT 901.742.833-0, con domicilio en La Mesa, Cundinamarca, es responsable del tratamiento de los datos del aula. Para asuntos de privacidad, escribe a globalteq2022@gmail.com. Edwin Gómez Forero atiende directamente este buzón. Dirección de atención: Carrera 20 # 4A-47, La Mesa, Cundinamarca. Teléfono: 314 486 4187.
 
 ## Si exploras sin cuenta
 
@@ -18,9 +18,9 @@ La cookie de sesión permite mantener tu acceso. El aula registra intentos de ac
 
 ## Acceso, conservación y solicitudes
 
-El aula usa el servidor administrado por GLOBALT. El dominio público llega al servidor a través de Cloudflare. Para el lanzamiento se identificará también al proveedor efectivo del correo transaccional y se completará el detalle de los servicios que intervienen.
+El aula usa el servidor administrado por GLOBALT. El dominio público llega al servidor a través de Cloudflare. Los mensajes automáticos del aula se envían mediante Gmail desde edwinforerogh13@gmail.com. Las consultas sobre datos personales se reciben en globalteq2022@gmail.com.
 
-Conservaremos los datos académicos mientras sean necesarios para prestarte el servicio o exista una obligación que justifique conservarlos. Si solicitas la supresión, te informaremos de su alcance, de las excepciones aplicables y del tratamiento de las copias de respaldo. Antes de publicar, GLOBALT fijará los plazos operativos de cuentas inactivas, registros técnicos y evidencias.
+Conservaremos los datos académicos mientras sean necesarios para prestarte el servicio o exista una obligación que justifique conservarlos. Si solicitas la supresión, te informaremos de su alcance, de las excepciones aplicables y del tratamiento de las copias de respaldo. Regla aprobada para la apertura: la cuenta podrá eliminarse al cumplir 24 meses desde el último acceso. GLOBALT enviará un aviso al correo registrado al menos 30 días antes de eliminarla. Si vuelves a entrar durante ese plazo, se reinicia el cómputo. El procedimiento de aviso y eliminación está pendiente de implementación y prueba. Los registros técnicos y las evidencias tendrán plazos propios.
 
 Puedes solicitar acceso gratuito a tus datos, actualización, rectificación, prueba de tu autorización e información sobre el uso de tus datos. También puedes solicitar revocatoria o supresión cuando proceda. Escribe a globalteq2022@gmail.com con tu solicitud y un medio de respuesta. Verificaremos tu identidad de forma proporcional. Nunca envíes tu contraseña. Una vez agotado el trámite de consulta o reclamo ante el responsable o encargado, puedes acudir a la Superintendencia de Industria y Comercio.
 
