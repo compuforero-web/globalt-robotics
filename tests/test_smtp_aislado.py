@@ -24,6 +24,8 @@ correo.enviar(config.cargar(), 'estudiante@example.invalid', 'Ensayo', 'Solo pru
 class Buzon(socketserver.StreamRequestHandler):
     def handle(self):
         def tls():
+            self.rfile.close()
+            self.wfile.close()
             self.connection = self.server.context.wrap_socket(self.connection, server_side=True)
             self.rfile = self.connection.makefile('rb')
             self.wfile = self.connection.makefile('wb', buffering=0)
@@ -31,7 +33,7 @@ class Buzon(socketserver.StreamRequestHandler):
             if self.server.implicit:
                 tls()
             self.wfile.write(b'220 ensayo\r\n')
-            for line in self.rfile:
+            while line := self.rfile.readline():
                 command = line.split()[0].upper()
                 if command == b'EHLO':
                     self.wfile.write(b'250-ensayo\r\n250 STARTTLS\r\n')
@@ -56,6 +58,9 @@ class Buzon(socketserver.StreamRequestHandler):
                     self.wfile.write(b'250 OK\r\n')
         except (ssl.SSLError, ConnectionError):
             pass
+        finally:
+            if isinstance(self.connection, ssl.SSLSocket):
+                self.connection.close()
 
 
 @unittest.skipUnless(Path(PROXY).is_file() and shutil.which('openssl'), 'requiere Linux con systemd-socket-proxyd y openssl')
