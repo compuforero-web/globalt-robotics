@@ -735,8 +735,9 @@ bajas_configurar() {
   [[ $ruta =~ ^/[A-Za-z0-9._/-]+[A-Za-z0-9._-]$ && $ruta != *..* && $ruta != "$STATE"* && -n $fuente && -n $tipo ]] \
     || falla 'Uso: bajas configurar --ruta /punto/de/montaje --fuente ORIGEN --tipo nfs4|nfs|cifs|smb3|fuse.sshfs [--inicializar]'
   [[ " $BAJAS_TIPOS " == *" $tipo "* ]] || falla "Tipo no admitido: $tipo (solo almacenamiento remoto: $BAJAS_TIPOS)."
-  [[ $fuente =~ ^[A-Za-z0-9._@:/\[\]-]+$ ]] || falla 'Origen del montaje no válido.'
-  [[ $fuente =~ ^[^@/]*:[^@/]*@ ]] && falla 'El origen no debe incluir contraseñas: van en el archivo de credenciales del montaje.'
+  local valido='^[][A-Za-z0-9._@:/-]+$' con_clave='^[^@/]*:[^@/]*@'   # IPv6 entre corchetes admitida
+  [[ $fuente =~ $valido ]] || falla 'Origen del montaje no válido.'
+  [[ $fuente =~ $con_clave ]] && falla 'El origen no debe incluir contraseñas: van en el archivo de credenciales del montaje.'
   [[ -f $STATE/revision.txt ]] && en_ejecucion "$API_C" || falla 'El aula no está preparada o la API no está en ejecución.'
   iniciar_registro
   paso '1/4 Montaje en el anfitrión'
