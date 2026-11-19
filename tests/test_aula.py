@@ -110,7 +110,8 @@ class RegistroAdultosStaticTests(unittest.TestCase):
         conf = (ROOT / 'deploy/linux/nginx-public-aula.conf').read_text()
         lista = re.compile(re.search(r'location ~ "(\^/api/aula/\([^"]+)"', conf)[1])
         for ruta in ('/api/aula/cuenta/verificar', '/api/aula/cuenta/reenviar', '/api/aula/cuenta/recuperar',
-                     '/api/aula/cuenta/restablecer', '/api/aula/cuenta/autorizar', '/api/aula/documentos/datos/2026-12-01'):
+                     '/api/aula/cuenta/restablecer', '/api/aula/cuenta/autorizar', '/api/aula/documentos/datos/2026-12-01',
+                     '/api/aula/documentos/politica/2026-12-01'):
             self.assertTrue(lista.match(ruta), ruta)
         for ruta in ('/api/aula/cuenta/otra', '/api/aula/documentos/otro/v1', '/api/aula/documentos/datos/../x'):
             self.assertFalse(lista.match(ruta), ruta)
