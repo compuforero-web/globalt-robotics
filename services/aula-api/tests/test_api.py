@@ -36,7 +36,7 @@ def base_limpia():
     with psycopg.connect(URL, autocommit=True) as c:
         c.execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
     assert migraciones.aplicar(URL) == ['0001_inicial.sql', '0002_borradores.sql', '0003_compilaciones.sql',
-                                       '0004_progreso.sql', '0005_catalogo.sql', '0006_registro_adultos.sql']
+                                       '0004_progreso.sql', '0005_catalogo.sql', '0006_registro_adultos.sql', '0007_inactividad.sql']
     assert migraciones.aplicar(URL) == []          # reproducible e idempotente
     documentos.cargar_prueba(URL)                  # textos PROVISIONALES de prueba, versión prueba-1
 
@@ -726,3 +726,61 @@ def test_registro_cerrado_por_defecto_y_cuentas_por_consola():
         r = c.post('/api/aula/sesion', json={'correo': 'consola.prueba@example.com', 'clave': CLAVE})
         assert r.status_code == 200 and r.json()['usuario'] == {'nombre': 'Estudiante Consola',
                                                                  'correo': 'consola.prueba@example.com', 'rol': 'estudiante'}
+
+
+def test_inactividad_aviso_y_reingreso():
+    from app import correo, inactividad
+    email = 'alumna-inactiva@example.com'
+    with cliente() as c, psycopg.connect(URL, autocommit=True) as db:
+        assert registrar(c, email).status_code == 200
+        uid = sql('SELECT id FROM usuarios WHERE correo=%s AND ultimo_acceso IS NOT NULL', email)[0][0]
+        sql("UPDATE usuarios SET ultimo_acceso=now()-interval '25 months' WHERE id=%s", uid)
+
+        def falla(*args):
+            raise correo.ErrorEnvio()
+
+        assert inactividad.avisar(db, config(), uid, falla) == 'fallido'
+        ref = sql('SELECT referencia FROM avisos_inactividad WHERE usuario_id=%s', uid)[0][0]
+        assert not inactividad.gestionar(db, 'acreditar', ref)
+        assert not inactividad.gestionar(db, 'eliminar', ref)
+        assert inactividad.gestionar(db, 'invalidar', ref)
+        buz = []
+        envio = lambda *args: buz.append(args)
+        assert inactividad.avisar(db, config(), uid, envio) == 'enviado'
+        assert inactividad.avisar(db, config(), uid, envio) == 'sin cambio'
+        assert len(buz) == 1 and buz[0][1] == email
+        nuevo = sql('SELECT referencia FROM avisos_inactividad WHERE usuario_id=%s', uid)[0][0]
+        assert not inactividad.gestionar(db, 'acreditar', ref)
+        assert inactividad.gestionar(db, 'acreditar', nuevo)
+        assert not inactividad.gestionar(db, 'eliminar', nuevo)
+        assert c.get('/api/aula/sesion').status_code == 200
+        assert not sql('SELECT 1 FROM avisos_inactividad WHERE usuario_id=%s', uid)
+        assert not inactividad.gestionar(db, 'eliminar', nuevo)
+        assert inactividad.avisar(db, config(), uid, envio) == 'sin cambio'
+
+
+def test_limites_de_inactividad_y_supresion():
+    from app import inactividad
+    email = 'cuenta-plazos@example.com'
+    with cliente() as c, psycopg.connect(URL, autocommit=True) as db:
+        assert registrar(c, email).status_code == 200
+        uid = sql('SELECT id FROM usuarios WHERE correo=%s', email)[0][0]
+        sql("INSERT INTO inscripciones(usuario_id,curso_id) VALUES (%s,'course-python')", uid)
+        sql("UPDATE usuarios SET ultimo_acceso=NULL WHERE id=%s", uid)
+        envio = lambda *args: None
+        assert inactividad.avisar(db, config(), uid, envio) == 'sin cambio'
+        sql("UPDATE usuarios SET ultimo_acceso=now()-interval '24 months'+interval '31 days' WHERE id=%s", uid)
+        assert inactividad.avisar(db, config(), uid, envio) == 'sin cambio'
+        sql("UPDATE usuarios SET ultimo_acceso=now()-interval '24 months'+interval '1 day' WHERE id=%s", uid)
+        assert inactividad.avisar(db, config(), uid, envio) == 'enviado'
+        ref = sql('SELECT referencia FROM avisos_inactividad WHERE usuario_id=%s', uid)[0][0]
+        assert inactividad.gestionar(db, 'acreditar', ref)
+        sql("UPDATE avisos_inactividad SET acreditado_en=now()-interval '31 days' WHERE referencia=%s", ref)
+        assert not inactividad.gestionar(db, 'eliminar', ref)
+        sql("UPDATE usuarios SET ultimo_acceso=now()-interval '25 months' WHERE id=%s", uid)
+        assert inactividad.gestionar(db, 'eliminar', ref)
+        assert not inactividad.gestionar(db, 'eliminar', ref)
+        assert not sql('SELECT 1 FROM usuarios WHERE id=%s', uid)
+        assert not sql('SELECT 1 FROM inscripciones WHERE usuario_id=%s', uid)
+        assert not sql('SELECT 1 FROM registros_pendientes WHERE correo=%s', email)
+        assert c.get('/api/aula/sesion').status_code == 401

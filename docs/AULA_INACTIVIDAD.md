@@ -1,0 +1,12 @@
+# Inactividad de cuentas del aula
+
+La migración 0007 registra la apertura y el uso autenticado de sesiones. Las cuentas antiguas empiezan a contar desde su primer acceso observado tras la migración. Las cuentas sin acceso conocido, sin correo verificado y las administrativas quedan fuera del procedimiento. Visitar una práctica pública no identifica a la persona.
+
+El operador ejecuta `python -m app.inactividad` dentro de la API. Sin argumentos muestra cantidades. No se instala ningún calendario ni se envían avisos al desplegar. Las siguientes operaciones son individuales y se usan con la configuración del aula correspondiente.
+
+1. `listar` muestra identificadores internos, referencia opaca y estado. Aparecen estudiantes a los que les faltan como máximo 30 días para cumplir 24 meses naturales de inactividad, incluidos los que han pasado el plazo.
+2. `avisar ID` reserva el expediente y envía un correo. Repetir el comando sobre el mismo expediente no vuelve a enviar. Un error SMTP deja el aviso fallido. Una interrupción puede dejarlo reservado incluso si el mensaje salió. Revisar el resultado antes de reintentar.
+3. `acreditar REFERENCIA` registra la comprobación de entrega por el operador, por ejemplo mediante confirmación del destinatario o constancia del proveedor. La aceptación SMTP por sí sola es insuficiente. Si no se puede acreditar, se conserva la cuenta. Ante un rebote, `invalidar REFERENCIA` cancela el expediente. Para reintentar un envío revisado, invalidar primero y usar de nuevo `avisar ID`. El nuevo expediente obtiene otra referencia.
+4. `eliminar REFERENCIA` comprueba dentro de la transacción tanto los 24 meses desde el último acceso como los 30 días desde la acreditación. Cualquier nuevo acceso autenticado cancela el expediente. La supresión borra la cuenta y sus filas dependientes de la base activa, incluida su evidencia de autorizaciones, así como solicitudes de registro con el mismo correo. El operador debe resolver cualquier obligación de conservación antes de aplicar la baja.
+
+La operación no modifica copias de respaldo, almacenamiento local del navegador ni registros técnicos. Antes de habilitar bajas reales, definir y ensayar la reconciliación de bajas tras restaurar una copia. Una restauración puede recuperar un expediente antiguo y datos suprimidos. Revisar antes de reanudar cualquier operación. Esta entrega se ensaya con cuentas ficticias.
