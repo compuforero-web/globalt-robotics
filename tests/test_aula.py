@@ -130,3 +130,46 @@ class RegistroAdultosStaticTests(unittest.TestCase):
         self.assertIn('AULA_PERMITIR_TEXTOS_PRUEBA=true', bloque)
         self.assertIn('AULA_REGISTRO_ABIERTO=false', script)        # preparar: cerrado por defecto
         self.assertNotIn('AULA_PERMITIR_TEXTOS_PRUEBA', (API / 'Dockerfile').read_text())
+
+
+class BajasProduccionStaticTests(unittest.TestCase):
+    """Registro externo de bajas en aula-produccion.sh: opcional y sin credenciales en los contenedores."""
+    SCRIPT = ROOT / 'deploy/linux/aula-produccion.sh'
+
+    def compose(self, estado, conf=None):
+        import json, tempfile
+        texto = self.SCRIPT.read_text()
+        inicio = texto.index("state, rev, gid, sdir, sapi, img, pg, bapi = sys.argv[1:]")
+        codigo = 'import json, pathlib, sys\n' + texto[inicio:texto.index('\nPY\n', inicio)]
+        if conf is not None:
+            (estado / 'bajas.conf').write_text(conf)
+        subprocess.run(['python3', '-c', codigo, str(estado), 'r' * 40, '10500', '/s', '/compilador', 'img', 'pg', '/bajas'],
+                       check=True)
+        return json.loads((estado / 'compose.json').read_text())['services']['api']
+
+    def test_sin_destino_no_hay_volumen_ni_variables(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            api = self.compose(Path(d))
+            self.assertFalse([v for v in api['volumes'] if isinstance(v, dict)])
+            self.assertFalse([k for k in api['environment'] if k.startswith('AULA_BAJAS')])
+
+    def test_con_destino_volumen_rslave_y_sin_identificador_no_habilita(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            base = 'RUTA=/mnt/globalt-aula-bajas\nFUENTE=equipo:/bajas\nTIPO=nfs4\n'
+            api = self.compose(Path(d), base + 'ID=\n')
+            self.assertIn({'type': 'bind', 'source': '/mnt/globalt-aula-bajas', 'target': '/bajas',
+                           'bind': {'propagation': 'rslave'}}, api['volumes'])
+            self.assertNotIn('AULA_BAJAS_REGISTRO', api['environment'])
+            api = self.compose(Path(d), base + 'ID=584157a1-5c8e-488f-976a-99968c4058e2\n')
+            self.assertEqual(api['environment']['AULA_BAJAS_REGISTRO'], '/bajas')
+            self.assertEqual(api['environment']['AULA_BAJAS_REGISTRO_ID'], '584157a1-5c8e-488f-976a-99968c4058e2')
+            self.assertNotIn('AULA_BAJAS_REGISTRO_PRUEBAS', api['environment'])
+
+    def test_sin_credenciales_ni_destinos_locales(self):
+        texto = self.SCRIPT.read_text()
+        bloque = texto[texto.index('# ====' + '=' * 58 + ' registro externo de bajas'):texto.index('case $ORDEN in')]
+        self.assertNotRegex(bloque, r'(?i)read -r -s|password=|identityfile|credentials=')
+        self.assertIn("BAJAS_TIPOS='nfs nfs4 cifs smb3 fuse.sshfs'", texto)
+        self.assertIn('--inicializar', bloque)

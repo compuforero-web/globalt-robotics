@@ -39,11 +39,56 @@ En una recuperación supervisada, restaurar en una base nueva llamada `aula_insp
 
 El CI lo ensaya en PostgreSQL con `pg_dump -Fc` y `pg_restore`, cuentas ficticias y una carpeta temporal como destino de pruebas (`tests/test_restauracion.py`). Un respaldo anterior incluso al alta puede contener una solicitud pendiente sin cuenta asociada; este procedimiento no identifica esas solicitudes huérfanas. Revisar su caducidad y los enlaces pendientes antes de reabrir.
 
-## Requisitos para producción (pendientes)
+## Configuración en producción
 
-Hasta completarlos, `api.env` no define `AULA_BAJAS_REGISTRO` y **las bajas siguen bloqueadas**.
+El registro es **opcional** para el resto del aula. Sin él, `actualizar`, las sesiones, el progreso y la compilación funcionan igual; solo `eliminar` y `resolver` se niegan. `comprobar` y `actualizar` muestran el estado de las bajas sin detenerse por él.
 
-1. Un segundo equipo o almacenamiento fuera del servidor, alcanzable por NetBird. Debe exportar una carpeta dedicada por NFSv4 (preferido), SMB o SSHFS, escribible solo por la cuenta del aula. También debe guardar instantáneas o una copia diaria que el servidor no pueda borrar. Requiere el equipo y las credenciales de Edwin. Las credenciales del montaje viven solo en el servidor, en un archivo de root, nunca en el repositorio.
-2. Montarla en el anfitrión con arranque automático y llevarla a la API como volumen. Definir `AULA_BAJAS_REGISTRO` con la ruta dentro del contenedor. `deploy/linux/aula-produccion.sh` todavía no lo hace; es un cambio posterior.
-3. Ejecutar `python -m app.registro_bajas inicializar` una vez y comprobar con `comprobar`. Ensayar una baja ficticia y una restauración antes de la primera baja real.
-4. `AULA_BAJAS_REGISTRO_PRUEBAS` es solo para pruebas: admite una carpeta local y no debe definirse en producción.
+**Lo que prepara el administrador, fuera del script.** Necesita un segundo equipo o almacenamiento fuera del servidor, alcanzable por NetBird, que exporte una carpeta dedicada. Se prefiere NFSv4; también valen SMB o SSHFS. La cuenta del aula, uid 10002 dentro de la API, debe poder escribir en ella. El equipo remoto debe guardar instantáneas o una copia diaria que el servidor no pueda borrar. El montaje se define en el anfitrión, en `/etc/fstab` o en una unidad `.mount`, con arranque automático. Sus credenciales van en un archivo de root con permiso 600, por ejemplo en `/etc/globalt-aula/`. El script no pide ni guarda credenciales: solo guarda en `/var/lib/globalt-robotics-aula/bajas.conf` la ruta, el origen, el tipo y el identificador del registro. La API no recibe más que la carpeta montada en `/bajas`.
+
+```bash
+sudo bash deploy/linux/aula-produccion.sh bajas configurar --ruta /mnt/globalt-aula-bajas --fuente equipo:/exports/aula-bajas --tipo nfs4 --inicializar
+```
+
+`--inicializar` solo se usa una vez, con un registro **nuevo** en una carpeta vacía. Sin esa opción, el comando exige que la carpeta ya contenga un registro y lo reutiliza con su identificador. El comando sigue estos pasos:
+
+1. Comprueba en el anfitrión que la ruta es exactamente ese montaje remoto, con `findmnt`.
+2. Monta la carpeta en la API con propagación `rslave`.
+3. Inicializa el registro si se pidió.
+4. Habilita las bajas con el identificador escrito en la marca del registro.
+5. Comprueba que un archivo creado desde el anfitrión se ve dentro de la API, y que la API puede escribir.
+
+Si algo falla, vuelve a la configuración anterior. Hay que anotar fuera del servidor el identificador que muestra.
+
+```bash
+sudo bash deploy/linux/aula-produccion.sh bajas estado          # 0 habilitadas · 1 inciertas · 2 BLOQUEADAS · 3 deshabilitadas
+sudo bash deploy/linux/aula-produccion.sh bajas eliminar REFERENCIA
+sudo bash deploy/linux/aula-produccion.sh bajas resolver
+sudo bash deploy/linux/aula-produccion.sh bajas reconectar      # tras volver a montar el registro
+sudo bash deploy/linux/aula-produccion.sh bajas deshabilitar    # quita el volumen y las variables; no toca el registro remoto
+```
+
+`bajas eliminar` y `bajas resolver` repiten todas las comprobaciones antes de cada operación. Usar estos comandos en lugar de `docker exec … app.inactividad`. Aun así, la API se protege sola: exige un montaje remoto, la marca y el identificador configurado.
+
+**Pérdida del montaje.** Si la ruta deja de ser el montaje esperado, porque se desmontó, el proceso cayó o se montó otra carpeta u otro registro, `bajas estado` muestra **BLOQUEADAS** y avisa al operador. `eliminar` también se detiene. Debajo puede quedar una carpeta local, vacía o incluso con una copia de la marca. Si la API arranca en ese momento, la API también la rechaza porque no es un sistema remoto. Si la API ya tenía el montaje, conserva su conexión al registro original. Cuando el montaje vuelve, la propagación lo lleva a la API. Si `bajas estado` indica que la API no ve el mismo registro, por ejemplo tras una caída del proceso de montaje, ejecutar `bajas reconectar`. Un montaje NFS «hard» sin servidor puede bloquear los accesos en lugar de fallar. Las comprobaciones del anfitrión tienen un límite de 15 s, pero conviene revisar el equipo remoto antes de reintentar.
+
+**Ensayado en una réplica, no en el servidor real.** El segundo equipo se simuló con SSHFS contra un sshd local, y el compilador con un sustituto. Se probaron:
+
+- la actualización desde a6c7339 sin destino;
+- la configuración, incluida la inicialización explícita, y bajas reales;
+- el desmontaje con carpeta local vacía y con una marca copiada;
+- otro registro con el mismo origen;
+- la caída del proceso SSHFS;
+- la reconexión al registro original;
+- dos actualizaciones repetidas;
+- deshabilitar y volver a configurar el mismo registro.
+
+**Falta probar con el almacenamiento real de Edwin:**
+
+- NFSv4 o SMB reales por NetBird, con su origen exacto en `findmnt`;
+- permisos para el uid 10002 (`all_squash`/`anonuid` o propietario);
+- `O_EXCL` y `fsync` en ese servidor;
+- comportamiento `hard`/`soft` ante la caída de red;
+- arranque automático tras un reinicio;
+- las instantáneas del equipo remoto.
+
+`AULA_BAJAS_REGISTRO_PRUEBAS` es solo para pruebas: admite una carpeta local y no debe definirse en producción.

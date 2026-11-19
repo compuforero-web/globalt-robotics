@@ -80,9 +80,11 @@ def test_destino_sin_configurar_local_o_sin_marca(tmp_path, monkeypatch):
         Registro(tmp_path, identidad=str(uuid4())).comprobar()     # otro registro inicializado
     Registro(tmp_path, identidad=real.leer_identidad()).comprobar()
     assert not list(tmp_path.glob('.prueba-*'))   # la prueba de escritura no deja restos
-    (tmp_path / registro_bajas.MARCA).write_text('aula-registro-bajas v1\n')
-    with pytest.raises(RegistroNoDisponible, match='no es válida'):
-        Registro(tmp_path, identidad=real.leer_identidad()).comprobar()
+    identidad = real.leer_identidad()
+    for danada in (b'aula-registro-bajas v1\n', b'\xff\xfe'):    # sin identificador o ilegible
+        (tmp_path / registro_bajas.MARCA).write_bytes(danada)
+        with pytest.raises(RegistroNoDisponible, match='no es válida'):
+            Registro(tmp_path, identidad=identidad).comprobar()
 
 
 def test_tipo_montaje_lee_el_montaje_mas_especifico(tmp_path, monkeypatch):

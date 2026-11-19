@@ -145,6 +145,8 @@ class Registro:
             lineas = (self.ruta / MARCA).read_text().splitlines()
         except OSError as e:
             raise RegistroNoDisponible('Destino sin inicializar o inaccesible: falta la marca del registro') from e
+        except UnicodeDecodeError:
+            lineas = []
         m = IDENTIFICADOR.match(lineas[1]) if len(lineas) == 2 and lineas[0] == CABECERA_MARCA else None
         if not m:
             raise RegistroNoDisponible('La marca del registro de bajas no es válida')
