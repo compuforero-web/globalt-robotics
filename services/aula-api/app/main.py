@@ -62,7 +62,9 @@ PRACTICAS = {
     'python-asistente': 'course-python',
 }
 CON_PROGRESO = {**LECCIONES, **PRACTICAS}   # lección o práctica → curso, para el progreso
-TIPOS_DOCUMENTO = ('terminos', 'datos')   # términos de uso y autorización de tratamiento de datos, por separado
+# Términos de uso y autorización de tratamiento de datos (casillas separadas) y política de tratamiento completa,
+# que se lee antes de registrarse y se acepta con la casilla de datos (su versión exacta queda en la evidencia).
+TIPOS_DOCUMENTO = ('terminos', 'datos', 'politica')
 VERSION_DOC = r'^[A-Za-z0-9][A-Za-z0-9.-]{0,39}$'
 DIAS_PENDIENTE = 7   # altas sin confirmar: se pueden reenviar durante 7 días y después se borran
 ACEPTADO = ('Si los datos son correctos, te enviamos un correo. Revisa tu bandeja de entrada y la carpeta de '
@@ -208,7 +210,7 @@ def crear_app(config=None, enviar_correo=None):
         return [doc_publico(docs[t]) for t in TIPOS_DOCUMENTO if t in docs and docs[t]['id'] not in aceptados]
 
     def registro_disponible(conexion):
-        """El registro público exige decisión explícita, correo configurado y ambos documentos vigentes."""
+        """El registro público exige decisión explícita, correo configurado y los tres documentos vigentes."""
         docs = documentos_vigentes(conexion)
         abierto = config.registro_abierto and correo.listo(config) and all(t in docs for t in TIPOS_DOCUMENTO)
         return abierto, docs
@@ -260,7 +262,7 @@ def crear_app(config=None, enviar_correo=None):
                 'documentos': {t: doc_publico(docs[t]) for t in TIPOS_DOCUMENTO if t in docs}}
 
     @app.get('/api/aula/documentos/{tipo}/{version}')
-    def documento(tipo: Literal['terminos', 'datos'], version: str, conexion=Depends(bd)):
+    def documento(tipo: Literal['terminos', 'datos', 'politica'], version: str, conexion=Depends(bd)):
         """Texto exacto de una versión (vigente o anterior), para consultarlo antes y después de aceptarlo."""
         if not re.fullmatch(VERSION_DOC, version):
             raise HTTPException(404, 'Documento no disponible.')
@@ -285,8 +287,8 @@ def crear_app(config=None, enviar_correo=None):
         anotar(conexion, 'registro_ip', ip(request))
         if datos.clave.lower() == datos.correo.lower():
             raise HTTPException(422, 'La contraseña no puede ser igual al correo.')
-        if datos.terminos != docs['terminos']['version'] or datos.datos != docs['datos']['version']:
-            raise HTTPException(409, 'Los documentos cambiaron mientras completabas el formulario. Recarga la página y revísalos.')
+        if any(getattr(datos, t) != docs[t]['version'] for t in TIPOS_DOCUMENTO):
+            raise HTTPException(409, 'Se publicó una versión nueva de los documentos mientras completabas el formulario. Léela y marca de nuevo la casilla para continuar.')
         hash_clave = seguridad.hash_clave(datos.clave)   # también si el correo ya tiene cuenta (tiempos similares)
         curso = curso_valido(conexion, datos.curso)
         if not puede_enviar(conexion, datos.correo):
@@ -302,9 +304,9 @@ def crear_app(config=None, enviar_correo=None):
         else:
             # La aceptación expresa queda fijada aquí (fecha y versiones exactas) y pasa a la cuenta al verificar.
             pendiente = conexion.execute(
-                'INSERT INTO registros_pendientes (correo, nombre, hash_clave, terminos_id, datos_id, curso_id, token_hash, expira_en) '
-                'VALUES (%s, %s, %s, %s, %s, %s, %s, now() + %s) RETURNING id',
-                (datos.correo, datos.nombre, hash_clave, docs['terminos']['id'], docs['datos']['id'], curso,
+                'INSERT INTO registros_pendientes (correo, nombre, hash_clave, terminos_id, datos_id, politica_id, curso_id, '
+                'token_hash, expira_en) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now() + %s) RETURNING id',
+                (datos.correo, datos.nombre, hash_clave, docs['terminos']['id'], docs['datos']['id'], docs['politica']['id'], curso,
                  seguridad.huella(token), timedelta(minutes=config.verificacion_min))).fetchone()[0]
             asunto = 'Confirma tu correo · Aula GLOBALT ROBOTICS'
             texto = correo.texto_verificacion(datos.nombre, correo.enlace(config, 'verificar', token, curso),
@@ -353,12 +355,12 @@ def crear_app(config=None, enviar_correo=None):
         if contar(conexion, 'enlace_ip', ip(request)) >= config.max_fallos_ip:
             raise HTTPException(429, 'Demasiados intentos. Espera unos minutos.', headers={'Retry-After': str(config.ventana_min * 60)})
         fila = conexion.execute(
-            'SELECT id, correo, nombre, hash_clave, terminos_id, datos_id, curso_id, creado_en FROM registros_pendientes '
+            'SELECT id, correo, nombre, hash_clave, terminos_id, datos_id, politica_id, curso_id, creado_en FROM registros_pendientes '
             'WHERE token_hash = %s AND usado_en IS NULL AND expira_en > now()', (seguridad.huella(datos.token),)).fetchone()
         if not fila:
             anotar(conexion, 'enlace_ip', ip(request))
             raise HTTPException(410, ENLACE_INVALIDO)
-        pid, direccion, nombre, hash_clave, terminos_id, datos_id, curso, aceptada_en = fila
+        pid, direccion, nombre, hash_clave, terminos_id, datos_id, politica_id, curso, aceptada_en = fila
         if contar(conexion, 'acceso_correo', direccion) >= config.max_fallos_correo:
             raise HTTPException(429, 'Demasiados intentos fallidos. Espera unos minutos.',
                                 headers={'Retry-After': str(config.ventana_min * 60)})
@@ -375,7 +377,7 @@ def crear_app(config=None, enviar_correo=None):
                     "INSERT INTO usuarios (correo, nombre, hash_clave, rol, origen, correo_verificado_en, mayor_edad_declarada_en) "
                     "VALUES (%s, %s, %s, 'estudiante', 'registro', now(), %s) RETURNING id",
                     (direccion, nombre, hash_clave, aceptada_en)).fetchone()[0]
-                for documento_id in (terminos_id, datos_id):
+                for documento_id in (d for d in (terminos_id, datos_id, politica_id) if d):
                     anotar_autorizacion(conexion, usuario_id, documento_id, aceptada_en, 'registro')
                 conexion.execute('DELETE FROM registros_pendientes WHERE correo = %s AND id <> %s', (direccion, pid))
                 csrf = abrir_sesion(conexion, respuesta, usuario_id)
@@ -441,7 +443,7 @@ def crear_app(config=None, enviar_correo=None):
     @app.post('/api/aula/cuenta/autorizar')
     def autorizar(datos: Autorizacion, sesion=Depends(con_csrf), conexion=Depends(bd)):
         """Aceptación expresa de las versiones vigentes por una cuenta que aún no las aceptó (p. ej. anterior al registro)."""
-        recibidas = {'terminos': datos.terminos, 'datos': datos.datos}
+        recibidas = {t: getattr(datos, t) for t in TIPOS_DOCUMENTO}
         pendientes = sesion['pendientes']
         if not pendientes:
             return {'pendientes': []}
@@ -733,6 +735,7 @@ class Registro(DatosCuenta):
     mayor_de_edad: Literal[True]                       # declaración expresa; quien indica ser menor no llega a enviar
     terminos: str = Field(pattern=VERSION_DOC)         # versión de los términos de uso que se aceptan
     datos: str = Field(pattern=VERSION_DOC)            # versión de la autorización de tratamiento de datos
+    politica: str | None = Field(default=None, pattern=VERSION_DOC)   # versión de la política leída (exigida si está vigente)
     curso: str | None = Field(default=None, pattern=r'^[a-z0-9-]{3,60}$')   # curso elegido (para volver a él)
 
 
@@ -757,6 +760,7 @@ class Autorizacion(BaseModel):
     model_config = ConfigDict(extra='forbid')
     terminos: str | None = Field(default=None, pattern=VERSION_DOC)
     datos: str | None = Field(default=None, pattern=VERSION_DOC)
+    politica: str | None = Field(default=None, pattern=VERSION_DOC)
 
 
 class Acceso(BaseModel):

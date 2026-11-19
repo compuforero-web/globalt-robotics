@@ -7,7 +7,7 @@ Estado: **listo para probar de extremo a extremo en la réplica local**. El regi
 1. **«Inscribirme»** en la portada lleva a `aula/?curso=<id>`. El Aula muestra el curso elegido, abre «Crear cuenta» si el registro está abierto y ofrece siempre **«Probar sin cuenta»** (el laboratorio del curso, o el catálogo si el curso no tiene laboratorio).
 2. **Edad primero.** «¿Tienes 18 años o más?» con dos botones, sin respuesta preseleccionada. «No, soy menor de 18» muestra «Practicar sin cuenta» sin haber mostrado ningún campo y **sin hacer ninguna petición**: no se crea ni se guarda nada.
 3. **Datos mínimos (adultos):** nombre visible o alias, correo y contraseña (mínimo 10). No se pide documento de identidad, teléfono ni fecha de nacimiento (la API rechaza campos extra).
-4. **Autorización informada:** dos casillas **sin marcar** y separadas: aceptar los términos de uso y autorizar el tratamiento de datos; cada una enlaza la versión exacta (`aula/documento.html?tipo=…&version=…`) y la finalidad se muestra junto a la casilla. Sin marcar ambas, el navegador no envía nada; la API exige `mayor_de_edad: true` y las versiones vigentes exactas (si cambiaron mientras se rellenaba: 409).
+4. **Autorización informada:** dos casillas **sin marcar** y separadas: aceptar los términos de uso y autorizar el tratamiento de datos. La casilla de datos enlaza también la **política de tratamiento de datos completa** (tercer documento versionado, `tipo=politica`). Cada enlace abre la versión exacta en otra pestaña (`aula/documento.html?tipo=…&version=…&curso=…`), sin sesión y conservando el curso elegido; la finalidad se muestra junto a la casilla. Sin marcar ambas, el navegador no envía nada; la API exige `mayor_de_edad: true` y las versiones vigentes exactas de los tres documentos. Si se activa una versión nueva con el formulario abierto, responde 409 sin guardar nada: el Aula enlaza la versión nueva, desmarca su casilla y conserva los demás campos hasta que se lea y se acepte.
 5. **Correo:** la solicitud no crea la cuenta. Se guarda como alta pendiente y se envía un enlace de un solo uso (24 h). La respuesta es la misma tenga o no cuenta el correo; si ya la tiene, a esa dirección llega un aviso **sin enlace**, con el acceso y la recuperación.
 6. **Enlace:** al abrirlo, el Aula pide la contraseña elegida. Así quien registre un correo ajeno no obtiene la cuenta aunque la víctima pulse su enlace. Se crea la cuenta (`origen = registro`, correo verificado), se guarda la evidencia y se inicia sesión. El curso elegido viaja en el enlace (`?curso=`) y aparece primero con «Confirmar inscripción».
 7. **Recuperación:** «¿Olvidaste tu contraseña?» envía un enlace de un solo uso (60 min) con el curso; al cambiarla se cierran las demás sesiones. Respuesta idéntica exista o no la cuenta, y sin esperar al envío (el tiempo no revela nada).
@@ -16,7 +16,7 @@ WhatsApp solo aparece como ayuda opcional en el texto de registro cerrado; ning�
 
 ## Evidencia
 
-Tabla `autorizaciones` (solo añadir; la base impide modificarla): cuenta, documento (`id`, `tipo`, `version`, `sha256` del texto exacto), `finalidad`, `aceptada_en` (momento del envío del formulario), `registrada_en` y `via` (`registro` o `cuenta-existente`). La declaración de mayoría de edad queda en `usuarios.mayor_edad_declarada_en`.
+Tabla `autorizaciones` (solo añadir; la base impide modificarla), una fila por documento (términos, autorización y política): cuenta, documento (`id`, `tipo`, `version`, `sha256` del texto exacto), `finalidad`, `aceptada_en` (momento del envío del formulario), `registrada_en` y `via` (`registro` o `cuenta-existente`). La declaración de mayoría de edad queda en `usuarios.mayor_edad_declarada_en`.
 
 `documentos_legales` guarda el texto exacto de cada versión; la base impide modificar o borrar una versión cargada (solo puede pasar a vigente). Las versiones anteriores siguen consultables por su ruta. Los textos `prueba` solo se usan con `AULA_PERMITIR_TEXTOS_PRUEBA=true` (nunca en producción; ni siquiera se sirven sin esa variable).
 
@@ -33,14 +33,14 @@ Tabla `autorizaciones` (solo añadir; la base impide modificarla): cuenta, docum
 La migración `0006` solo añade tablas y columnas: cuentas, sesiones, inscripciones, borradores y avances no cambian (comprobado con huellas antes/después y por la prueba `test_actualizacion_desde_0005_conserva_cuentas_y_avances`). Las cuentas previas quedan con `origen = anterior`, **sin autorizaciones, verificación ni declaración de edad retroactivas**, y siguen entrando con su contraseña.
 
 - Mientras no haya documentos vigentes (como hoy en producción) todo funciona igual que antes.
-- Cuando se activen las versiones definitivas, al entrar se muestra «Revisa los documentos del Aula» con las casillas sin marcar. Hasta aceptarlas, la API responde 403 en «Mis cursos», inscripciones, borradores, progreso y compilación (la sesión, el cierre y los documentos siguen disponibles). Al aceptar se registra con `via = cuenta-existente` y la fecha de ese momento. Lo mismo ocurre con cualquier versión nueva que se active.
+- Cuando se activen las versiones definitivas, al entrar se muestra «Revisa los documentos del Aula» con las casillas sin marcar (la política va con la casilla de datos). Las altas pendientes anteriores a la migración `0009` aceptan la política en su primer acceso. Hasta aceptarlas, la API responde 403 en «Mis cursos», inscripciones, borradores, progreso y compilación (la sesión, el cierre y los documentos siguen disponibles). Al aceptar se registra con `via = cuenta-existente` y la fecha de ese momento. Lo mismo ocurre con cualquier versión nueva que se active.
 - Una cuenta anterior que recupere su contraseña queda con el correo verificado.
 
 ## Configuración
 
 | Variable | Valor por defecto | Uso |
 |---|---|---|
-| `AULA_REGISTRO_ABIERTO` | `false` | Decisión explícita. Sin correo listo y ambos documentos vigentes, el registro sigue cerrado aunque sea `true`. |
+| `AULA_REGISTRO_ABIERTO` | `false` | Decisión explícita. Sin correo listo y los tres documentos (términos, autorización y política) vigentes, el registro sigue cerrado aunque sea `true`. |
 | `AULA_CORREO_MODO` | `desactivado` | `smtp` para enviar enlaces (también la recuperación). |
 | `AULA_SMTP_HOST`, `AULA_SMTP_PUERTO`, `AULA_SMTP_TLS`, `AULA_SMTP_USUARIO`, `AULA_SMTP_CLAVE`, `AULA_CORREO_REMITENTE` | — / 587 / `starttls` | Servidor SMTP. La clave solo en `api.env` del servidor. |
 | `AULA_URL_PUBLICA` | — | Base de los enlaces (`https://globalt-robotics.com`). |

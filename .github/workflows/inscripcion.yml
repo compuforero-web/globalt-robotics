@@ -96,6 +96,6 @@ jobs:
           PYTEST
           PIDS+=($!)
           esperar 'Sitio y API (8182)' "${PIDS[-1]}" "$REGISTROS/sitio.log" curl -fsS "$AULA_SITIO/api/aula/salud"
-          curl -fsS "$AULA_SITIO/api/aula/config" | python -c 'import json,sys; c=json.load(sys.stdin); assert c["registro_abierto"] and set(c["documentos"]) == {"terminos","datos"}, c' \
-            || { echo '::error title=Réplica del aula::/api/aula/config no anuncia el registro abierto con ambos documentos'; cat "$REGISTROS/sitio.log"; exit 1; }
+          curl -fsS "$AULA_SITIO/api/aula/config" | python -c 'import json,sys; c=json.load(sys.stdin); assert c["registro_abierto"] and set(c["documentos"]) == {"terminos","datos","politica"}, c' \
+            || { echo '::error title=Réplica del aula::/api/aula/config no anuncia el registro abierto con los tres documentos'; cat "$REGISTROS/sitio.log"; exit 1; }
           node tests/e2e/inscripcion-catalogo.e2e.mjs || { echo '::group::Registro del sitio'; cat "$REGISTROS/sitio.log"; echo '::endgroup::'; exit 1; }

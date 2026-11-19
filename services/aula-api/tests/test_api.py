@@ -37,7 +37,7 @@ def base_limpia():
         c.execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
     assert migraciones.aplicar(URL) == ['0001_inicial.sql', '0002_borradores.sql', '0003_compilaciones.sql',
                                        '0004_progreso.sql', '0005_catalogo.sql', '0006_registro_adultos.sql', '0007_inactividad.sql',
-                                       '0008_bajas_registradas.sql']
+                                       '0008_bajas_registradas.sql', '0009_politica_datos.sql']
     assert migraciones.aplicar(URL) == []          # reproducible e idempotente
     documentos.cargar_prueba(URL)                  # textos PROVISIONALES de prueba, versión prueba-1
 
@@ -63,7 +63,7 @@ def sql(consulta, *params):
 
 def solicitar(c, correo, nombre='Estudiante Ficticio', clave=CLAVE, **extra):
     return c.post('/api/aula/registro', json={'nombre': nombre, 'correo': correo, 'clave': clave, 'mayor_de_edad': True,
-                                              'terminos': 'prueba-1', 'datos': 'prueba-1', **extra})
+                                              'terminos': 'prueba-1', 'datos': 'prueba-1', 'politica': 'prueba-1', **extra})
 
 
 def ultimo_enlace(destino, accion):

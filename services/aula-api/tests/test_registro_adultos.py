@@ -72,7 +72,7 @@ def sql(consulta, *params):
 
 def solicitud(correo_, **cambios):
     datos = {'nombre': 'Adulta Ficticia', 'correo': correo_, 'clave': CLAVE, 'mayor_de_edad': True,
-             'terminos': 'prueba-1', 'datos': 'prueba-1', 'curso': 'course-web'}
+             'terminos': 'prueba-1', 'datos': 'prueba-1', 'politica': 'prueba-1', 'curso': 'course-web'}
     datos.update(cambios)
     return {k: v for k, v in datos.items() if v is not None}
 
@@ -165,8 +165,9 @@ def test_alta_verificada_con_evidencia_y_curso_elegido():
                     'FROM autorizaciones a JOIN documentos_legales d ON d.id = a.documento_id WHERE a.usuario_id = %s '
                     'ORDER BY a.tipo', u[0])
     assert [(e[0], e[1], e[2], e[3], e[5]) for e in evidencia] == [('datos', 'prueba-1', True, True, 'registro'),
+                                                                  ('politica', 'prueba-1', True, True, 'registro'),
                                                                   ('terminos', 'prueba-1', True, True, 'registro')]
-    assert evidencia[0][4] == evidencia[1][4] == u[3]   # fecha de la acción expresa (envío del formulario)
+    assert evidencia[0][4] == evidencia[1][4] == evidencia[2][4] == u[3]   # fecha de la acción expresa (envío del formulario)
     with pytest.raises(psycopg.errors.RaiseException):
         sql("UPDATE autorizaciones SET version = 'otra' WHERE usuario_id = %s", u[0])
 
@@ -298,17 +299,18 @@ def test_cuenta_existente_sin_autorizaciones_historicas_acepta_al_entrar():
     assert contar('autorizaciones', 'usuario_id = %s', uid) == 0
     with cliente() as c:
         r = c.post('/api/aula/sesion', json={'correo': 'antigua@example.com', 'clave': CLAVE})
-        assert r.status_code == 200 and [p['tipo'] for p in r.json()['pendientes']] == ['terminos', 'datos']
+        assert r.status_code == 200 and [p['tipo'] for p in r.json()['pendientes']] == ['terminos', 'datos', 'politica']
         h = {'X-CSRF-Token': r.json()['csrf']}
         assert c.get('/api/aula/mis-cursos').status_code == 403
         assert c.post('/api/aula/inscripciones', json={'curso_id': 'course-web'}, headers=h).status_code == 403
         assert c.post('/api/aula/cuenta/autorizar', json={'terminos': 'prueba-1'}, headers=h).status_code == 409
         assert c.post('/api/aula/cuenta/autorizar', json={'terminos': 'prueba-1', 'datos': 'prueba-1'}).status_code == 403
-        r = c.post('/api/aula/cuenta/autorizar', json={'terminos': 'prueba-1', 'datos': 'prueba-1'}, headers=h)
+        assert c.post('/api/aula/cuenta/autorizar', json={'terminos': 'prueba-1', 'datos': 'prueba-1'}, headers=h).status_code == 409
+        r = c.post('/api/aula/cuenta/autorizar', json={'terminos': 'prueba-1', 'datos': 'prueba-1', 'politica': 'prueba-1'}, headers=h)
         assert r.status_code == 200 and r.json() == {'pendientes': []}
         assert c.get('/api/aula/mis-cursos').status_code == 200
     assert sql('SELECT array_agg(via), bool_and(aceptada_en > now() - interval \'1 minute\') FROM autorizaciones '
-               'WHERE usuario_id = %s', uid)[0] == (['cuenta-existente', 'cuenta-existente'], True)
+               'WHERE usuario_id = %s', uid)[0] == (['cuenta-existente'] * 3, True)
     with cliente(permitir_textos_prueba=False) as c:   # sin documentos vigentes no se exige nada (como hoy)
         r = c.post('/api/aula/sesion', json={'correo': 'existe@example.com', 'clave': CLAVE})
         assert r.json()['pendientes'] == [] and c.get('/api/aula/mis-cursos').status_code == 200
@@ -330,6 +332,51 @@ def _puerto_libre():
     with socket.socket() as s:
         s.bind(('127.0.0.1', 0))
         return s.getsockname()[1]
+
+
+# ---------------------------------------------------------------- política completa y versión que se vio
+def test_politica_completa_exigida_legible_y_registrada_con_su_version():
+    with cliente() as c:
+        conf = c.get('/api/aula/config').json()
+        assert conf['documentos']['politica']['version'] == 'prueba-1'
+        d = c.get('/api/aula/documentos/politica/prueba-1')   # sin sesión
+        assert d.status_code == 200 and 'Robótica de Ensayo' in d.json()['texto']
+        # Sin la versión de la política (cliente antiguo) o con otra: 409 y nada guardado.
+        for politica in (None, 'otra-version'):
+            assert c.post('/api/aula/registro', json=solicitud('politica@example.com', politica=politica)).status_code == 409
+        assert contar('registros_pendientes', 'correo = %s', 'politica@example.com') == 0
+        # Formulario abierto con prueba-1; se activa prueba-2 antes de enviar: 409 hasta aceptar la nueva.
+        documentos.cargar(URL, 'politica', 'prueba-2', 'Política de prueba 2', 'Finalidad de prueba 2',
+                          'Política ficticia número dos «Robótica de Ensayo», solo para pruebas.', False)
+        documentos.activar(URL, 'politica', 'prueba-2', permitir_prueba=True)
+        try:
+            assert c.post('/api/aula/registro', json=solicitud('politica@example.com')).status_code == 409
+            assert c.get('/api/aula/config').json()['documentos']['politica']['version'] == 'prueba-2'
+            assert c.post('/api/aula/registro', json=solicitud('politica@example.com', politica='prueba-2')).status_code == 202
+            _, token = enlace('politica@example.com', 'verificar')
+            assert c.post('/api/aula/cuenta/verificar', json={'token': token, 'clave': CLAVE}).json()['pendientes'] == []
+            vista = c.get('/api/aula/documentos/politica/prueba-2').json()
+            assert sql("SELECT a.version, a.sha256 FROM autorizaciones a JOIN usuarios u ON u.id = a.usuario_id "
+                       "WHERE u.correo = 'politica@example.com' AND a.tipo = 'politica'") == [('prueba-2', vista['sha256'])]
+        finally:
+            documentos.activar(URL, 'politica', 'prueba-1', permitir_prueba=True)
+    with cliente() as c:   # sin política vigente el registro no se abre
+        sql("UPDATE documentos_legales SET vigente_desde = NULL WHERE tipo = 'politica'")
+        try:
+            assert c.get('/api/aula/config').json()['registro_abierto'] is False
+            assert c.post('/api/aula/registro', json=solicitud('sin-politica@example.com')).status_code == 403
+        finally:
+            documentos.activar(URL, 'politica', 'prueba-1', permitir_prueba=True)
+
+
+def test_alta_pendiente_anterior_a_la_politica_la_pide_al_entrar():
+    with cliente() as c:
+        assert c.post('/api/aula/registro', json=solicitud('previa-politica@example.com')).status_code == 202
+        sql("UPDATE registros_pendientes SET politica_id = NULL WHERE correo = 'previa-politica@example.com'")
+        _, token = enlace('previa-politica@example.com', 'verificar')
+        r = c.post('/api/aula/cuenta/verificar', json={'token': token, 'clave': CLAVE})
+        assert r.status_code == 200 and [p['tipo'] for p in r.json()['pendientes']] == ['politica']
+        assert c.get('/api/aula/mis-cursos').status_code == 403
 
 
 def test_smtp_con_buzon_de_pruebas_local(tmp_path):
@@ -381,7 +428,7 @@ def test_actualizacion_desde_0005_conserva_cuentas_y_avances(tmp_path, monkeypat
     sql("INSERT INTO borradores (usuario_id, leccion_id, codigo) VALUES (%s, 'arduino-led-serie', 'void setup(){}')", uid)
     antes = sql('SELECT leccion_id, paso, pasos_vistos, completada_en FROM progreso_lecciones ORDER BY 1')
     monkeypatch.undo()
-    assert migraciones.aplicar(URL) == ['0006_registro_adultos.sql', '0007_inactividad.sql', '0008_bajas_registradas.sql']
+    assert migraciones.aplicar(URL) == ['0006_registro_adultos.sql', '0007_inactividad.sql', '0008_bajas_registradas.sql', '0009_politica_datos.sql']
     assert sql('SELECT leccion_id, paso, pasos_vistos, completada_en FROM progreso_lecciones ORDER BY 1') == antes
     assert sql('SELECT origen, correo_verificado_en, mayor_edad_declarada_en FROM usuarios WHERE id = %s', uid) == [('anterior', None, None)]
     assert contar('autorizaciones') == 0

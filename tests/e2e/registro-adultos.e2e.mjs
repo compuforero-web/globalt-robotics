@@ -5,7 +5,8 @@
 //   AULA_FASE=cerrado node tests/e2e/registro-adultos.e2e.mjs   # API con AULA_REGISTRO_ABIERTO=false
 //   AULA_FASE=abierto node tests/e2e/registro-adultos.e2e.mjs   # API con AULA_REGISTRO_ABIERTO=true
 //
-// Opcional: AULA_SITIO (http://127.0.0.1:8180), AULA_DB_CONTENEDOR (globalt-aula-dev-db-1), AULA_SHOTS=carpeta,
+// Opcional: AULA_SITIO (http://127.0.0.1:8180), AULA_DB_CONTENEDOR (globalt-aula-dev-db-1),
+// AULA_API_CONTENEDOR (globalt-aula-dev-api-1, para activar una versión nueva con el formulario abierto), AULA_SHOTS=carpeta,
 // AULA_PREVIAS=correo1,correo2 (cuentas creadas con la versión anterior, clave AULA_PREVIA_CLAVE) para comprobar
 // la transición: aceptar los documentos al entrar y conservar inscripciones y avances de Arduino, Web y Python.
 import assert from 'node:assert/strict';
@@ -17,6 +18,7 @@ const { chromium, devices } = createRequire(import.meta.url)('playwright');
 const SITIO = (process.env.AULA_SITIO || 'http://127.0.0.1:8180').replace(/\/$/, '');
 const FASE = process.env.AULA_FASE || 'abierto';
 const DB = process.env.AULA_DB_CONTENEDOR || 'globalt-aula-dev-db-1';
+const API = process.env.AULA_API_CONTENEDOR || 'globalt-aula-dev-api-1';
 const SHOTS = process.env.AULA_SHOTS || '';
 const PREVIAS = (process.env.AULA_PREVIAS || '').split(',').filter(Boolean);
 const PREVIA_CLAVE = process.env.AULA_PREVIA_CLAVE || 'clave-anterior-123';
@@ -24,6 +26,25 @@ const CLAVE = 'clave-adulta-e2e-1';
 const sufijo = Date.now().toString(36);
 const log = (...a) => console.log('✔', ...a);
 const sql = (q) => execFileSync('docker', ['exec', DB, 'psql', '-U', 'aula', '-d', 'aula', '-At', '-c', q], { encoding: 'utf8' }).trim();
+// Carga y activa una versión de PRUEBA (texto ficticio) de un documento, como haría el responsable con la definitiva.
+function activarPrueba(tipo, version, { cargar = true } = {}) {
+  if (cargar) cargarPrueba(tipo, version);
+  execFileSync('docker', ['exec', API, 'python', '-m', 'app.documentos', 'activar', '--tipo', tipo, '--version', version]);
+}
+function cargarPrueba(tipo, version) {
+  const texto = `Texto ficticio «Robótica de Ensayo» ${tipo} ${version}: solo para pruebas, no es un documento real.`;
+  execFileSync('docker', ['exec', '-i', API, 'python', '-m', 'app.documentos', 'cargar', '--tipo', tipo, '--version', version,
+    '--titulo', `Documento de prueba ${version}`, '--finalidad', 'Finalidad ficticia de prueba.'], { input: texto });
+}
+/** Abre el enlace de un documento desde el formulario (pestaña nueva) y devuelve versión y huella mostradas. */
+async function leerDocumento(p, selector) {
+  const [doc] = await Promise.all([p.context().waitForEvent('page'), p.click(selector)]);
+  await doc.locator('#texto:visible').waitFor();
+  const visto = { version: await doc.textContent('#version'), sha256: await doc.textContent('#huella'), texto: await doc.textContent('#texto') };
+  await sinDesborde(doc);
+  await doc.close();
+  return visto;
+}
 const conteos = () => sql("SELECT (SELECT count(*) FROM usuarios)||'/'||(SELECT count(*) FROM registros_pendientes)||'/'||(SELECT count(*) FROM autorizaciones)");
 
 const browser = await chromium.launch();
@@ -93,7 +114,18 @@ try {
       assert.equal(await f.locator('[name=terminos]').isChecked(), false);
       assert.equal(await f.locator('[name=datos]').isChecked(), false);
       assert.equal(await p.isVisible('#aviso-textos-prueba'), true);
-      assert.match(await f.locator('#doc-datos').getAttribute('href'), /documento\.html\?tipo=datos&version=prueba-1/);
+      assert.match(await f.locator('#doc-datos').getAttribute('href'), /documento\.html\?tipo=datos&version=prueba-1&curso=course-python/);
+      // Antes de enviar y sin sesión: política completa, términos y autorización legibles; la página conserva el curso.
+      const vistos = {};
+      for (const tipo of ['terminos', 'datos', 'politica']) {
+        vistos[tipo] = await leerDocumento(p, '#doc-' + tipo);
+        assert.equal(vistos[tipo].version, (await f.locator(`[data-version="${tipo}"]`).textContent()).match(/versión (\S+)\)/)[1], tipo);
+      }
+      assert.match(vistos.politica.texto, /Robótica de Ensayo/);
+      assert.ok(p.url().endsWith('/aula/?curso=course-python'), p.url());
+      assert.match(await p.textContent('#eleccion'), /Python desde Cero/);
+      assert.equal(await f.locator('[name=terminos]').isChecked(), false);
+      assert.equal(await f.locator('[name=datos]').isChecked(), false);
       await f.locator('[name=nombre]').fill('Alias Adulto');
       await f.locator('[name=correo]').fill(correo);
       await f.locator('[name=clave]').fill(CLAVE);
@@ -165,7 +197,12 @@ try {
       assert.equal((await repetida.json()).nueva, false);
       assert.equal(sql(`SELECT count(*) FROM inscripciones i JOIN usuarios u ON u.id = i.usuario_id WHERE u.correo = '${correo}'`), '1');
       assert.equal(sql(`SELECT string_agg(a.tipo || ':' || a.version || ':' || a.via, ',' ORDER BY a.tipo) FROM autorizaciones a JOIN usuarios u ON u.id = a.usuario_id WHERE u.correo = '${correo}'`),
-        'datos:prueba-1:registro,terminos:prueba-1:registro');
+        'datos:prueba-1:registro,politica:prueba-1:registro,terminos:prueba-1:registro');
+      // La versión y la huella que vio coinciden con las registradas en su aceptación.
+      for (const [tipo, visto] of Object.entries(vistos)) {
+        assert.equal(sql(`SELECT a.version || ':' || a.sha256 FROM autorizaciones a JOIN usuarios u ON u.id = a.usuario_id WHERE u.correo = '${correo}' AND a.tipo = '${tipo}'`),
+          `${visto.version}:${visto.sha256}`, tipo);
+      }
       await sinDesborde(q);
       // Enlace reutilizado
       const r2 = await ctx.newPage();
@@ -260,6 +297,70 @@ try {
       await foto(v, `vencido-${nombre}`);
       await ctx.close();
       log(nombre, 'enlace vencido: rechazado y sin cuenta');
+
+      // 8. «Probar sin cuenta» con el formulario relleno: a la práctica sin enviar los campos ni crear nada.
+      ctx = await contexto(opciones);
+      p = await ctx.newPage();
+      const invitado = `invitado.${nombre}.${sufijo}@example.com`;
+      const todas = [];
+      p.on('request', (r) => todas.push(r.url() + ' ' + (r.postData() || '')));
+      const antesInvitado = conteos();
+      await p.goto(SITIO + '/aula/?curso=course-python');
+      await p.click('#btn-adulto');
+      await p.fill('#form-registro [name=nombre]', 'Alias Invitado');
+      await p.fill('#form-registro [name=correo]', invitado);
+      await p.fill('#form-registro [name=clave]', CLAVE);
+      await p.check('#form-registro [name=terminos]');
+      const noEnviadas = peticionesAula(p);
+      await p.click('#btn-invitado');
+      await p.waitForURL(/laboratorio-python/);
+      await p.waitForLoadState('networkidle');
+      assert.deepEqual(noEnviadas, []);
+      assert.equal(todas.filter((t) => t.includes(invitado) || t.includes('Alias') || t.includes(CLAVE)).length, 0, 'campos transmitidos');
+      assert.equal(conteos(), antesInvitado);
+      await ctx.close();
+      log(nombre, '«Probar sin cuenta» con datos escritos: llega a la práctica sin transmitir los campos ni crear registros');
+
+      // 9. Se activa una política nueva con el formulario abierto: hay que leerla y aceptarla antes de continuar.
+      const cambio = `cambio.${nombre}.${sufijo}@example.com`;
+      const nueva = `e2e-${sufijo}-${nombre}`;
+      ctx = await contexto(opciones);
+      p = await ctx.newPage();
+      await p.goto(SITIO + '/aula/?curso=course-python');
+      await p.click('#btn-adulto');
+      await p.fill('#form-registro [name=nombre]', 'Alias Cambio');
+      await p.fill('#form-registro [name=correo]', cambio);
+      await p.fill('#form-registro [name=clave]', CLAVE);
+      assert.equal((await leerDocumento(p, '#doc-politica')).version, 'prueba-1');
+      await p.check('#form-registro [name=terminos]');
+      await p.check('#form-registro [name=datos]');
+      activarPrueba('politica', nueva);
+      try {
+        await p.click('#form-registro button[type=submit]');
+        await p.locator('#error-form', { hasText: 'versión nueva' }).waitFor();
+        assert.equal(sql(`SELECT count(*) FROM registros_pendientes WHERE correo = '${cambio}'`), '0');
+        assert.equal(await p.isChecked('#form-registro [name=datos]'), false, 'la casilla de datos se desmarca');
+        assert.equal(await p.isChecked('#form-registro [name=terminos]'), true, 'los términos no cambiaron');
+        assert.equal(await p.inputValue('#form-registro [name=correo]'), cambio, 'se conservan los campos');
+        assert.match(await p.textContent('[data-version="politica"]'), new RegExp(nueva));
+        await sinDesborde(p);
+        await foto(p, `cambio-version-${nombre}`);
+        const vista = await leerDocumento(p, '#doc-politica');
+        assert.equal(vista.version, nueva);
+        await p.check('#form-registro [name=datos]');
+        await p.click('#form-registro button[type=submit]');
+        await p.locator('#vista-correo:visible').waitFor();
+        await p.goto(enlaceDe(await esperarCorreo(cambio, 1), 'verificar'));
+        await p.fill('#form-enlace [name=clave]', CLAVE);
+        await p.click('#btn-enlace');
+        await p.locator('#vista-cursos:visible').waitFor();
+        assert.equal(sql(`SELECT a.version || ':' || a.sha256 FROM autorizaciones a JOIN usuarios u ON u.id = a.usuario_id WHERE u.correo = '${cambio}' AND a.tipo = 'politica'`),
+          `${nueva}:${vista.sha256}`);
+      } finally {
+        activarPrueba('politica', 'prueba-1', { cargar: false });   // vuelve a la versión de prueba para el resto del recorrido
+      }
+      await ctx.close();
+      log(nombre, 'versión nueva con el formulario abierto: 409 sin guardar nada, enlace a la nueva, casilla desmarcada y versión vista = registrada');
     }
 
     // 8. Cuentas de la versión anterior: aceptan los documentos al entrar y conservan inscripciones y avances.
@@ -295,7 +396,7 @@ try {
         }
       }
       assert.equal(sql(`SELECT string_agg(a.via, ',') FROM autorizaciones a JOIN usuarios u ON u.id = a.usuario_id WHERE u.correo = '${correo}'`),
-        'cuenta-existente,cuenta-existente');
+        'cuenta-existente,cuenta-existente,cuenta-existente');
       await foto(p, `transicion-cursos-${nombre}`);
       await ctx.close();
       log(nombre, `cuenta anterior ${correo}: acepta documentos (sin autorizaciones previas) y conserva inscripciones y avances`);
