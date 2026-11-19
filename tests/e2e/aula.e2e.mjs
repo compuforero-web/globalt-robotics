@@ -29,6 +29,7 @@ async function registrar(p, nombre, correo) {
   await p.fill('#form-registro [name=nombre]', nombre);
   await p.fill('#form-registro [name=correo]', correo);
   await p.fill('#form-registro [name=clave]', CLAVE);
+  await p.fill('#form-registro [name=confirmacion]', CLAVE);
   await p.check('#form-registro [name=terminos]');
   await p.check('#form-registro [name=datos]');
   await p.click('#form-registro button[type=submit]');
@@ -93,6 +94,7 @@ await c.click('#btn-adulto');
 await c.fill('#form-registro [name=nombre]', 'Copia');
 await c.fill('#form-registro [name=correo]', `ana.${sufijo}@example.com`);
 await c.fill('#form-registro [name=clave]', CLAVE);
+await c.fill('#form-registro [name=confirmacion]', CLAVE);
 await c.check('#form-registro [name=terminos]');
 await c.check('#form-registro [name=datos]');
 await c.click('#form-registro button[type=submit]');

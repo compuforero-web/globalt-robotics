@@ -129,6 +129,7 @@ try {
       await f.locator('[name=nombre]').fill('Alias Adulto');
       await f.locator('[name=correo]').fill(correo);
       await f.locator('[name=clave]').fill(CLAVE);
+      await f.locator('[name=confirmacion]').fill(CLAVE);
       const sinCasillas = peticionesAula(p);
       await f.locator('button[type=submit]').click();
       await p.waitForTimeout(300);
@@ -224,6 +225,7 @@ try {
       await d2.fill('#form-registro [name=nombre]', 'Otra Persona');
       await d2.fill('#form-registro [name=correo]', correo.toUpperCase());
       await d2.fill('#form-registro [name=clave]', 'clave-de-otra-123');
+      await d2.fill('#form-registro [name=confirmacion]', 'clave-de-otra-123');
       await d2.check('#form-registro [name=terminos]');
       await d2.check('#form-registro [name=datos]');
       await d2.click('#form-registro button[type=submit]');
@@ -283,6 +285,7 @@ try {
       await v.fill('#form-registro [name=nombre]', 'Vence');
       await v.fill('#form-registro [name=correo]', vencido);
       await v.fill('#form-registro [name=clave]', CLAVE);
+      await v.fill('#form-registro [name=confirmacion]', CLAVE);
       await v.check('#form-registro [name=terminos]');
       await v.check('#form-registro [name=datos]');
       await v.click('#form-registro button[type=submit]');
@@ -310,6 +313,7 @@ try {
       await p.fill('#form-registro [name=nombre]', 'Alias Invitado');
       await p.fill('#form-registro [name=correo]', invitado);
       await p.fill('#form-registro [name=clave]', CLAVE);
+      await p.fill('#form-registro [name=confirmacion]', CLAVE);
       await p.check('#form-registro [name=terminos]');
       const noEnviadas = peticionesAula(p);
       await p.click('#btn-invitado');
@@ -331,6 +335,7 @@ try {
       await p.fill('#form-registro [name=nombre]', 'Alias Cambio');
       await p.fill('#form-registro [name=correo]', cambio);
       await p.fill('#form-registro [name=clave]', CLAVE);
+      await p.fill('#form-registro [name=confirmacion]', CLAVE);
       assert.equal((await leerDocumento(p, '#doc-politica')).version, 'prueba-1');
       await p.check('#form-registro [name=terminos]');
       await p.check('#form-registro [name=datos]');

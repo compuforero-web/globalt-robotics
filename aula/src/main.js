@@ -63,6 +63,7 @@ function mostrar(nombre, usuario = null) {
 }
 
 function pestana(cual) {
+  ocultarClaves();
   const registro = cual === 'registro';
   $('#form-entrar').hidden = cual !== 'entrar';
   $('#form-recuperar').hidden = cual !== 'recuperar';
@@ -346,8 +347,38 @@ async function documentosCambiados(formulario, previos) {
   if (cambio('datos') || cambio('politica')) formulario.datos.checked = false;
 }
 
-$('#form-registro').addEventListener('submit', (e) => {
+const formularioRegistro = $('#form-registro');
+const verClaves = $('#ver-claves');
+let temporizadorClaves;
+
+function ocultarClaves() {
+  clearTimeout(temporizadorClaves);
+  formularioRegistro.clave.type = formularioRegistro.confirmacion.type = 'password';
+  verClaves.textContent = 'Mostrar contraseñas durante 5 segundos';
+}
+
+verClaves.addEventListener('click', () => {
+  if (formularioRegistro.clave.type === 'text') return ocultarClaves();
+  formularioRegistro.clave.type = formularioRegistro.confirmacion.type = 'text';
+  verClaves.textContent = 'Ocultar contraseñas';
+  temporizadorClaves = setTimeout(ocultarClaves, 5000);
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden) ocultarClaves(); });
+window.addEventListener('pagehide', ocultarClaves);
+function validarConfirmacion() {
+  const campo = formularioRegistro.confirmacion;
+  campo.setCustomValidity(campo.value && campo.value !== formularioRegistro.clave.value
+    ? 'Las contraseñas no coinciden. Revisa la confirmación.' : '');
+}
+formularioRegistro.addEventListener('input', validarConfirmacion);
+formularioRegistro.addEventListener('reset', () => {
+  ocultarClaves();
+  formularioRegistro.confirmacion.setCustomValidity('');
+});
+formularioRegistro.addEventListener('submit', (e) => {
   e.preventDefault();
+  ocultarClaves();
+  validarConfirmacion();
   conBoton(e.target, '#error-form', async (d) => {
     const docs = ajustes.documentos;
     if (!docs.terminos || !docs.datos || !docs.politica) throw new api.ApiError(409, 'Faltan los documentos. Recarga la página.');

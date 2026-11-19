@@ -97,6 +97,7 @@ await a.click('#btn-adulto');
 await a.fill('#form-registro [name=nombre]', 'Estudiante Recorrido');
 await a.fill('#form-registro [name=correo]', `recorrido.${sufijo}@example.com`);
 await a.fill('#form-registro [name=clave]', CLAVE);
+await a.fill('#form-registro [name=confirmacion]', CLAVE);
 await a.check('#form-registro [name=terminos]');
 await a.check('#form-registro [name=datos]');
 await a.click('#form-registro button[type=submit]');
