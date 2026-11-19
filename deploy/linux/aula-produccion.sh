@@ -12,6 +12,8 @@
 #   sudo bash deploy/linux/aula-produccion.sh correo configurar|desactivar|probar --a CORREO   # SMTP de producción
 #   sudo bash deploy/linux/aula-produccion.sh documentos listar|cargar|activar …   # términos y autorización de datos
 #   sudo bash deploy/linux/aula-produccion.sh respaldo              # respaldo comprobado inmediato
+#   sudo bash deploy/linux/aula-produccion.sh bajas estado|configurar|reconectar|deshabilitar|eliminar|resolver
+#                                                                   # registro externo de bajas (opcional)
 #
 # Ejecutar desde una copia del repositorio en el commit indicado (el script se compara con el del commit).
 # Nunca restaura la base automáticamente. Credenciales generadas en el servidor, fuera de GitHub.
@@ -37,6 +39,9 @@ SOCKET_DIR=/var/lib/globalt-robotics-lab/run
 SOCKET_API=/compilador
 ORIGENES=https://globalt-robotics.com,https://www.globalt-robotics.com
 RESPALDOS=/var/backups/globalt-aula
+BAJAS_CONF=$STATE/bajas.conf     # destino externo de bajas: ruta, origen y tipo del montaje e identificador (sin credenciales)
+BAJAS_API=/bajas                 # ruta del registro dentro del contenedor de la API
+BAJAS_TIPOS='nfs nfs4 cifs smb3 fuse.sshfs'
 PG_IMAGE='postgres:16.6-alpine@sha256:1d04b9ba1d4996401f2552b51beda8187f175c0645c091e4781134fc9c9a3eef'
 
 falla() { echo "ERROR: $*" >&2; exit 1; }
@@ -47,7 +52,7 @@ REPO=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 SELF=$(readlink -f -- "${BASH_SOURCE[0]}")
 GIT=(git -c safe.directory="$REPO" -C "$REPO")
 DC=(docker compose -f "$STATE/compose.json")
-for t in docker git python3 curl tar sha256sum flock stat runuser install; do command -v "$t" >/dev/null || falla "Falta $t"; done
+for t in docker git python3 curl tar sha256sum flock stat runuser install findmnt timeout; do command -v "$t" >/dev/null || falla "Falta $t"; done
 docker info >/dev/null 2>&1 || falla 'Docker no responde.'
 
 sql() { docker exec -i "$DB_C" sh -c 'psql -X -q -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'; }
@@ -69,7 +74,7 @@ verificar_commit() {   # $1 commit
   "${GIT[@]}" show "$1:deploy/linux/aula-produccion.sh" | cmp -s - "$SELF" \
     || falla 'Este script no coincide con el del commit indicado. Ejecuta la copia de ese mismo commit.'
   for f in services/aula-api/Dockerfile services/aula-api/app/main.py services/aula-api/app/cuentas.py \
-           services/aula-api/app/correo.py services/aula-api/app/documentos.py \
+           services/aula-api/app/correo.py services/aula-api/app/documentos.py services/aula-api/app/registro_bajas.py \
            deploy/linux/nginx-public-aula.conf deploy/linux/aula-respaldo.sh deploy/linux/aula-prueba.py \
            deploy/linux/update.py aula/index.html; do
     "${GIT[@]}" cat-file -e "$1:$f" 2>/dev/null || falla "El commit no contiene $f."
@@ -118,9 +123,12 @@ print(gw)'
 
 escribir_compose() {   # $1 commit, $2 gid del socket
   install -d -m 0750 -o root -g 10002 "$STATE/smtp"
-  python3 - "$STATE" "$1" "$2" "$SOCKET_DIR" "$SOCKET_API" "$IMG" "$PG_IMAGE" <<'PY'
+  if bajas_leer; then   # el punto de montaje debe existir para arrancar la API aunque falte el montaje remoto
+    timeout 15 test -d "$B_RUTA" || timeout 15 install -d -m 0700 "$B_RUTA" || echo "AVISO: no se pudo comprobar $B_RUTA" >&2
+  fi
+  python3 - "$STATE" "$1" "$2" "$SOCKET_DIR" "$SOCKET_API" "$IMG" "$PG_IMAGE" "$BAJAS_API" <<'PY'
 import json, pathlib, sys
-state, rev, gid, sdir, sapi, img, pg = sys.argv[1:]
+state, rev, gid, sdir, sapi, img, pg, bapi = sys.argv[1:]
 duro = {'read_only': True, 'tmpfs': ['/tmp'], 'cap_drop': ['ALL'], 'security_opt': ['no-new-privileges:true'],
         'init': True, 'restart': 'unless-stopped',
         'logging': {'driver': 'json-file', 'options': {'max-size': '5m', 'max-file': '3'}}}
@@ -139,6 +147,15 @@ c = {'name': 'globalt-aula', 'services': {
     # Ambas redes internas: la base solo ve a la API; la API solo ve a la base y a la web pública.
     'networks': {'aislada': {'internal': True}, 'frontal': {'internal': True}},
     'volumes': {'datos': {}}}
+# Registro externo de bajas (opcional). Sin bajas.conf no hay volumen ni variables: las bajas quedan bloqueadas.
+conf = pathlib.Path(state, 'bajas.conf')
+if conf.exists():
+    b = dict(l.split('=', 1) for l in conf.read_text().splitlines() if '=' in l)
+    api = c['services']['api']
+    # rslave: si el montaje del anfitrión desaparece o vuelve, la API ve el mismo cambio.
+    api['volumes'].append({'type': 'bind', 'source': b['RUTA'], 'target': bapi, 'bind': {'propagation': 'rslave'}})
+    if b.get('ID'):   # sin identificador (registro aún por inicializar) la API no habilita las bajas
+        api['environment'].update({'AULA_BAJAS_REGISTRO': bapi, 'AULA_BAJAS_REGISTRO_ID': b['ID']})
 p = pathlib.Path(state, 'compose.json'); tmp = p.with_name('.compose.json.nuevo')
 tmp.write_text(json.dumps(c, indent=2)); tmp.chmod(0o600); tmp.replace(p)
 PY
@@ -290,6 +307,7 @@ comprobar() {
   [[ -n $ultimo ]] && echo "Último respaldo (<30 h): $ultimo" || echo 'AVISO: no hay respaldo de las últimas 30 h.'
   echo 'Registro de adultos (requisitos de producción):'
   estado_registro || echo 'Registro real: NO disponible (ver «faltan»).'
+  bajas_verificar || true
   if [[ -f $STATE/activado ]]; then
     echo 'Estado: ACTIVADO en la web pública.'
     curl -fsS --max-time 5 -H 'X-Forwarded-Proto: https' "$PUB_URL/api/aula/salud" | grep -q '"ok"' && echo 'Ruta pública /api/aula/salud: OK'
@@ -470,6 +488,7 @@ actualizar() {
   printf '%s\n' "$REV" > "$STATE/revision.txt"
   "${GIT[@]}" rev-parse "$REV:services/aula-api" > "$STATE/arbol-api.txt"
   instalar_respaldos   # script y temporizador de respaldo de esta versión
+  bajas_verificar || true   # solo informa: sesiones, progreso y compilación no dependen del registro de bajas
   printf '\nAPI actualizada a %s. Anterior conservada: imagen %s:%s y %s\n' "$REV" "$IMG" "$OLD" "$ANT"
 }
 
@@ -649,6 +668,162 @@ documentos_cmd() {
   esac
 }
 
+# ============================================================== registro externo de bajas
+# El montaje remoto (NFS, SMB o SSHFS) y sus credenciales los define el administrador en el anfitrión
+# (fstab o unidad .mount, credenciales en un archivo de root). Este script nunca recibe ni guarda credenciales:
+# solo comprueba que la ruta es el montaje esperado y lo lleva a la API como volumen.
+bajas_leer() {   # define B_RUTA B_FUENTE B_TIPO B_ID desde bajas.conf; 1 si no hay destino configurado
+  [[ -f $BAJAS_CONF ]] || return 1
+  B_RUTA=$(sed -n 's/^RUTA=//p' "$BAJAS_CONF"); B_FUENTE=$(sed -n 's/^FUENTE=//p' "$BAJAS_CONF")
+  B_TIPO=$(sed -n 's/^TIPO=//p' "$BAJAS_CONF"); B_ID=$(sed -n 's/^ID=//p' "$BAJAS_CONF")
+  [[ -n $B_RUTA && -n $B_FUENTE && -n $B_TIPO ]] || falla "$BAJAS_CONF incompleto."
+}
+
+bajas_guardar() {   # RUTA FUENTE TIPO ID (vacío mientras el registro no esté inicializado)
+  printf 'RUTA=%s\nFUENTE=%s\nTIPO=%s\nID=%s\n' "$@" > "$BAJAS_CONF.nuevo"
+  chmod 600 "$BAJAS_CONF.nuevo"; mv "$BAJAS_CONF.nuevo" "$BAJAS_CONF"
+}
+
+montaje_actual() {   # «ORIGEN TIPO» del montaje superior en exactamente esa ruta (vacío si no hay ninguno)
+  timeout 15 findmnt -n -M "$1" -o SOURCE,FSTYPE 2>/dev/null | tail -1 | tr -s ' ' || true
+}
+
+identidad_host() {   # identificador de la marca vista desde el anfitrión (vacío si falta o no es válida)
+  local m; m=$(timeout 15 cat -- "$1/.aula-registro-bajas" 2>/dev/null) || return 0
+  [[ $m =~ ^aula-registro-bajas\ v1$'\n'id=([0-9a-f-]{36})$ ]] && printf '%s' "${BASH_REMATCH[1]}"
+  return 0
+}
+
+bajas_bloqueo() {
+  echo "Bajas: BLOQUEADAS. $*" >&2
+  echo 'Avisar al operador: no ejecutar bajas hasta corregirlo (ver docs/AULA_INACTIVIDAD.md).' >&2
+}
+
+# 0: habilitadas y en orden; 1: habilitadas con operaciones inciertas o problemas en el diario;
+# 2: bloqueadas (sin montaje esperado, otro registro, API que no lo ve o sin escritura); 3: deshabilitadas.
+bajas_verificar() {
+  if ! bajas_leer; then echo 'Bajas: DESHABILITADAS (sin registro externo configurado). El resto del aula funciona.'; return 3; fi
+  local real id nonce rc=0
+  [[ -n $B_ID ]] || { bajas_bloqueo 'El registro no llegó a inicializarse. Repite «bajas configurar».'; return 2; }
+  real=$(montaje_actual "$B_RUTA")
+  [[ $real == "$B_FUENTE $B_TIPO" ]] \
+    || { bajas_bloqueo "$B_RUTA no es el montaje esperado ($B_FUENTE, $B_TIPO). Encontrado: ${real:-ninguno (carpeta local)}."; return 2; }
+  id=$(identidad_host "$B_RUTA")
+  [[ $id == "$B_ID" ]] || { bajas_bloqueo "El montaje no contiene el registro $B_ID (encontrado: ${id:-ninguno})."; return 2; }
+  en_ejecucion "$API_C" || { bajas_bloqueo 'La API no está en ejecución.'; return 2; }
+  # Prueba cruzada: un archivo creado desde el anfitrión debe verse dentro de la API (mismo registro, no una copia).
+  nonce=".prueba-anfitrion-$(date +%s%N)-$RANDOM"
+  timeout 15 sh -c ': > "$1"' sh "${B_RUTA:?}/${nonce:?}" || { bajas_bloqueo 'El anfitrión no puede escribir en el registro.'; return 2; }
+  docker exec "$API_C" python -c 'import os, sys; sys.exit(0 if os.path.exists(sys.argv[1]) else 1)' "$BAJAS_API/$nonce" || rc=1
+  timeout 15 rm -f -- "${B_RUTA:?}/${nonce:?}" || true
+  ((rc == 0)) || { bajas_bloqueo 'La API no ve el mismo registro que el anfitrión. Ejecuta «bajas reconectar».'; return 2; }
+  docker exec "$API_C" python -m app.registro_bajas comprobar || rc=$?
+  ((rc != 2)) || { bajas_bloqueo 'La API no puede usar el registro (ver el error anterior).'; return 2; }
+  if ((rc == 0)); then
+    echo "Bajas: HABILITADAS. Registro $B_ID en $B_FUENTE ($B_TIPO)."
+  else
+    echo 'Bajas: habilitadas, con operaciones inciertas o problemas en el registro. Revisar con «bajas resolver».' >&2
+  fi
+  return "$rc"
+}
+
+bajas_configurar() {
+  local ruta='' fuente='' tipo='' inicializar=no previo='' real id
+  while (($#)); do case $1 in
+    --ruta) ruta=$2; shift 2;; --fuente) fuente=$2; shift 2;; --tipo) tipo=$2; shift 2;;
+    --inicializar) inicializar=si; shift;; *) falla "Opción desconocida: $1";; esac; done
+  [[ $ruta =~ ^/[A-Za-z0-9._/-]+[A-Za-z0-9._-]$ && $ruta != *..* && $ruta != "$STATE"* && -n $fuente && -n $tipo ]] \
+    || falla 'Uso: bajas configurar --ruta /punto/de/montaje --fuente ORIGEN --tipo nfs4|nfs|cifs|smb3|fuse.sshfs [--inicializar]'
+  [[ " $BAJAS_TIPOS " == *" $tipo "* ]] || falla "Tipo no admitido: $tipo (solo almacenamiento remoto: $BAJAS_TIPOS)."
+  local valido='^[][A-Za-z0-9._@:/-]+$' con_clave='^[^@/]*:[^@/]*@'   # IPv6 entre corchetes admitida
+  [[ $fuente =~ $valido ]] || falla 'Origen del montaje no válido.'
+  [[ $fuente =~ $con_clave ]] && falla 'El origen no debe incluir contraseñas: van en el archivo de credenciales del montaje.'
+  [[ -f $STATE/revision.txt ]] && en_ejecucion "$API_C" || falla 'El aula no está preparada o la API no está en ejecución.'
+  iniciar_registro
+  paso '1/4 Montaje en el anfitrión'
+  real=$(montaje_actual "$ruta")
+  [[ $real == "$fuente $tipo" ]] || falla "$ruta no está montado desde $fuente ($tipo). Encontrado: ${real:-ninguno}. Monta primero el almacenamiento remoto."
+  id=$(identidad_host "$ruta")
+  if [[ $inicializar == si ]]; then
+    [[ -z $(timeout 15 find "$ruta" -mindepth 1 -maxdepth 1 ! -name lost+found -print -quit) ]] \
+      || falla "--inicializar solo para un registro NUEVO en una carpeta vacía; $ruta tiene contenido."
+  else
+    [[ -n $id ]] || falla "$ruta no contiene un registro de bajas. Si es un registro NUEVO y vacío, repite con --inicializar; si debía tenerlo, el montaje no es el correcto."
+  fi
+  echo "Montaje: $fuente ($tipo) en $ruta"
+  paso '2/4 Volumen para la API (bajas aún deshabilitadas)'
+  if [[ -f $BAJAS_CONF ]]; then previo=$(cat "$BAJAS_CONF"); fi
+  local REV; REV=$(cat "$STATE/revision.txt")
+  verificar_compilador >/dev/null
+  deshacer_bajas() {
+    set +e
+    echo '!! Fallo: se restablece la configuración de bajas anterior.' >&2
+    if [[ -n $previo ]]; then printf '%s\n' "$previo" > "$BAJAS_CONF"; else mv -f "$BAJAS_CONF" "$BAJAS_CONF.fallida-$TS"; fi
+    escribir_compose "$REV" "$SOCK_GID" && recrear_api
+    exit 1
+  }
+  trap deshacer_bajas ERR
+  bajas_guardar "$ruta" "$fuente" "$tipo" ''
+  escribir_compose "$REV" "$SOCK_GID"
+  recrear_api
+  if [[ $inicializar == si ]]; then
+    paso '3/4 Inicialización explícita del registro nuevo'
+    docker exec -e AULA_BAJAS_REGISTRO="$BAJAS_API" "$API_C" python -m app.registro_bajas inicializar
+    id=$(identidad_host "$ruta")
+    [[ -n $id ]]
+  else
+    paso '3/4 Registro existente'
+    echo "Registro $id"
+  fi
+  paso '4/4 Habilitación y comprobación cruzada anfitrión/API'
+  bajas_guardar "$ruta" "$fuente" "$tipo" "$id"
+  escribir_compose "$REV" "$SOCK_GID"
+  recrear_api
+  local rc=0; bajas_verificar || rc=$?
+  ((rc <= 1))      # 1 = registro existente con operaciones por resolver: habilitado, pero se avisa arriba
+  trap - ERR
+  echo "Configuración guardada en $BAJAS_CONF (sin credenciales). Identificador del registro: $id. Anótalo fuera del servidor."
+}
+
+bajas_deshabilitar() {
+  iniciar_registro
+  bajas_leer || { echo 'Las bajas ya estaban deshabilitadas.'; return 0; }
+  local REV; REV=$(cat "$STATE/revision.txt")
+  verificar_compilador >/dev/null
+  mv "$BAJAS_CONF" "$BAJAS_CONF.deshabilitado-$TS"
+  escribir_compose "$REV" "$SOCK_GID"
+  recrear_api
+  echo 'Bajas deshabilitadas. La API ya no monta el registro y «eliminar» se niega. El registro remoto no se modifica.'
+  echo "Configuración anterior (con su identificador): $BAJAS_CONF.deshabilitado-$TS"
+}
+
+bajas_cmd() {
+  local accion=${1:-} rc=0; shift || true
+  [[ -f $STATE/revision.txt ]] || falla 'El aula no está preparada.'
+  case $accion in
+    estado|comprobar) bajas_verificar ;;
+    configurar) bajas_configurar "$@" ;;
+    reconectar)   # tras volver a montar el registro: la API recrea su volumen desde el anfitrión
+      iniciar_registro
+      bajas_leer || falla 'No hay registro de bajas configurado.'
+      [[ -n $B_ID && $(montaje_actual "$B_RUTA") == "$B_FUENTE $B_TIPO" && $(identidad_host "$B_RUTA") == "$B_ID" ]] \
+        || falla "El anfitrión todavía no monta el registro $B_ID desde $B_FUENTE en $B_RUTA."
+      recrear_api
+      bajas_verificar ;;
+    deshabilitar) bajas_deshabilitar ;;
+    eliminar|resolver)
+      [[ $accion == resolver || ${1:-} =~ ^[0-9a-f-]{36}$ ]] || falla 'Uso: bajas eliminar REFERENCIA'
+      iniciar_registro
+      bajas_verificar || rc=$?
+      # Con operaciones inciertas (1) solo se permite resolverlas; cualquier bloqueo detiene ambas.
+      if ((rc != 0)) && ! [[ $accion == resolver && $rc == 1 ]]; then
+        falla 'Bajas detenidas: el registro externo no está disponible, no es el esperado o tiene operaciones por resolver.'
+      fi
+      docker exec "$API_C" python -m app.inactividad "$accion" "$@" ;;
+    *) falla 'Uso: bajas estado|configurar|comprobar|reconectar|deshabilitar|eliminar REFERENCIA|resolver' ;;
+  esac
+}
+
 case $ORDEN in
   preparar) preparar "$@" ;;
   comprobar) comprobar ;;
@@ -660,5 +835,6 @@ case $ORDEN in
   correo) correo_cmd "$@" ;;
   documentos) documentos_cmd "$@" ;;
   respaldo) iniciar_registro; respaldo_ahora ;;
+  bajas) bajas_cmd "$@" ;;
   *) sed -n '2,18p' "$SELF"; exit 1 ;;
 esac
