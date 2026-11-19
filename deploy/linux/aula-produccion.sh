@@ -117,6 +117,7 @@ print(gw)'
 }
 
 escribir_compose() {   # $1 commit, $2 gid del socket
+  install -d -m 0750 -o root -g 10002 "$STATE/smtp"
   python3 - "$STATE" "$1" "$2" "$SOCKET_DIR" "$SOCKET_API" "$IMG" "$PG_IMAGE" <<'PY'
 import json, pathlib, sys
 state, rev, gid, sdir, sapi, img, pg = sys.argv[1:]
@@ -131,8 +132,8 @@ c = {'name': 'globalt-aula', 'services': {
            'healthcheck': {'test': ['CMD-SHELL', 'pg_isready -U aula -d aula'], 'interval': '5s', 'timeout': '3s', 'retries': 30}},
     'api': {**duro, 'build': {'context': 'source/services/aula-api'}, 'image': f'{img}:{rev}',
             'container_name': 'globalt-aula-api', 'env_file': ['api.env'],
-            'environment': {'AULA_COMPILADOR_SOCKET': f'{sapi}/compilador.sock'},
-            'volumes': [f'{sdir}:{sapi}:ro'], 'group_add': [gid],
+            'environment': {'AULA_COMPILADOR_SOCKET': f'{sapi}/compilador.sock', 'AULA_SMTP_SOCKET': '/smtp/proveedor.sock'},
+            'volumes': [f'{sdir}:{sapi}:ro', f'{state}/smtp:/smtp:ro'], 'group_add': [gid],
             'networks': ['aislada', 'frontal'], 'mem_limit': '512m', 'cpus': 1, 'pids_limit': 128,
             'depends_on': {'db': {'condition': 'service_healthy'}}}},
     # Ambas redes internas: la base solo ve a la API; la API solo ve a la base y a la web pública.
@@ -527,6 +528,38 @@ registro() {
   docker exec "$API_C" python -c "import json,urllib.request; print('Registro público abierto:', json.load(urllib.request.urlopen('http://127.0.0.1:8000/api/aula/config'))['registro_abierto'])"
 }
 
+instalar_salida_smtp() {
+  local unidad=globalt-aula-smtp
+  cat > "/etc/systemd/system/$unidad.socket" <<EOF
+[Unit]
+Description=Socket privado de correo del aula GLOBALT
+[Socket]
+ListenStream=$STATE/smtp/proveedor.sock
+SocketGroup=10002
+SocketMode=0660
+RemoveOnStop=yes
+[Install]
+WantedBy=sockets.target
+EOF
+  cat > "/etc/systemd/system/$unidad.service" <<EOF
+[Unit]
+Description=Conexión al proveedor SMTP del aula GLOBALT
+Requires=$unidad.socket
+After=network-online.target
+[Service]
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ExecStart=/usr/lib/systemd/systemd-socket-proxyd $1:$2
+EOF
+  chmod 0644 "/etc/systemd/system/$unidad."{socket,service}
+  systemctl daemon-reload
+  systemctl enable --now "$unidad.socket"
+  systemctl try-restart "$unidad.service"
+}
+
 correo_cmd() {
   local accion=${1:-}; shift || true
   [[ -f $STATE/api.env ]] || falla 'El aula no está preparada.'
@@ -545,6 +578,10 @@ correo_cmd() {
       [[ $c1 == "$c2" ]] || falla 'Las claves no coinciden.'
       [[ $host =~ ^[A-Za-z0-9.-]+$ && $puerto =~ ^[0-9]+$ && ( $tls == starttls || $tls == ssl ) && -n $remitente ]] \
         || falla 'Datos de correo no válidos (TLS obligatorio: starttls o ssl).'
+      [[ $host =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ && ${#puerto} -le 5 ]] && (( 10#$puerto >= 1 && 10#$puerto <= 65535 )) || falla 'Destino SMTP inválido.'
+      [[ -x /usr/lib/systemd/systemd-socket-proxyd ]] || falla 'Falta systemd-socket-proxyd.'
+      grep -q '/smtp/proveedor.sock' "$STATE/compose.json" || falla 'Actualiza primero el despliegue del aula.'
+      instalar_salida_smtp "$host" "$puerto"
       printf 'AULA_CORREO_MODO=smtp\nAULA_SMTP_HOST=%s\nAULA_SMTP_PUERTO=%s\nAULA_SMTP_TLS=%s\nAULA_SMTP_USUARIO=%s\nAULA_SMTP_CLAVE=%s\nAULA_CORREO_REMITENTE=%s\nAULA_URL_PUBLICA=https://globalt-robotics.com\n' \
         "$host" "$puerto" "$tls" "$usuario" "$c1" "$remitente" | fijar_env
       unset c1 c2
@@ -555,6 +592,10 @@ correo_cmd() {
       iniciar_registro
       printf 'AULA_CORREO_MODO=desactivado\nAULA_REGISTRO_ABIERTO=false\n' | fijar_env
       recrear_api
+      if [[ -f /etc/systemd/system/globalt-aula-smtp.socket ]]; then
+        systemctl disable --now globalt-aula-smtp.socket
+        systemctl stop globalt-aula-smtp.service
+      fi
       echo 'Correo desactivado y registro cerrado. La recuperación por correo queda no disponible.'
       ;;
     probar)

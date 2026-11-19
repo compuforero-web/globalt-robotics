@@ -66,3 +66,9 @@ docker compose up -d --build                  # API, PostgreSQL, nginx y buzón 
 - No hay revocación de la autorización ni eliminación de cuenta desde el Aula; si se elimina una cuenta, su evidencia se elimina con ella (`ON DELETE CASCADE`). Ambas decisiones quedan pendientes de revisión legal.
 - No se ha probado con un proveedor SMTP real ni con entregabilidad (SPF/DKIM/DMARC del dominio remitente).
 - El envío es síncrono al registrarse (hasta 15 s si el SMTP tarda); el reenvío y la recuperación se envían tras responder, sin cola persistente: si el proceso se reinicia en ese instante, el correo se pierde y la persona lo vuelve a pedir.
+
+### Transporte SMTP en Linux
+
+Al actualizar con el registro cerrado se monta una carpeta privada de sockets en la API. Las redes de PostgreSQL y de la API siguen siendo internas. Al configurar el proveedor, el host crea la unidad de socket `globalt-aula-smtp.socket` y el servicio de systemd reenvía los bytes exclusivamente al host y puerto configurados. El cliente SMTP de la API negocia TLS y verifica el certificado del proveedor usando su nombre original. Las credenciales se usan dentro de la API. El socket no se publica por TCP.
+
+Desde Linux, tras configurar, ejecutar `correo probar --a` con un buzón controlado por GLOBALT y comprobar su recepción. La aceptación del mensaje por el SMTP y su llegada a la bandeja son dos comprobaciones distintas. Para diagnosticar el transporte, consultar el estado de las dos unidades con systemctl. Para cerrar el envío y las altas, usar `correo desactivar`. La prueba automatizada usa un certificado temporal, un buzón local y systemd-socket-proxyd; en un runner con Docker también comprueba el envío desde un cliente sin red.

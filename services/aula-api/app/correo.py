@@ -5,6 +5,8 @@ registros de nginx ni de la API. Este módulo NUNCA registra el contenido, el en
 fallo solo anota el tipo de correo y la clase del error.
 """
 import logging
+import os
+import socket
 import smtplib
 import ssl
 from email.message import EmailMessage
@@ -48,6 +50,26 @@ def enlace(config, accion: str, token: str, curso: str | None = None) -> str:
     return f'{pagina(config, curso)}#{accion}={token}'
 
 
+class _SMTPUnix(smtplib.SMTP):
+    """Conecta por el socket del host. smtplib conserva el nombre SMTP para STARTTLS."""
+
+    def _get_socket(self, host, port, timeout):
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            sock.settimeout(timeout)
+            sock.connect(os.environ['AULA_SMTP_SOCKET'])
+            return sock
+        except BaseException:
+            sock.close()
+            raise
+
+
+class _SMTPUnixSSL(_SMTPUnix):
+    def _get_socket(self, host, port, timeout):
+        sock = super()._get_socket(host, port, timeout)
+        return ssl.create_default_context().wrap_socket(sock, server_hostname=host)
+
+
 def enviar(config, destino: str, asunto: str, texto: str, tipo: str) -> None:
     """Entrega síncrona al servidor SMTP configurado. Lanza ErrorEnvio si falla."""
     if not listo(config):
@@ -61,7 +83,12 @@ def enviar(config, destino: str, asunto: str, texto: str, tipo: str) -> None:
     mensaje['Auto-Submitted'] = 'auto-generated'
     mensaje.set_content(texto + FIRMA)
     try:
-        if config.smtp_tls == 'ssl':
+        if os.environ.get('AULA_SMTP_SOCKET'):
+            if config.smtp_tls not in ('starttls', 'ssl'):
+                raise ErrorEnvio('El transporte de producción requiere TLS')
+            cliente = _SMTPUnixSSL if config.smtp_tls == 'ssl' else _SMTPUnix
+            smtp = cliente(config.smtp_host, config.smtp_puerto, timeout=15)
+        elif config.smtp_tls == 'ssl':
             smtp = smtplib.SMTP_SSL(config.smtp_host, config.smtp_puerto, timeout=15,
                                     context=ssl.create_default_context())
         else:
