@@ -55,7 +55,7 @@ class ProgresoStaticTests(unittest.TestCase):
     def test_migracion_nueva_sin_tocar_las_aplicadas(self):
         nombres = sorted(p.name for p in (API / 'migrations').glob('*.sql'))
         self.assertEqual(nombres, ['0001_inicial.sql', '0002_borradores.sql', '0003_compilaciones.sql', '0004_progreso.sql', '0005_catalogo.sql',
-                                   '0006_registro_adultos.sql', '0007_inactividad.sql', '0008_bajas_registradas.sql', '0009_politica_datos.sql'])
+                                   '0006_registro_adultos.sql', '0007_inactividad.sql', '0008_bajas_registradas.sql', '0009_politica_datos.sql', '0010_familias.sql'])
         sql = (API / 'migrations/0004_progreso.sql').read_text()
         self.assertIn('CREATE TABLE progreso_lecciones', sql)
         self.assertIn('ON DELETE CASCADE', sql)

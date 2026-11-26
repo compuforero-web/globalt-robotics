@@ -83,3 +83,14 @@
 @media (max-width: 520px) {
   .botones .btn { width: 100%; }
 }
+
+#profesor details summary { cursor: pointer; padding-block: .65rem; }
+#edicion { margin-block: 1rem; }
+#edicion select, #edicion textarea {
+  width: 100%; min-height: 44px; padding: .6rem; font: inherit;
+  background: var(--bg-2); color: var(--text); border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+#edicion textarea { min-height: 6rem; resize: vertical; }
+#historial { display: grid; gap: 1rem; overflow-wrap: anywhere; }
+#historial h3 { margin-top: 1rem; }
