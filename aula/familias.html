@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Seguimiento familiar · GLOBALT Robotics</title>
+  <link rel="stylesheet" href="../styles/base.css">
+  <link rel="stylesheet" href="aula.css">
+  <script type="module" src="src/familias.js"></script>
+</head>
+<body>
+<header class="aula-top"><a class="aula-top__home" href="index.html">Volver al Aula</a></header>
+<main class="aula">
+  <h1>Seguimiento familiar</h1>
+  <p class="aviso">Vista de prueba. Usa datos ficticios.</p>
+  <div id="profesor" hidden>
+    <details class="tarjeta"><summary>Agregar estudiante</summary>
+      <form id="alta" class="formulario">
+        <label>Nombre o alias <input name="nombre" required minlength="2" maxlength="80"></label>
+        <label>Grado <input name="grado" type="number" min="1" max="11" required></label>
+        <button class="btn btn--primary">Agregar estudiante</button>
+      </form>
+    </details>
+    <section id="edicion" class="tarjeta" hidden>
+      <label>Estudiante <select id="alumno"></select></label>
+      <h2>Registrar actividad</h2>
+      <form id="actividad" class="formulario">
+        <label>Actividad <input name="titulo" required minlength="2" maxlength="120"></label>
+        <label>Fecha de clase <input name="fecha" type="date" required></label>
+        <label>Resultado <select name="resultado"><option>Logrado</option><option>En proceso</option><option>Por retomar</option></select></label>
+        <label>Observación para la familia <textarea name="observacion" required minlength="2" maxlength="800"></textarea></label>
+        <button class="btn btn--primary">Publicar para la familia</button>
+      </form>
+      <details><summary>Invitar a un acudiente</summary>
+        <form id="invitacion" class="formulario">
+          <label>Correo del acudiente <input type="email" name="correo" required></label>
+          <button class="btn btn--ghost">Generar código</button>
+          <label id="entrega" hidden>Comparte este código con el acudiente. Vence en siete días.
+            <input id="generado" readonly>
+          </label>
+        </form>
+      </details>
+    </section>
+  </div>
+  <form id="vinculo" class="formulario tarjeta" hidden>
+    <label>Código de invitación del profesor <input name="codigo" required autocomplete="off" maxlength="100"></label>
+    <button class="btn btn--primary">Vincular estudiante</button>
+  </form>
+  <p role="status" id="mensaje" aria-live="polite"></p>
+  <section id="historial" aria-label="Actividades publicadas"></section>
+</main>
+</body>
+</html>

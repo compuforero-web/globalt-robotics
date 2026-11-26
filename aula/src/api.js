@@ -45,3 +45,4 @@ export const misCursos = () => llamar('/mis-cursos');
 export const inscribir = (cursoId) => llamar('/inscripciones', { metodo: 'POST', datos: { curso_id: cursoId } });
 export const registrarProgreso = (datos) => llamar('/mis-cursos', { metodo: 'POST', datos });
 export function olvidarCsrf() { csrf = ''; }
+export const seguimiento = (ruta = '', opciones) => llamar('/familias' + ruta, opciones);

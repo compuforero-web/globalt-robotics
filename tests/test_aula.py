@@ -55,7 +55,7 @@ class ProgresoStaticTests(unittest.TestCase):
     def test_migracion_nueva_sin_tocar_las_aplicadas(self):
         nombres = sorted(p.name for p in (API / 'migrations').glob('*.sql'))
         self.assertEqual(nombres, ['0001_inicial.sql', '0002_borradores.sql', '0003_compilaciones.sql', '0004_progreso.sql', '0005_catalogo.sql',
-                                   '0006_registro_adultos.sql', '0007_inactividad.sql', '0008_bajas_registradas.sql', '0009_politica_datos.sql'])
+                                   '0006_registro_adultos.sql', '0007_inactividad.sql', '0008_bajas_registradas.sql', '0009_politica_datos.sql', '0010_familias.sql'])
         sql = (API / 'migrations/0004_progreso.sql').read_text()
         self.assertIn('CREATE TABLE progreso_lecciones', sql)
         self.assertIn('ON DELETE CASCADE', sql)
@@ -131,6 +131,35 @@ class RegistroAdultosStaticTests(unittest.TestCase):
         self.assertIn('AULA_PERMITIR_TEXTOS_PRUEBA=true', bloque)
         self.assertIn('AULA_REGISTRO_ABIERTO=false', script)        # preparar: cerrado por defecto
         self.assertNotIn('AULA_PERMITIR_TEXTOS_PRUEBA', (API / 'Dockerfile').read_text())
+
+
+class EnsayoOctavoStaticTests(unittest.TestCase):
+    """La réplica de ensayo abre su propio registro sin tocar producción ni publicarse en todas las interfaces."""
+    DIR = ROOT / 'deploy/ensayo-octavo'
+
+    def test_aislada_de_produccion(self):
+        script = (self.DIR / 'ensayo.sh').read_text()
+        self.assertIn('-p globalt-ensayo-octavo', script)
+        self.assertNotIn('deploy/linux', script)
+        self.assertNotIn('aula-produccion', script)
+        self.assertIn('is_unspecified', script)                          # rechaza 0.0.0.0
+        for nombre in ('compose.yaml', 'red.yaml', 'nginx.conf', 'buzon_web.py'):
+            self.assertNotIn('0.0.0.0:', (self.DIR / nombre).read_text())
+        compose = (self.DIR / 'compose.yaml').read_text()
+        self.assertIn('AULA_REGISTRO_ABIERTO: "true"', compose)
+        self.assertNotIn('globalt-ensayo', (ROOT / 'deploy/linux/aula-produccion.sh').read_text())
+        self.assertIn('AULA_REGISTRO_ABIERTO=false', (ROOT / 'deploy/linux/aula-produccion.sh').read_text())
+        self.assertIn('AULA_REGISTRO_ABIERTO: ${AULA_REGISTRO_ABIERTO:-false}', (API / 'compose.yaml').read_text())
+
+    def test_lector_del_buzon_solo_lectura(self):
+        compose = (self.DIR / 'compose.yaml').read_text()
+        bloque = compose[compose.index('  buzon-web:'):compose.index('  web:')]
+        for clave in ('read_only: true', 'cap_drop: [ALL]', ':/buzon:ro'):
+            self.assertIn(clave, bloque)
+        self.assertNotIn('ports', bloque)
+        lector = (self.DIR / 'buzon_web.py').read_text()
+        self.assertNotIn('do_POST', lector)
+        self.assertIn("!= correo", lector)                               # solo el destinatario pedido
 
 
 class BajasProduccionStaticTests(unittest.TestCase):

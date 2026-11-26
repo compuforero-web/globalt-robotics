@@ -14,6 +14,8 @@ on:
       - 'tests/fixtures/laboratorio/pista-*'
       - 'tests/e2e/evasor-pista.e2e.mjs'
       - 'scripts/prepare-pista-fixtures.py'
+      - 'deploy/ensayo-octavo/carrito_octavo/**'
+      - 'tests/test_carrito_octavo.py'
       - '.github/workflows/pista.yml'
 permissions:
   contents: read

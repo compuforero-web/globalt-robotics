@@ -428,7 +428,7 @@ def test_actualizacion_desde_0005_conserva_cuentas_y_avances(tmp_path, monkeypat
     sql("INSERT INTO borradores (usuario_id, leccion_id, codigo) VALUES (%s, 'arduino-led-serie', 'void setup(){}')", uid)
     antes = sql('SELECT leccion_id, paso, pasos_vistos, completada_en FROM progreso_lecciones ORDER BY 1')
     monkeypatch.undo()
-    assert migraciones.aplicar(URL) == ['0006_registro_adultos.sql', '0007_inactividad.sql', '0008_bajas_registradas.sql', '0009_politica_datos.sql']
+    assert migraciones.aplicar(URL) == ['0006_registro_adultos.sql', '0007_inactividad.sql', '0008_bajas_registradas.sql', '0009_politica_datos.sql', '0010_familias.sql']
     assert sql('SELECT leccion_id, paso, pasos_vistos, completada_en FROM progreso_lecciones ORDER BY 1') == antes
     assert sql('SELECT origen, correo_verificado_en, mayor_edad_declarada_en FROM usuarios WHERE id = %s', uid) == [('anterior', None, None)]
     assert contar('autorizaciones') == 0

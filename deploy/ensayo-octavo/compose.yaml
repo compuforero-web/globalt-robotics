@@ -1,0 +1,54 @@
+# Se combina con services/aula-api/compose.yaml. Las rutas parten de ese directorio.
+# Solo para el ensayo: registro abierto con textos y buzón de PRUEBA. Producción usa deploy/linux y sigue cerrada.
+services:
+  api:
+    image: globalt-ensayo-octavo-api:local
+    group_add: ["${ENSAYO_GID:?}"]
+    volumes:
+      - ${ENSAYO_SOCKET_DIR:?}:/run/compilador:ro
+    environment:
+      AULA_COMPILADOR_SOCKET: /run/compilador/compilador.sock
+      AULA_REGISTRO_ABIERTO: "true"
+      AULA_COOKIE_SEGURA: "false"
+      AULA_ORIGENES: ${ENSAYO_ORIGENES:?}
+      AULA_URL_PUBLICA: ${ENSAYO_URL:?}
+      # Permite registrar las dos familias y repetir pasos sin esperar la ventana de una hora.
+      AULA_CORREOS_POR_HORA: "10"
+  buzon:
+    image: globalt-ensayo-octavo-api:local
+    volumes:
+      - ${ENSAYO_BUZON:?}:/buzon
+  # Lector del buzón para el celular: solo lectura, sin capacidades, pide el correo exacto y muestra sus enlaces.
+  buzon-web:
+    image: globalt-ensayo-octavo-api:local
+    depends_on: [buzon]
+    command: ["python", "/opt/ensayo/buzon_web.py", "/buzon", "8025"]
+    user: "${ENSAYO_UID:?}:${ENSAYO_GID:?}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - ${ENSAYO_BUZON:?}:/buzon:ro
+      - ../../deploy/ensayo-octavo/buzon_web.py:/opt/ensayo/buzon_web.py:ro
+    networks: [interna]
+  web:
+    depends_on: [api, buzon-web]
+    volumes:
+      - ../../deploy/ensayo-octavo/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+  compilador:
+    build: ../compilador-arduino
+    image: globalt-ensayo-octavo-compilador:local
+    user: "10001:${ENSAYO_GID:?}"
+    network_mode: none
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 768m
+    cpus: 1.0
+    tmpfs: ["/tmp:size=64m,mode=1777,nosuid,nodev,noexec"]
+    environment:
+      COMPILADOR_SOCKET: /run/compilador/compilador.sock
+    volumes:
+      - ${ENSAYO_SOCKET_DIR:?}:/run/compilador

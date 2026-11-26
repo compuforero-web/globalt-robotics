@@ -21,3 +21,10 @@ for name in names:
         raise RuntimeError((name,result))
     (args.output/(name+'.hex')).write_text(result['hex'])
     print(name,result['memoria']['flash'],'bytes',flush=True)
+# Práctica física de octavo: se compila desde su carpeta de Arduino IDE para simular siempre la fuente actual.
+source=(root/'deploy/ensayo-octavo/carrito_octavo/carrito_octavo.ino').read_text()
+result=compiler.compilar(source)
+if not result['ok']:
+    raise RuntimeError(('carrito-octavo',result))
+(args.output/'carrito-octavo.hex').write_text(result['hex'])
+print('carrito-octavo',result['memoria']['flash'],'bytes',flush=True)
