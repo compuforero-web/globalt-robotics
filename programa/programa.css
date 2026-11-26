@@ -1,0 +1,8 @@
+.aula { margin-bottom: 4rem; }
+.tarjeta dt, .tarjeta li { margin-top: 1.1rem; }
+.tarjeta dt { color: var(--cyan); font-weight: 700; }
+.tarjeta dd { margin-inline-start: 0; }
+.tarjeta ol { padding-inline-start: 1.7rem; }
+.tarjeta li p { margin: .3rem 0; }
+.tarjeta small { color: var(--muted); }
+.tarjeta a, main > p a { text-decoration: underline; text-underline-offset: .18em; }

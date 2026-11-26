@@ -1,0 +1,32 @@
+# Se combina con services/aula-api/compose.yaml. Las rutas parten de ese directorio.
+services:
+  api:
+    image: globalt-ensayo-octavo-api:local
+    group_add: ["${ENSAYO_GID:?}"]
+    volumes:
+      - ${ENSAYO_SOCKET_DIR:?}:/run/compilador:ro
+    environment:
+      AULA_COMPILADOR_SOCKET: /run/compilador/compilador.sock
+      AULA_REGISTRO_ABIERTO: "true"
+      AULA_COOKIE_SEGURA: "false"
+      AULA_ORIGENES: http://127.0.0.1:18180
+      AULA_URL_PUBLICA: http://127.0.0.1:18180
+  buzon:
+    image: globalt-ensayo-octavo-api:local
+  compilador:
+    build: ../compilador-arduino
+    image: globalt-ensayo-octavo-compilador:local
+    user: "10001:${ENSAYO_GID:?}"
+    network_mode: none
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 768m
+    cpus: 1.0
+    tmpfs: ["/tmp:size=64m,mode=1777,nosuid,nodev,noexec"]
+    environment:
+      COMPILADOR_SOCKET: /run/compilador/compilador.sock
+    volumes:
+      - ${ENSAYO_SOCKET_DIR:?}:/run/compilador

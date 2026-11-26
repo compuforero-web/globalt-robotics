@@ -1,0 +1,31 @@
+name: Ensayo integrado de octavo
+on:
+  pull_request:
+    paths:
+      - 'deploy/ensayo-octavo/**'
+      - 'tests/e2e/ensayo-octavo.e2e.mjs'
+      - '.github/workflows/ensayo-octavo.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ensayo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Preparar réplica aislada y comprobar reinicio
+        run: |
+          bash deploy/ensayo-octavo/ensayo.sh iniciar
+          bash deploy/ensayo-octavo/ensayo.sh iniciar
+      - name: Probar la clase y su consulta desde el portal familiar
+        run: |
+          npm install --prefix "$RUNNER_TEMP/ensayo" --no-save --ignore-scripts playwright@1.56.1
+          export NODE_PATH="$RUNNER_TEMP/ensayo/node_modules"
+          "$NODE_PATH/.bin/playwright" install --with-deps chromium
+          node tests/e2e/ensayo-octavo.e2e.mjs
+      - name: Detener réplica
+        if: always()
+        run: bash deploy/ensayo-octavo/ensayo.sh detener

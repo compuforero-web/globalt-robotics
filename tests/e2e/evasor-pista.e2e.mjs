@@ -70,3 +70,29 @@ for(const[name,options]of[['desktop',{viewport:{width:1440,height:1000}}],['mobi
   console.log('OK '+name+': interfaz, pistas y borrador local sin errores');
  }finally{await browser.close();}
 }
+
+// La ruta escolar utiliza el mismo compilador, guardado y evaluador que el laboratorio general.
+const navegador = await chromium.launch(launchOptions);
+try {
+  const pagina = await navegador.newPage();
+  const fase = id => BASE + '?grado=8&leccion=arduino-ultrasonico-' + id;
+  await pagina.goto(fase('alerta'));
+  await pagina.getByRole('link', { name: 'Abrir mi fase disponible' }).click();
+  await pagina.waitForURL(fase('distancia'));
+  const segunda = pagina.locator('#lesson-picker a[data-lesson="arduino-ultrasonico-alerta"]');
+  assert.equal(await segunda.count(), 0);
+  await pagina.locator('.code-editor__input').fill(fx('ultra-fijo'));
+  await pagina.click('#btn-check');
+  await pagina.getByText('Todavía no: revisa los puntos marcados', {exact:true}).waitFor();
+  assert.equal(await segunda.count(), 0);
+  await pagina.locator('.code-editor__input').fill(fx('ultra-solucion'));
+  await pagina.click('#btn-check');
+  await segunda.waitFor({timeout:60000});
+  await segunda.click();
+  await pagina.waitForURL(fase('alerta'));
+  await pagina.reload();
+  await pagina.getByText('Octavo · Fase 2 de 5', {exact:true}).waitFor();
+  console.log('Octavo: enlace directo bloqueado, programa incorrecto retenido y solución compilada habilita la fase 2.');
+} finally {
+  await navegador.close();
+}
