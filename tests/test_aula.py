@@ -133,6 +133,35 @@ class RegistroAdultosStaticTests(unittest.TestCase):
         self.assertNotIn('AULA_PERMITIR_TEXTOS_PRUEBA', (API / 'Dockerfile').read_text())
 
 
+class EnsayoOctavoStaticTests(unittest.TestCase):
+    """La réplica de ensayo abre su propio registro sin tocar producción ni publicarse en todas las interfaces."""
+    DIR = ROOT / 'deploy/ensayo-octavo'
+
+    def test_aislada_de_produccion(self):
+        script = (self.DIR / 'ensayo.sh').read_text()
+        self.assertIn('-p globalt-ensayo-octavo', script)
+        self.assertNotIn('deploy/linux', script)
+        self.assertNotIn('aula-produccion', script)
+        self.assertIn('is_unspecified', script)                          # rechaza 0.0.0.0
+        for nombre in ('compose.yaml', 'red.yaml', 'nginx.conf', 'buzon_web.py'):
+            self.assertNotIn('0.0.0.0:', (self.DIR / nombre).read_text())
+        compose = (self.DIR / 'compose.yaml').read_text()
+        self.assertIn('AULA_REGISTRO_ABIERTO: "true"', compose)
+        self.assertNotIn('globalt-ensayo', (ROOT / 'deploy/linux/aula-produccion.sh').read_text())
+        self.assertIn('AULA_REGISTRO_ABIERTO=false', (ROOT / 'deploy/linux/aula-produccion.sh').read_text())
+        self.assertIn('AULA_REGISTRO_ABIERTO: ${AULA_REGISTRO_ABIERTO:-false}', (API / 'compose.yaml').read_text())
+
+    def test_lector_del_buzon_solo_lectura(self):
+        compose = (self.DIR / 'compose.yaml').read_text()
+        bloque = compose[compose.index('  buzon-web:'):compose.index('  web:')]
+        for clave in ('read_only: true', 'cap_drop: [ALL]', ':/buzon:ro'):
+            self.assertIn(clave, bloque)
+        self.assertNotIn('ports', bloque)
+        lector = (self.DIR / 'buzon_web.py').read_text()
+        self.assertNotIn('do_POST', lector)
+        self.assertIn("!= correo", lector)                               # solo el destinatario pedido
+
+
 class BajasProduccionStaticTests(unittest.TestCase):
     """Registro externo de bajas en aula-produccion.sh: opcional y sin credenciales en los contenedores."""
     SCRIPT = ROOT / 'deploy/linux/aula-produccion.sh'

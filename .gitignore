@@ -10,3 +10,6 @@ backups/
 .DS_Store
 Thumbs.db
 __pycache__/
+
+# Réplica de ensayo de octavo: claves, base y buzón locales
+.ensayo-octavo/
