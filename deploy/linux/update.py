@@ -13,10 +13,11 @@ import tempfile
 import time
 import urllib.request
 
-PUBLIC_DIRS = {'assets', 'styles', 'src', 'games', 'data', 'aula'}
+PUBLIC_DIRS = {'assets', 'styles', 'src', 'games', 'data', 'aula', 'programa'}
 PUBLIC_FILES = {'index.html', 'admin.html', 'robots.txt', 'favicon.ico'}
 REQUIRED = ('index.html', 'admin.html', 'src/config.js', 'src/public/main.js',
-            'games/robolab-arduino/index.html', 'aula/index.html')
+            'games/robolab-arduino/index.html', 'aula/index.html', 'aula/familias.html', 'programa/octavo.html',
+            'programa/reto-distancia.html')
 
 
 def run(*args):
