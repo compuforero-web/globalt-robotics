@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, StrictBool, StrictI
 
 from . import compilador, correo, seguridad
 from .config import cargar
+from . import familias
 
 COOKIE = 'aula_sesion'
 RUTA_COOKIE = '/api/aula'
@@ -488,6 +489,8 @@ def crear_app(config=None, enviar_correo=None):
         respuesta.delete_cookie(COOKIE, path=RUTA_COOKIE, httponly=True, secure=config.cookie_segura, samesite='strict')
         respuesta.status_code = 204
         return respuesta
+
+    familias.instalar(app, bd, autorizada, autorizada_csrf)
 
     @app.get('/api/aula/cursos')
     def cursos(conexion=Depends(bd)):

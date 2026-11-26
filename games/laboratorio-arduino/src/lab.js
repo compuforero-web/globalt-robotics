@@ -9,6 +9,7 @@ import { createGuide } from './guide.js';
 import * as progress from './progress.js';
 import * as cuenta from './cuenta.js';
 import * as progresoCuenta from './progreso-cuenta.js';
+import { fases, disponible, enlaceFase } from './octavo.js';
 import { MANIFEST, lessonHref } from './lessons/index.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -545,6 +546,7 @@ export function startLab(L) {
             : 'Reto superado. No se registró en ninguna cuenta: revisa el aviso de la sesión.', quien === 'misma' ? 'ok' : 'warn');
         }
         guide.notify('eval-pass');
+        renderPicker(L, completed);
       } else {
         setStatus('El reto aún no se cumple.', 'warn');
         const failedId = result.checks.find((c) => !c.ok)?.id;
@@ -765,6 +767,21 @@ function renderHeader(L) {
  * «Superado» sale del progreso de la cuenta con sesión activa, o si no, del registro local de este navegador.
  */
 function renderPicker(current, done = (id) => Boolean(progress.getLesson(id).completedAt)) {
+  if (current && new URLSearchParams(location.search).get('grado') === '8') {
+    const box = $('#lesson-picker');
+    const items = fases.map((id, i) => {
+      const nombre = esc(MANIFEST.find(m => m.id === id).corto);
+      const rotulo = (i + 1) + '. ' + nombre;
+      if (!disponible(id, done)) return '<li>' + rotulo + ' · Pendiente de la fase anterior</li>';
+      return '<li><a data-lesson="' + id + '" href="' + enlaceFase(id) + '">' + rotulo + '</a>' +
+        (done(id) ? ' · Superada' : '') + '</li>';
+    });
+    box.innerHTML = '<p><strong>Octavo · Fase ' + (fases.indexOf(current.id) + 1) +
+      ' de ' + fases.length + '</strong></p><ol>' + items.join('') +
+      '</ol><a href="../../programa/octavo.html">Volver a la cartilla de octavo</a>';
+    box.hidden = false;
+    return;
+  }
   const items = MANIFEST.map((m) => {
     const here = current && m.id === current.id;
     return `<li><a href="${lessonHref(m.id)}" data-lesson="${esc(m.id)}"${here ? ' aria-current="page"' : ''}>

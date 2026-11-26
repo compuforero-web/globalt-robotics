@@ -37,7 +37,7 @@ def base_limpia():
         c.execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
     assert migraciones.aplicar(URL) == ['0001_inicial.sql', '0002_borradores.sql', '0003_compilaciones.sql',
                                        '0004_progreso.sql', '0005_catalogo.sql', '0006_registro_adultos.sql', '0007_inactividad.sql',
-                                       '0008_bajas_registradas.sql', '0009_politica_datos.sql']
+                                       '0008_bajas_registradas.sql', '0009_politica_datos.sql', '0010_familias.sql']
     assert migraciones.aplicar(URL) == []          # reproducible e idempotente
     documentos.cargar_prueba(URL)                  # textos PROVISIONALES de prueba, versión prueba-1
 
@@ -809,3 +809,34 @@ def test_limites_de_inactividad_y_supresion(tmp_path):
         assert not sql('SELECT 1 FROM inscripciones WHERE usuario_id=%s', uid)
         assert not sql('SELECT 1 FROM registros_pendientes WHERE correo=%s', email)
         assert c.get('/api/aula/sesion').status_code == 401
+
+
+def test_seguimiento_familiar_separa_dos_familias():
+    ruta = '/api/aula/familias'
+    with cliente() as profesor, cliente() as ana, cliente() as luis:
+        for persona, nombre in [(profesor, 'profe'), (ana, 'familia-a'), (luis, 'familia-b')]:
+            alta = registrar(persona, nombre + '@example.com')
+            persona.headers.update({'X-CSRF-Token': alta.json()['csrf']})
+        sql("UPDATE usuarios SET rol='administrador' WHERE correo='profe@example.com'")
+        alumnos = []
+        for alias, correo, adulto in [('Estudiante A', 'familia-a', ana), ('Estudiante B', 'familia-b', luis)]:
+            ident = profesor.post(ruta + '/alumnos', json={'nombre': alias, 'grado': 8}).json()['id']
+            alumnos.append(ident)
+            url = ruta + '/alumnos/' + str(ident)
+            actividad = dict(fecha='2026-11-25', titulo='¿Cuándo debe frenar?', resultado='Logrado',
+                             observacion='Explicó la parada a 20 cm.')
+            assert adulto.put(url + '/actividad', json=actividad).status_code == 403
+            assert profesor.put(url + '/actividad', json=actividad).status_code == 200
+            assert profesor.put(url + '/actividad', json=actividad).status_code == 200
+            invitacion = profesor.post(url + '/invitacion', json={'correo': correo + '@example.com'}).json()
+            otra = luis if adulto is ana else ana
+            assert otra.post(ruta + '/vincular', json=invitacion).status_code == 400
+            assert adulto.post(ruta + '/vincular', json=invitacion).status_code == 200
+            assert adulto.post(ruta + '/vincular', json=invitacion).status_code == 400
+        for adulto, ident in zip([ana, luis], alumnos):
+            ficha, = adulto.get(ruta).json()
+            assert ficha['id'] == ident
+            assert ficha['actividades'] == [actividad]
+        assert len(profesor.get(ruta).json()) == 2
+        profesor.cookies.clear()
+        assert profesor.get(ruta).status_code == 401

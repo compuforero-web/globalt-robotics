@@ -1,0 +1,5 @@
+# Solo si ensayo.sh recibe la IP del servidor: publica la réplica también en esa dirección para el celular.
+# Nunca en 0.0.0.0; ensayo.sh lo rechaza.
+services:
+  web:
+    ports: ["${ENSAYO_DIRECCION:?}:${AULA_PUERTO_LOCAL:?}:80"]

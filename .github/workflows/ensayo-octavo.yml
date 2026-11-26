@@ -1,0 +1,40 @@
+name: Ensayo integrado de octavo
+on:
+  pull_request:
+    paths:
+      - 'deploy/ensayo-octavo/**'
+      - 'tests/e2e/ensayo-octavo.e2e.mjs'
+      - 'programa/**'
+      - 'games/laboratorio-arduino/src/octavo.js'
+      - 'games/laboratorio-arduino/src/main.js'
+      - 'aula/familias.html'
+      - 'aula/src/familias.js'
+      - 'services/aula-api/app/familias.py'
+      - '.github/workflows/ensayo-octavo.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ensayo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Preparar réplica aislada y comprobar reinicio
+        run: |
+          # Como en el servidor: la IP de la máquina para el «celular»; el segundo arranque la reutiliza.
+          ip="$(hostname -I | awk '{print $1}')"
+          echo "ENSAYO_ORIGEN=http://$ip:18180" >> "$GITHUB_ENV"
+          bash deploy/ensayo-octavo/ensayo.sh iniciar "$ip"
+          bash deploy/ensayo-octavo/ensayo.sh iniciar
+      - name: Recorrido de la guía PDF (clase, fases y dos familias desde el celular)
+        run: |
+          npm install --prefix "$RUNNER_TEMP/ensayo" --no-save --ignore-scripts playwright@1.56.1
+          export NODE_PATH="$RUNNER_TEMP/ensayo/node_modules"
+          "$NODE_PATH/.bin/playwright" install --with-deps chromium
+          node tests/e2e/ensayo-octavo.e2e.mjs
+      - name: Detener réplica
+        if: always()
+        run: bash deploy/ensayo-octavo/ensayo.sh detener

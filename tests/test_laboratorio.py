@@ -1657,7 +1657,7 @@ class CompilerServiceTests(unittest.TestCase):
             for _ in range(50):
                 try:
                     estado = Path(f'/proc/{child}/stat').read_text().rsplit(')', 1)[1].split()[0]
-                except FileNotFoundError:
+                except (FileNotFoundError, ProcessLookupError):   # ya recogido entre abrir y leer
                     break
                 if estado == 'Z':   # terminado; falta que init lo recoja
                     break
