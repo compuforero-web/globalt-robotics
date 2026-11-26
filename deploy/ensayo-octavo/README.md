@@ -15,3 +15,7 @@ bash deploy/ensayo-octavo/ensayo.sh limpiar                # borra solo esta ré
 - `/buzon-ensayo/` muestra, para un correo ficticio exacto, los enlaces que la réplica le envió (solo lectura).
 - Guía rellenable del ensayo: `guia/Guia_ensayo_octavo.pdf` (se regenera con `python3 guia/generar_guia.py`;
   requiere reportlab). `tests/e2e/ensayo-octavo.e2e.mjs` recorre los mismos pasos en CI.
+- Programa del carrito físico: `carrito_octavo/carrito_octavo.ino` (conexiones, carga con Arduino IDE y verificación
+  en `carrito_octavo/README.md`). `tests/test_carrito_octavo.py` lo simula y CI lo compila desde la fuente.
+- Revisión de concordancia: `revision/Revision_concordancia_octavo.pdf` (fuente en Markdown junto a él; se regenera
+  con `python3 revision/generar_revision.py`).

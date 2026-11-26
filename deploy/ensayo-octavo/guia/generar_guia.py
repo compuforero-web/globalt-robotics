@@ -43,6 +43,7 @@ titulo = ParagraphStyle('titulo', parent=base, fontName=NEGRITA, fontSize=20, le
 subtitulo = ParagraphStyle('subtitulo', parent=base, fontSize=11, leading=15, textColor=GRIS, spaceAfter=10)
 seccion = ParagraphStyle('seccion', parent=base, fontName=NEGRITA, fontSize=13.5, leading=17, textColor=ACENTO,
                          spaceBefore=8, spaceAfter=5)
+celda = ParagraphStyle('celda', parent=base, fontSize=7.6, leading=9.4, textColor=GRIS)
 rotulo = ParagraphStyle('rotulo', parent=base, fontName=NEGRITA, fontSize=8.4, leading=11, textColor=ACENTO)
 encabezado = ParagraphStyle('encabezado', parent=base, fontName=NEGRITA, fontSize=10.5, leading=14, textColor=colors.white)
 codigo = ParagraphStyle('codigo', parent=base, fontName=MONO, fontSize=8.6, leading=11.2, backColor=SUAVE,
@@ -62,10 +63,15 @@ def p(texto, estilo=base):
 class Prueba(Flowable):
     """Bloque de una prueba: qué hago, qué debería ver, Pasó/Falló/Pendiente y observación, todo rellenable."""
 
-    def __init__(self, ident, nombre, hago, veo, extra=None, alto_obs=34):
+    def __init__(self, ident, nombre, hago, veo, extra=None, alto_obs=34, grillas=None, corto=False):
         super().__init__()
         self.ident, self.nombre, self.extra, self.alto_obs = ident, nombre, extra or [], alto_obs
-        self.cabecera = Paragraph(f'{ident} · {nombre}', encabezado)
+        self.corto = corto
+        marca = '  <font size="8.5">· RECORRIDO CORTO PARA RECTORÍA</font>' if corto else ''
+        self.cabecera = Paragraph(f'{ident} · {nombre}{marca}', encabezado)
+        # grillas: [(título, [(clave, encabezado de columna)], [(clave, rótulo de fila)])]; un campo por celda.
+        self.grillas = [(Paragraph(t, rotulo), [(k, Paragraph(e, celda)) for k, e in cols], filas)
+                        for t, cols, filas in grillas or []]
         self.partes = [(Paragraph('QUÉ HAGO', rotulo), [Paragraph(t, base) for t in hago]),
                        (Paragraph('QUÉ DEBERÍA VER', rotulo), [Paragraph(t, base) for t in veo])]
 
@@ -79,9 +85,21 @@ class Prueba(Flowable):
                 h += t.wrap(interior - 10, alto)[1] + 2
             h += 4
         h += len(self.extra) * 22
+        for titulo_g, cols, filas in self.grillas:
+            h += self._alto_grilla(interior, titulo_g, cols, filas)
         h += 22 + 12 + self.alto_obs + 8
         self.alto = h
         return ancho, h
+
+    ROTULO_FILA = 64
+
+    def _anchos(self, interior, cols):
+        return (interior - self.ROTULO_FILA) / len(cols)
+
+    def _alto_grilla(self, interior, titulo_g, cols, filas):
+        ancho = self._anchos(interior, cols) - 4
+        cab = max(e.wrap(ancho, 100)[1] for _, e in cols)
+        return 6 + titulo_g.wrap(interior, 100)[1] + 3 + cab + 3 + len(filas) * 21
 
     def draw(self):
         c, w, h = self.canv, self.ancho, self.alto
@@ -90,7 +108,7 @@ class Prueba(Flowable):
         c.setLineWidth(0.8)
         c.roundRect(0, 0, w, h, 5)
         hc = self.cabecera.wrap(interior, h)[1]
-        c.setFillColor(TINTA)
+        c.setFillColor(ACENTO if self.corto else TINTA)
         c.roundRect(0, h - hc - 12, w, hc + 12, 5, stroke=0, fill=1)
         c.rect(0, h - hc - 12, w, 6, stroke=0, fill=1)
         self.cabecera.drawOn(c, 8, h - hc - 6)
@@ -107,6 +125,29 @@ class Prueba(Flowable):
                 y -= 2
             y -= 4
         form = c.acroForm
+        for titulo_g, cols, filas in self.grillas:
+            ancho = self._anchos(interior, cols)
+            y -= 6
+            th = titulo_g.wrap(interior, h)[1]
+            y -= th
+            titulo_g.drawOn(c, 8, y)
+            y -= 3
+            cab = max(e.wrap(ancho - 4, h)[1] for _, e in cols)
+            y -= cab
+            for i, (_, e) in enumerate(cols):
+                eh = e.wrap(ancho - 4, h)[1]
+                e.drawOn(c, 8 + self.ROTULO_FILA + i * ancho, y + cab - eh)
+            y -= 3
+            for clave_f, rotulo_f in filas:
+                y -= 21
+                c.setFont(NEGRITA, 8.6)
+                c.setFillColor(TINTA)
+                c.drawString(8, y + 6, rotulo_f)
+                for i, (clave_c, e) in enumerate(cols):
+                    form.textfield(name=f'{self.ident}_{clave_f}_{clave_c}', tooltip=f'{self.ident} · {rotulo_f} · '
+                                   f'{e.text}', x=8 + self.ROTULO_FILA + i * ancho, y=y + 2, width=ancho - 6,
+                                   height=16, borderColor=GRIS, fillColor=CAMPO, borderWidth=0.6, fontSize=9,
+                                   maxlen=60, relative=True)
         for nombre, etiqueta in self.extra:
             y -= 20
             c.setFont(TEXTO, 8.8)
@@ -195,7 +236,7 @@ def contenido():
                'Escribe una observación breve si algo cambia. Al terminar, guarda el archivo con el mismo nombre o '
                'con la fecha: el resultado queda dentro del PDF y no hace falta copiar registros.'))
     s.append(Spacer(1, 4))
-    s.append(p('<b>Terminal solo al inicio (sección A) y al cierre (sección F).</b> Todo lo demás se hace en el '
+    s.append(p('<b>Terminal solo al inicio (sección A) y al cierre (sección G).</b> Todo lo demás se hace en el '
                'navegador del computador y en el celular. Los correos, alumnos y familias son ficticios; la réplica '
                'tiene su propia base, su propio buzón y un puerto distinto (18180); no toca la instalación pública.'))
     s.append(Spacer(1, 6))
@@ -214,6 +255,19 @@ def contenido():
                                ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
     s += [tabla, Spacer(1, 4),
           p('DIRECCION es la IP del servidor que alcanza el celular (misma red Wi-Fi o Tailscale). Escríbela arriba.',
+            pequeno), Spacer(1, 8)]
+    corto = [[p('<b>Recorrido corto para rectoría</b> · una sola clase, de la cartilla a la familia', encabezado), ''],
+             [p('<b>B2</b>'), p('Abrir la clase de la cartilla «¿Cuándo debe frenar el robot?» (trimestre 2).')],
+             [p('<b>B5</b>'), p('El carrito físico a 19, 20 y 21 cm: lectura del sensor, orden enviada y posición final.')],
+             [p('<b>C1</b>'), p('El profesor publica la observación de la clase para la familia.')],
+             [p('<b>D4</b>'), p('El acudiente la lee en el celular, solo de su hijo.')]]
+    tabla = Table(corto, colWidths=[ANCHO * 0.1, ANCHO * 0.9])
+    tabla.setStyle(TableStyle([('SPAN', (0, 0), (-1, 0)), ('BACKGROUND', (0, 0), (-1, 0), ACENTO),
+                               ('BACKGROUND', (0, 1), (-1, -1), SUAVE), ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                               ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
+    s += [tabla, Spacer(1, 3),
+          p('Antes de la visita deja hechos A, B1, C2 y D1 a D3, y el carrito cargado (Anexo 3). Esas pruebas llevan '
+            'la cabecera verde. Las cinco fases del laboratorio (sección F) son una <b>demostración adicional</b>.',
             pequeno)]
 
     # ---------- A. Inicio en la terminal ----------
@@ -267,11 +321,11 @@ def contenido():
         'Los documentos llevan el aviso «Textos provisionales solo para pruebas».',
     ])))
     s.append(Spacer(1, 6))
-    s.append(KeepTogether(Prueba('B2', 'Abrir la clase de la cartilla', [
+    s.append(KeepTogether(Prueba('B2', 'Abrir la clase de la cartilla', corto=True, hago=[
         'Abre <b>/programa/octavo.html</b>.',
         'En «Trimestre 2 · Pongo a prueba el sensor», busca «¿Cuándo debe frenar el robot? Pruebo 19, 20 y 21 cm» y '
         'pulsa <b>«Abrir el reto de 19, 20 y 21 cm»</b>.',
-    ], [
+    ], veo=[
         'La página «¿Cuándo debe frenar el robot?» con la regla del equipo: «detenerse a <b>20 cm o menos</b>».',
         'Un selector de comparación, un umbral en cm, el control «Distancia de prueba» y el botón «Comprobar mi regla».',
     ])))
@@ -293,53 +347,33 @@ def contenido():
         'Al comprobar: «Reto superado. Tu regla respondió correctamente en las cinco pruebas.»',
     ])))
     s.append(Spacer(1, 6))
-    s.append(KeepTogether(Prueba('B5', 'Kit físico: obstáculo a 19, 20 y 21 cm', [
-        'Con el vehículo y el programa de la muestra (regla: detenerse a 20 cm o menos), mide con una regla desde el '
-        'frente del sensor y coloca el obstáculo a 19, 20 y 21 cm. Anota la lectura y lo que hizo el vehículo.',
-    ], [
-        'A 19 y 20 cm el vehículo se detiene; a 21 cm avanza.',
-        'La lectura del sensor coincide con la regla de medir dentro de ±1 cm. Si no, anota la discrepancia: es '
-        'material para la actividad «Presento las lecturas y explico una discrepancia».',
-    ], extra=[('19cm', '19 cm · lectura y acción'), ('20cm', '20 cm · lectura y acción'),
-              ('21cm', '21 cm · lectura y acción')])))
-    s.append(Spacer(1, 6))
-    s.append(KeepTogether(Prueba('B6', 'Abrir la primera fase del laboratorio', [
-        'Vuelve a /programa/octavo.html y pulsa <b>«Abrir la primera fase · Medir distancia»</b>.',
-    ], [
-        'El laboratorio de Arduino con la lista «Octavo · Fase 1 de 5»: «1. Medir distancia» y las fases 2 a 5 con '
-        '«Pendiente de la fase anterior».',
-        'El editor muestra el código inicial, que escribe «Eco: … us» en el monitor serie.',
-    ])))
-    s.append(Spacer(1, 6))
-    s.append(KeepTogether(Prueba('B7', 'Programa incorrecto: la segunda fase sigue bloqueada', [
-        'Sin cambiar el código inicial (mide el eco pero no escribe «Distancia: N cm»), pulsa <b>«Comprobar reto»</b>.',
-        'Espera: compila de verdad y simula unos segundos (hasta un minuto).',
-    ], [
-        'El aviso «El reto aún no se cumple.» con el criterio que falló.',
-        'En la lista, «2. Alerta de cercanía» sigue como «Pendiente de la fase anterior», sin enlace.',
-    ])))
-    s.append(Spacer(1, 6))
-    s.append(KeepTogether(Prueba('B8', 'Entrada directa a la fase 2 bloqueada', [
-        'En la barra de direcciones abre: <b>…:18180/games/laboratorio-arduino/index.html?grado=8&amp;leccion=arduino-ultrasonico-alerta</b>',
-    ], [
-        'La página «Laboratorio de octavo» con «Completa las fases en orden con el botón «Comprobar reto».» y el enlace '
-        '«Abrir mi fase disponible». No se abre el editor de la fase 2.',
-    ])))
-    s.append(Spacer(1, 6))
-    s.append(KeepTogether(Prueba('B9', 'Programa correcto: la segunda fase se habilita', [
-        'Pulsa «Abrir mi fase disponible» (vuelve a la fase 1).',
-        'En el editor selecciona todo (Ctrl+A) y reemplázalo por el programa del <b>Anexo 1</b>. Pulsa «Comprobar reto».',
-    ], [
-        'El aviso «Reto superado».',
-        'En la lista: «1. Medir distancia · Superada» y «2. Alerta de cercanía» ya es un enlace.',
-    ])))
-    s.append(Spacer(1, 6))
-    s.append(KeepTogether(Prueba('B10', 'Abrir la segunda fase', [
-        'Pulsa «2. Alerta de cercanía» en la lista.',
-    ], [
-        'La lista dice «Octavo · Fase 2 de 5»; las fases 3 a 5 siguen «Pendiente de la fase anterior».',
-        'Al recargar la página la fase 1 sigue superada (el progreso queda en la cuenta del profesor).',
-    ])))
+    s.append(KeepTogether(Prueba('B5', 'Carrito físico: orden y posición final a 19, 20 y 21 cm', corto=True, hago=[
+        'Carga <b>carrito_octavo.ino</b> (Anexo 3) y abre el Monitor serie a 9600 baudios con el USB conectado. Cada '
+        'línea dice «Lectura usada: N cm | Orden: PARAR» o «AVANZAR». <b>La regla se aplica a la lectura usada</b>, '
+        'no a la marca de la regla de medir.',
+        '<b>Parte 1 · ruedas levantadas.</b> Coloca el obstáculo en cada marca medida desde el frente del sensor. '
+        'Anota la marca real, la lectura usada y la orden del monitor, y si las ruedas giran.',
+        '<b>Parte 2 · en el piso, aproximación lenta.</b> Suelta el carrito a unos 60 cm del obstáculo. En el monitor, '
+        'la primera línea con PARAR da la lectura con la que recibió la orden. Cuando se detenga, mide con la regla '
+        'la distancia del frente del sensor al obstáculo.',
+        '<b>Sin eco.</b> Con las ruedas levantadas y la lectura en AVANZAR, suelta un momento el cable de ECHO.',
+    ], veo=[
+        'Parte 1: lectura usada igual a la marca ±1 cm. Con lectura 19 o 20, PARAR y ruedas quietas; con 21, AVANZAR '
+        'y ruedas girando. A 20,9 cm el programa redondea: lee 21 y avanza (si el sensor da 20, PARAR también es '
+        'correcto). Lo que cuenta es que la orden siga a la lectura usada.',
+        'Parte 2: la primera orden PARAR llega con una lectura de 20 cm o menos. El carrito termina detenido más cerca '
+        'que esa lectura, por la inercia. Anota la posición final; la diferencia es el dato de la clase del trimestre 3.',
+        'Sin eco: «Orden: PARAR (sin eco)» y ruedas quietas; al reconectar vuelve a aplicar la regla.',
+    ], grillas=[
+        ('PARTE 1 · OBSTÁCULO FIJO, RUEDAS LEVANTADAS',
+         [('regla', 'Distancia marcada con regla (cm)'), ('lectura', 'Lectura usada (monitor, cm)'),
+          ('orden', 'Orden enviada (monitor)'), ('ruedas', 'Ruedas: giran o quietas')],
+         [('19', '19 cm'), ('20', '20 cm'), ('20_9', '20,9 cm'), ('21', '21 cm')]),
+        ('PARTE 2 · APROXIMACIÓN LENTA EN EL PISO',
+         [('lectura', 'Lectura con la primera orden PARAR (cm)'), ('orden', 'Orden enviada (monitor)'),
+          ('final', 'Posición final del carrito: regla al obstáculo (cm)'), ('dif', 'Diferencia lectura − final (cm)')],
+         [('i1', 'Intento 1'), ('i2', 'Intento 2'), ('i3', 'Intento 3')]),
+    ], extra=[('sineco', 'Sin eco: orden mostrada y ruedas')])))
 
     # ---------- C. Profesor prepara a las familias ----------
     s += [PageBreak(), p('C. El profesor publica la observación e invita a las familias', seccion),
@@ -348,11 +382,11 @@ def contenido():
             'mensaje a ti mismo) y cópialo desde allí. Cada código sirve una vez, solo para el correo invitado, '
             'durante siete días.'),
           Spacer(1, 6)]
-    s.append(KeepTogether(Prueba('C1', 'Publicar la observación de Estudiante Sol', [
+    s.append(KeepTogether(Prueba('C1', 'Publicar la observación de Estudiante Sol', corto=True, hago=[
         'Elige «Estudiante Sol · 8°». Actividad: <b>¿Cuándo debe frenar el robot?</b> · Fecha: 30/11/2026 · Resultado: '
         'Logrado · Observación: escribe tu observación y cópiala también en el campo de abajo.',
         'Pulsa «Publicar para la familia».',
-    ], [
+    ], veo=[
         'El mensaje «Actividad publicada.» y, en la tarjeta de Estudiante Sol, el título, «2026-11-30 · Logrado» y tu '
         'observación.',
     ], extra=[('texto', 'Texto exacto de mi observación')])))
@@ -400,9 +434,9 @@ def contenido():
         'No aparecen los formularios del profesor (agregar estudiante, publicar, invitar).',
     ])))
     s.append(Spacer(1, 6))
-    s.append(KeepTogether(Prueba('D4', 'Consulta de mi observación', [
+    s.append(KeepTogether(Prueba('D4', 'El acudiente lee la observación', corto=True, hago=[
         'Lee la tarjeta y recarga la página.',
-    ], [
+    ], veo=[
         '«¿Cuándo debe frenar el robot?», «2026-11-30 · Logrado» y exactamente el texto anotado en C1.',
         'Una sola tarjeta: no aparece Estudiante Viento ni su observación, tampoco después de recargar.',
     ])))
@@ -446,9 +480,56 @@ def contenido():
         'El selector incluye «Estudiante Sol · 8°» y «Estudiante Viento · 8°»; cada tarjeta con su propia observación.',
     ])))
 
-    # ---------- F. Cierre ----------
-    s += [PageBreak(), p('F. Cierre', seccion)]
-    s.append(KeepTogether(Prueba('F1', 'El registro público de producción sigue cerrado', [
+    # ---------- F. Demostración adicional: fases del laboratorio ----------
+    s += [PageBreak(), p('F. Demostración adicional · las cinco fases del laboratorio', seccion),
+          p('No forma parte del recorrido corto. El laboratorio de octavo encadena cinco fases: Medir distancia, '
+            'Alerta de cercanía, dos motores, evasor en banco y evasor en pista. Cada una se abre al superar la '
+            'anterior con «Comprobar reto». Aquí se prueba el paso de la fase 1 a la 2; las demás usan el mismo '
+            'mecanismo. El evasor en banco (fase 4) empieza a esquivar a <b>25 cm o menos</b>: es otra actividad, con '
+            'su propio umbral, y no contradice la regla de 20 cm de la clase.'),
+          Spacer(1, 6)]
+    s.append(KeepTogether(Prueba('F1', 'Abrir la primera fase del laboratorio', [
+        'Vuelve a /programa/octavo.html y pulsa <b>«Abrir la primera fase · Medir distancia»</b>.',
+    ], [
+        'El laboratorio de Arduino con la lista «Octavo · Fase 1 de 5»: «1. Medir distancia» y las fases 2 a 5 con '
+        '«Pendiente de la fase anterior».',
+        'El editor muestra el código inicial, que escribe «Eco: … us» en el monitor serie.',
+    ])))
+    s.append(Spacer(1, 6))
+    s.append(KeepTogether(Prueba('F2', 'Programa incorrecto: la segunda fase sigue bloqueada', [
+        'Sin cambiar el código inicial (mide el eco pero no escribe «Distancia: N cm»), pulsa <b>«Comprobar reto»</b>.',
+        'Espera: compila de verdad y simula unos segundos (hasta un minuto).',
+    ], [
+        'El aviso «El reto aún no se cumple.» con el criterio que falló.',
+        'En la lista, «2. Alerta de cercanía» sigue como «Pendiente de la fase anterior», sin enlace.',
+    ])))
+    s.append(Spacer(1, 6))
+    s.append(KeepTogether(Prueba('F3', 'Entrada directa a la fase 2 bloqueada', [
+        'En la barra de direcciones abre: <b>…:18180/games/laboratorio-arduino/index.html?grado=8&amp;leccion=arduino-ultrasonico-alerta</b>',
+    ], [
+        'La página «Laboratorio de octavo» con «Completa las fases en orden con el botón «Comprobar reto».» y el enlace '
+        '«Abrir mi fase disponible». No se abre el editor de la fase 2.',
+    ])))
+    s.append(Spacer(1, 6))
+    s.append(KeepTogether(Prueba('F4', 'Programa correcto: la segunda fase se habilita', [
+        'Pulsa «Abrir mi fase disponible» (vuelve a la fase 1).',
+        'En el editor selecciona todo (Ctrl+A) y reemplázalo por el programa del <b>Anexo 1</b>. Pulsa «Comprobar reto».',
+    ], [
+        'El aviso «Reto superado».',
+        'En la lista: «1. Medir distancia · Superada» y «2. Alerta de cercanía» ya es un enlace.',
+    ])))
+    s.append(Spacer(1, 6))
+    s.append(KeepTogether(Prueba('F5', 'Abrir la segunda fase', [
+        'Pulsa «2. Alerta de cercanía» en la lista.',
+    ], [
+        'La lista dice «Octavo · Fase 2 de 5»; las fases 3 a 5 siguen «Pendiente de la fase anterior».',
+        'Al recargar la página la fase 1 sigue superada (el progreso queda en la cuenta del profesor).',
+    ])))
+
+
+    # ---------- G. Cierre ----------
+    s += [PageBreak(), p('G. Cierre', seccion)]
+    s.append(KeepTogether(Prueba('G1', 'El registro público de producción sigue cerrado', [
         'En el celular, con datos móviles o Wi-Fi, abre <b>https://globalt-robotics.com/api/aula/config</b>.',
     ], [
         'Un texto que incluye <b>"registro_abierto": false</b>. (La réplica sí lo tiene abierto, solo en el puerto 18180.)',
@@ -458,17 +539,18 @@ def contenido():
                'para repetir el ensayo desde cero usa <i>limpiar</i> y luego <i>iniciar DIRECCION</i>. Si abriste el '
                'puerto en el cortafuegos (A3), ciérralo.'))
     s.append(cmd('bash deploy/ensayo-octavo/ensayo.sh detener'))
-    s.append(KeepTogether(Prueba('F2', 'Réplica detenida', [
+    s.append(KeepTogether(Prueba('G2', 'Réplica detenida', [
         'Ejecuta <i>ensayo.sh detener</i> (y, si aplica, retira la regla del cortafuegos de A3).',
     ], [
         '«Réplica detenida. Cuentas y progreso se conservan; para borrarlos: ensayo.sh limpiar»',
         'En el celular, http://DIRECCION:18180/aula/ ya no carga.',
     ])))
     s.append(Spacer(1, 8))
-    s.append(KeepTogether(Prueba('F3', 'Decisión para la muestra del lunes', [
+    s.append(KeepTogether(Prueba('G3', 'Decisión para la muestra del lunes', [
         'Revisa las pruebas marcadas. Marca Pasó si la muestra está lista, Falló si algo la impide, o Pendiente.',
     ], [
-        'Todas las pruebas de A a F en Pasó, o una observación que explique cada excepción.',
+        'El recorrido corto (B2, B5, C1, D4) y sus preparativos en Pasó. Las secciones E y F en Pasó o con una '
+        'observación que explique cada excepción.',
     ], alto_obs=60)))
 
     # ---------- Anexos ----------
@@ -477,7 +559,7 @@ def contenido():
             'dispara el sensor con 10 µs, mide el eco con pulseIn, lo convierte a centímetros (µs / 58) y escribe '
             '«Distancia: N cm» cada 100 ms.'),
           cmd(programa_correcto()),
-          p('El código inicial del laboratorio es el «programa incorrecto» de B7: mide el eco pero escribe '
+          p('El código inicial del laboratorio es el «programa incorrecto» de F2: mide el eco pero escribe '
             '«Eco: … us» cada 500 ms, así que no cumple el formato ni el ritmo del reto.', pequeno),
           Spacer(1, 8),
           p('Anexo 2 · Si algo no sale como se espera', seccion)]
@@ -488,10 +570,13 @@ def contenido():
          'ejecuta ensayo.sh limpiar y vuelve a iniciar.'),
         ('El buzón dice «Todavía no hay mensajes»', 'Revisa que el correo sea exactamente el del registro. Espera unos '
          'segundos y busca otra vez. En «Revisa tu correo» puedes pulsar «Reenviar el enlace».'),
-        ('B7 ya aparece superada', 'La cuenta del profesor conserva un ensayo anterior: limpia la réplica antes de '
+        ('F2 ya aparece superada', 'La cuenta del profesor conserva un ensayo anterior: limpia la réplica antes de '
          'empezar.'),
         ('«Comprobar reto» tarda', 'La primera compilación tras arrancar es la más lenta. Espera hasta un minuto antes '
          'de marcar Falló.'),
+        ('El carrito avanza con lectura de 20 o menos', 'Revisa los cables IN1–IN4 y ENA/ENB (Anexo 3). Si un motor gira '
+         'al revés, intercambia sus cables en OUT del L298N; no cambies el programa.'),
+        ('El monitor serie muestra símbolos raros', 'Elige 9600 baudios en el Monitor serie.'),
         ('«Revisa el código y el correo verificado» con el código correcto', 'El código se generó para otro correo, '
          'ya se usó o se regeneró después (solo vale el último). Genera uno nuevo en C2 o C3.'),
     ]
@@ -500,6 +585,41 @@ def contenido():
                                ('VALIGN', (0, 0), (-1, -1), 'TOP'), ('TOPPADDING', (0, 0), (-1, -1), 3),
                                ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
     s.append(tabla)
+
+    s += [Spacer(1, 10), p('Anexo 3 · Programa del carrito (práctica física)', seccion),
+          p('Archivo: <b>deploy/ensayo-octavo/carrito_octavo/carrito_octavo.ino</b>, descargable desde la PR. Sus '
+            'instrucciones completas están en el README.md de la misma carpeta. Se carga desde Arduino IDE, no desde '
+            'la terminal ni desde la plataforma, que compila y simula pero no carga a la placa.')]
+    conex = [['Pieza', 'Pin', 'Arduino Nano / alimentación'],
+             ['HC-SR04 (4 pines)', 'VCC · GND · TRIG · ECHO', '5V · GND · D7 · D8'],
+             ['L298N, motor izquierdo', 'IN1 · IN2 · ENA', 'D2 · D4 · D5'],
+             ['L298N, motor derecho', 'IN3 · IN4 · ENB', 'D10 · D11 · D6'],
+             ['L298N, potencia', 'VS (+12V) · GND', 'batería 7–9 V (+) · (−), y GND del L298N al GND del Nano'],
+             ['Nano', 'USB', 'computador; el 5 V del L298N no se conecta al Nano']]
+    tabla = Table([[p(x, rotulo if i == 0 else base) for x in fila] for i, fila in enumerate(conex)],
+                  colWidths=[ANCHO * 0.27, ANCHO * 0.3, ANCHO * 0.43])
+    tabla.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), SUAVE), ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#b8cbc7')),
+                               ('VALIGN', (0, 0), (-1, -1), 'TOP'), ('TOPPADDING', (0, 0), (-1, -1), 3),
+                               ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
+    s += [Spacer(1, 4), tabla, Spacer(1, 6),
+          p('<b>Cargar:</b> retira los puentes de ENA y ENB del L298N y deja la batería apagada o las ruedas '
+            'levantadas. En Arduino IDE: Archivo → Abrir (la carpeta debe llamarse carrito_octavo) → Herramientas: '
+            'Placa «Arduino Nano», Procesador «ATmega328P» y el Puerto del Nano → Verificar → Subir. Si falla con '
+            '«not in sync», elige «ATmega328P (Old Bootloader)». Abre el Monitor serie a 9600 baudios. El carrito '
+            'espera 3 s antes de la primera orden.'),
+          Spacer(1, 4),
+          p('<b>Monitor serie:</b>'),
+          cmd('Eco: 1161 us | Distancia: 20,0 cm | Lectura usada: 20 cm | Orden: PARAR\n'
+              'Eco: 1213 us | Distancia: 20,9 cm | Lectura usada: 21 cm | Orden: AVANZAR\n'
+              'Eco: sin eco | Distancia: -- | Lectura usada: -- | Orden: PARAR (sin eco)'),
+          p('<b>Lectura usada:</b> la distancia redondeada al centímetro más cercano (20,4 → 20 → PARAR; 20,6 → 21 → '
+            'AVANZAR). La fase 1 del laboratorio, en cambio, descarta los decimales (µs / 58): con esa conversión '
+            '20,9 cm se leería 20 y el carrito pararía. <b>Sin eco</b> (cable suelto, nada al frente en unos 5 m): '
+            'freno a los dos motores. La orden cambia en la medida siguiente, como mucho unos 0,2 s después.'),
+          Spacer(1, 4),
+          p('Verificado por compilación (4092 bytes para el ATmega328P) y por simulación con los modelos del '
+            'laboratorio: 19 y 20 cm → PARAR; 20,9 y 21 cm → AVANZAR; sin eco → PARAR; motores quietos en la espera '
+            'inicial. El sensor real, la inercia y la posición final solo se comprueban con el kit (B5).', pequeno)]
     return s
 
 
